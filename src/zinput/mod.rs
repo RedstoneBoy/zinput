@@ -8,7 +8,7 @@ use self::engine::Engine;
 
 pub struct ZInput {
     backends: Vec<Arc<dyn Backend>>,
-    frontends: Vec<Box<dyn Frontend>>,
+    frontends: Vec<Arc<dyn Frontend>>,
     engine: Arc<Engine>,
 }
 
@@ -25,7 +25,7 @@ impl ZInput {
         self.backends.push(backend);
     }
 
-    pub fn add_frontend(&mut self, frontend: Box<dyn Frontend>) {
+    pub fn add_frontend(&mut self, frontend: Arc<dyn Frontend>) {
         self.frontends.push(frontend);
     }
 
@@ -34,11 +34,11 @@ impl ZInput {
             backend.init(self.engine.clone());
         }
 
-        for frontend in &mut self.frontends {
+        for frontend in &self.frontends {
             frontend.init(self.engine.clone());
         }
 
-        let app = Gui::new(self.engine.clone(), self.backends.clone());
+        let app = Gui::new(self.engine.clone(), self.backends.clone(), self.frontends.clone());
         let options = eframe::NativeOptions::default();
 
         // TODO: make sure program stops cleanly

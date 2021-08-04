@@ -25,10 +25,10 @@ impl DeviceView {
             egui::ComboBox::from_label("Devices")
                 .selected_text(self.selected_controller.and_then(|id| self.engine.get_device(&id)).map_or("".to_owned(), |dev| dev.name.clone()))
                 .show_ui(ui, |ui| {
-                for device_ref in self.engine.devices() {
-                    ui.selectable_value(&mut self.selected_controller, Some(*device_ref.key()), &device_ref.name);
-                }
-            });
+                    for device_ref in self.engine.devices() {
+                        ui.selectable_value(&mut self.selected_controller, Some(*device_ref.key()), &device_ref.name);
+                    }
+                });
             if let Some(controller_data) = self.selected_controller
                 .and_then(|id| self.engine.get_device(&id))
                 .and_then(|dev| dev.controller)

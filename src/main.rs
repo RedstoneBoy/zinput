@@ -12,6 +12,6 @@ fn main() {
     let mut zinput = zinput::ZInput::new();
     zinput.add_backend(Arc::new(backend::gc_adaptor::GcAdaptor::new()));
     zinput.add_backend(Arc::new(backend::swi::Swi::new()));
-    zinput.add_frontend(Box::new(frontend::xinput::XInput));
+    zinput.add_frontend(Arc::new(frontend::xinput::XInput::new()));
     zinput.run();
 }

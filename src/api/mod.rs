@@ -29,7 +29,13 @@ pub trait Backend {
 }
 
 pub trait Frontend {
-    fn init(&mut self, engine: Arc<Engine>);
+    fn init(&self, engine: Arc<Engine>);
+
+    fn name(&self) -> &str;
+
+    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {
+
+    }
 }
 
 pub trait ZInputApi {
