@@ -1,0 +1,17 @@
+use std::sync::Arc;
+
+mod api;
+mod backend;
+mod frontend;
+mod gui;
+mod zinput;
+
+fn main() {
+    simple_logger::SimpleLogger::new().init().unwrap();
+
+    let mut zinput = zinput::ZInput::new();
+    zinput.add_backend(Arc::new(backend::gc_adaptor::GcAdaptor::new()));
+    zinput.add_backend(Arc::new(backend::swi::Swi::new()));
+    zinput.add_frontend(Box::new(frontend::xinput::XInput));
+    zinput.run();
+}
