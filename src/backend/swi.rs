@@ -1,6 +1,7 @@
 use std::{convert::TryInto, net::{SocketAddr, UdpSocket}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
 
 use anyhow::{Context, Result};
+use eframe::{egui, epi};
 use parking_lot::Mutex;
 use swi_protocol::{SwiButton, SwiPacket};
 
@@ -41,6 +42,12 @@ impl Backend for Swi {
     fn name(&self) -> &str {
         "swi"
     }
+    
+    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+        let mut inner = self.inner.lock();
+        ui.label(format!("Current Address: {}", inner.old_address));
+        ui.text_edit_singleline(&mut inner.address);
+    }
 }
 
 struct Inner {
@@ -48,6 +55,7 @@ struct Inner {
     stop: Arc<AtomicBool>,
     status: Arc<Mutex<BackendStatus>>,
     address: String,
+    old_address: String,
 }
 
 impl Inner {
@@ -57,6 +65,7 @@ impl Inner {
             stop: Arc::new(AtomicBool::new(false)),
             status: Arc::new(Mutex::new(BackendStatus::Running)),
             address: "0.0.0.0:26780".to_owned(),
+            old_address: "0.0.0.0:26780".to_owned(),
         }
     }
 
@@ -64,6 +73,7 @@ impl Inner {
         *self.status.lock() = BackendStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
         self.handle = Some(std::thread::spawn(swi_thread(self.address.clone(), self.status.clone(), self.stop.clone(), api)));
+        self.old_address = self.address.clone();
     }
 
     fn stop(&mut self) {
@@ -114,7 +124,7 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Resul
     };
     let mut switch_conn = SwitchConnection::new(address.parse()?)
         .context("failed to connect to switch")?;
-
+    
     switch_conn.conn.set_read_timeout(Some(Duration::from_secs(1)))?;
     
     let controller_id = api.new_controller(ControllerInfo::default());

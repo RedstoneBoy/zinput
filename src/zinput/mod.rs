@@ -30,7 +30,7 @@ impl ZInput {
     }
 
     pub fn run(&mut self) {
-        for backend in &mut self.backends {
+        for backend in &self.backends {
             backend.init(self.engine.clone());
         }
 
@@ -40,6 +40,9 @@ impl ZInput {
 
         let app = Gui::new(self.engine.clone(), self.backends.clone());
         let options = eframe::NativeOptions::default();
+
+        // TODO: make sure program stops cleanly
+
         eframe::run_native(Box::new(app), options);
     }
 }

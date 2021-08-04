@@ -4,8 +4,6 @@ use eframe::{egui, epi};
 
 use crate::{api::Backend, zinput::engine::Engine};
 
-mod swi;
-
 pub struct BackendConfig {
     engine: Arc<Engine>,
     backends: Vec<Arc<dyn Backend>>,
@@ -39,6 +37,8 @@ impl BackendConfig {
                     self.backends[backend_index].stop();
                     self.backends[backend_index].init(self.engine.clone());
                 }
+
+                self.backends[backend_index].update_gui(ctx, _frame, ui);
             }
         });
     }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use eframe::{egui, epi};
 use uuid::Uuid;
 
 use crate::zinput::engine::Engine;
@@ -21,6 +22,10 @@ pub trait Backend {
     fn status(&self) -> BackendStatus;
 
     fn name(&self) -> &str;
+
+    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {
+
+    }
 }
 
 pub trait Frontend {
