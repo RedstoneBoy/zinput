@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::Result;
 use crossbeam_channel::{Sender, Receiver};
@@ -138,24 +138,24 @@ fn xinput_thread(thread: Thread) -> Result<()> {
             }
         };
 
-        let ticker = crossbeam_channel::tick(Duration::from_millis(16));
+        let update_recv = engine.add_update_channel(&controller_id);
     
         loop {
             crossbeam_channel::select! {
-                recv(ticker) -> _ => {
-                    let controller = match engine.get_controller(&controller_id) {
-                        Some(controller) => controller,
-                        None => break,
-                    };
-                    
-                    update_target(&mut vigem, &target, &controller.data)?;
-                }
                 recv(device_change) -> id => {
                     device_id = match id {
                         Ok(id) => Some(id),
                         Err(_) => None,
                     };
                     break;
+                }
+                recv(update_recv) -> _ => {
+                    let controller = match engine.get_controller(&controller_id) {
+                        Some(controller) => controller,
+                        None => break,
+                    };
+                    
+                    update_target(&mut vigem, &target, &controller.data)?;
                 }
             }
         }

@@ -1,3 +1,4 @@
+use crossbeam_channel::{Receiver, Sender};
 use dashmap::{DashMap, mapref::{multiple::RefMulti, one::Ref}};
 use uuid::Uuid;
 
@@ -7,6 +8,7 @@ pub struct Engine {
     devices: DashMap<Uuid, DeviceInfo>,
     controllers: DashMap<Uuid, Component<Controller>>,
     motions: DashMap<Uuid, Component<Motion>>,
+    updates: DashMap<Uuid, Vec<Sender<()>>>
 }
 
 impl Engine {
@@ -15,6 +17,7 @@ impl Engine {
             devices: DashMap::new(),
             controllers: DashMap::new(),
             motions: DashMap::new(),
+            updates: DashMap::new(),
         }
     }
     
@@ -53,6 +56,14 @@ impl Engine {
     pub fn get_motion(&self, id: &Uuid) -> Option<Ref<Uuid, Component<Motion>>> {
         self.motions.get(id)
     }
+
+    pub fn add_update_channel(&self, id: &Uuid) -> Receiver<()> {
+        let (send, recv) = crossbeam_channel::bounded(1);
+        self.updates.entry(*id)
+            .or_insert(Vec::new())
+            .push(send);
+        recv
+    }
 }
 
 impl ZInputApi for Engine {
@@ -80,6 +91,17 @@ impl ZInputApi for Engine {
         
         component.data.update(data);
 
+        match self.updates.get(id) {
+            Some(senders) => {
+                for sender in senders.value() {
+                    if sender.is_empty() {
+                        sender.send(()).unwrap();
+                    }
+                }
+            }
+            None => {}
+        }
+
         Ok(())
     }
 
@@ -88,6 +110,17 @@ impl ZInputApi for Engine {
             .ok_or(InvalidComponentIdError)?;
         
         component.data.update(data);
+
+        match self.updates.get(id) {
+            Some(senders) => {
+                for sender in senders.value() {
+                    if sender.is_empty() {
+                        sender.send(()).unwrap();
+                    }
+                }
+            }
+            None => {}
+        }
 
         Ok(())
     }
