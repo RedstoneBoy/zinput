@@ -18,14 +18,12 @@ use self::device::DeviceInfo;
 pub trait Backend {
     fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>);
     fn stop(&self);
-    
+
     fn status(&self) -> BackendStatus;
 
     fn name(&self) -> &str;
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {
-
-    }
+    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {}
 }
 
 pub trait Frontend {
@@ -33,18 +31,20 @@ pub trait Frontend {
 
     fn name(&self) -> &str;
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {
-
-    }
+    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {}
 }
 
 pub trait ZInputApi {
     fn new_controller(&self, info: ControllerInfo) -> Uuid;
     fn new_motion(&self, info: MotionInfo) -> Uuid;
-    
+
     fn new_device(&self, info: DeviceInfo) -> Uuid;
 
-    fn update_controller(&self, id: &Uuid, data: &Controller) -> Result<(), InvalidComponentIdError>;
+    fn update_controller(
+        &self,
+        id: &Uuid,
+        data: &Controller,
+    ) -> Result<(), InvalidComponentIdError>;
     fn update_motion(&self, id: &Uuid, data: &Motion) -> Result<(), InvalidComponentIdError>;
 
     fn remove_controller(&self, id: &Uuid);

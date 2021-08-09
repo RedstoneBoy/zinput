@@ -9,9 +9,7 @@ use rusb::UsbContext;
 use uuid::Uuid;
 
 use crate::api::{Backend, BackendStatus, ZInputApi};
-use crate::api::component::{
-    controller::{Button, Controller, ControllerInfo},
-};
+use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::device::DeviceInfo;
 
 const VENDOR_ID: u16 = 0x28DE;

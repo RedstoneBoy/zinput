@@ -1,16 +1,24 @@
-use std::{convert::TryInto, net::{SocketAddr, UdpSocket}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
+use std::{
+    convert::TryInto,
+    net::{SocketAddr, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use eframe::{egui, epi};
 use parking_lot::Mutex;
 use swi_protocol::{SwiButton, SwiPacket};
 
-use crate::api::{Backend, BackendStatus, ZInputApi};
 use crate::api::component::{
     controller::{Button, Controller, ControllerInfo},
     motion::{Motion, MotionInfo},
 };
 use crate::api::device::DeviceInfo;
+use crate::api::{Backend, BackendStatus, ZInputApi};
 
 const T: &'static str = "backend:swi";
 
@@ -42,7 +50,7 @@ impl Backend for Swi {
     fn name(&self) -> &str {
         "swi"
     }
-    
+
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         let mut inner = self.inner.lock();
         ui.label(format!("Current Address: {}", inner.old_address));
@@ -72,7 +80,12 @@ impl Inner {
     fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
         *self.status.lock() = BackendStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
-        self.handle = Some(std::thread::spawn(swi_thread(self.address.clone(), self.status.clone(), self.stop.clone(), api)));
+        self.handle = Some(std::thread::spawn(swi_thread(
+            self.address.clone(),
+            self.status.clone(),
+            self.stop.clone(),
+            api,
+        )));
         self.old_address = self.address.clone();
     }
 
@@ -98,7 +111,12 @@ impl Drop for Swi {
     }
 }
 
-fn swi_thread(address: String, status: Arc<Mutex<BackendStatus>>, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi + Send + Sync>) -> impl FnOnce() {
+fn swi_thread(
+    address: String,
+    status: Arc<Mutex<BackendStatus>>,
+    stop: Arc<AtomicBool>,
+    api: Arc<dyn ZInputApi + Send + Sync>,
+) -> impl FnOnce() {
     move || {
         log::info!(target: T, "driver initialized");
 
@@ -118,21 +136,29 @@ fn swi_thread(address: String, status: Arc<Mutex<BackendStatus>>, stop: Arc<Atom
 fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Result<()> {
     const TIMEOUT_KIND: std::io::ErrorKind = {
         #[cfg(target_os = "windows")]
-        { std::io::ErrorKind::TimedOut }
+        {
+            std::io::ErrorKind::TimedOut
+        }
         #[cfg(target_os = "unix")]
-        { std::io::ErrorKind::WouldBlock }
+        {
+            std::io::ErrorKind::WouldBlock
+        }
     };
-    let mut switch_conn = SwitchConnection::new(address.parse()?)
-        .context("failed to connect to switch")?;
-    
-    switch_conn.conn.set_read_timeout(Some(Duration::from_secs(1)))?;
-    
+    let mut switch_conn =
+        SwitchConnection::new(address.parse()?).context("failed to connect to switch")?;
+
+    switch_conn
+        .conn
+        .set_read_timeout(Some(Duration::from_secs(1)))?;
+
     let controller_id = api.new_controller(ControllerInfo::default());
     let motion_id = api.new_motion(MotionInfo::default());
-    let device_id = api.new_device(DeviceInfo::new(format!("Swi Controller"))
-        .with_controller(controller_id)
-        .with_motion(motion_id));
-    
+    let device_id = api.new_device(
+        DeviceInfo::new(format!("Swi Controller"))
+            .with_controller(controller_id)
+            .with_motion(motion_id),
+    );
+
     let mut controller = Controller::default();
     let mut motion = Motion::default();
 
@@ -146,7 +172,7 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Resul
                 return Err(err).context("failed to receive switch data");
             }
         }
-        
+
         switch_conn.write_controller(&mut controller);
         switch_conn.write_motion(&mut motion);
 
@@ -160,7 +186,6 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Resul
 
     Ok(())
 }
-
 
 struct SwitchConnection {
     conn: UdpSocket,
@@ -224,13 +249,13 @@ impl SwitchConnection {
         ctrl.right_stick_x = self.data[4];
         ctrl.right_stick_y = self.data[5];
     }
-    
+
     fn write_motion(&self, motion: &mut Motion) {
         motion.accel_x = f32::from_le_bytes(self.data[6..10].try_into().unwrap());
         motion.accel_y = f32::from_le_bytes(self.data[10..14].try_into().unwrap());
         motion.accel_z = f32::from_le_bytes(self.data[14..18].try_into().unwrap());
-        motion.gyro_pitch  = f32::from_le_bytes(self.data[18..22].try_into().unwrap());
-        motion.gyro_roll  = f32::from_le_bytes(self.data[22..26].try_into().unwrap());
-        motion.gyro_yaw  = f32::from_le_bytes(self.data[26..30].try_into().unwrap());
+        motion.gyro_pitch = f32::from_le_bytes(self.data[18..22].try_into().unwrap());
+        motion.gyro_roll = f32::from_le_bytes(self.data[22..26].try_into().unwrap());
+        motion.gyro_yaw = f32::from_le_bytes(self.data[26..30].try_into().unwrap());
     }
 }

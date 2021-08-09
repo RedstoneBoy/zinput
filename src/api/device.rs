@@ -14,7 +14,7 @@ impl DeviceInfo {
             motion: None,
         }
     }
-    
+
     pub fn with_controller(mut self, controller: Uuid) -> Self {
         self.controller = Some(controller);
         self

@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::{api::{Backend, Frontend}, gui::{Gui}};
+use crate::{
+    api::{Backend, Frontend},
+    gui::Gui,
+};
 
 pub mod engine;
 
@@ -38,7 +41,11 @@ impl ZInput {
             frontend.init(self.engine.clone());
         }
 
-        let app = Gui::new(self.engine.clone(), self.backends.clone(), self.frontends.clone());
+        let app = Gui::new(
+            self.engine.clone(),
+            self.backends.clone(),
+            self.frontends.clone(),
+        );
         let options = eframe::NativeOptions::default();
 
         // TODO: make sure program stops cleanly

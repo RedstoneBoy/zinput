@@ -1,14 +1,25 @@
 use crossbeam_channel::{Receiver, Sender};
-use dashmap::{DashMap, mapref::{multiple::RefMulti, one::Ref}};
+use dashmap::{
+    mapref::{multiple::RefMulti, one::Ref},
+    DashMap,
+};
 use uuid::Uuid;
 
-use crate::api::{InvalidComponentIdError, ZInputApi, component::{Component, ComponentData, controller::{Controller, ControllerInfo}, motion::{Motion, MotionInfo}}, device::DeviceInfo};
+use crate::api::{
+    component::{
+        controller::{Controller, ControllerInfo},
+        motion::{Motion, MotionInfo},
+        Component, ComponentData,
+    },
+    device::DeviceInfo,
+    InvalidComponentIdError, ZInputApi,
+};
 
 pub struct Engine {
     devices: DashMap<Uuid, DeviceInfo>,
     controllers: DashMap<Uuid, Component<Controller>>,
     motions: DashMap<Uuid, Component<Motion>>,
-    updates: DashMap<Uuid, Vec<Sender<()>>>
+    updates: DashMap<Uuid, Vec<Sender<()>>>,
 }
 
 impl Engine {
@@ -20,16 +31,16 @@ impl Engine {
             updates: DashMap::new(),
         }
     }
-    
-    pub fn devices(&self) -> impl Iterator<Item=RefMulti<Uuid, DeviceInfo>> {
+
+    pub fn devices(&self) -> impl Iterator<Item = RefMulti<Uuid, DeviceInfo>> {
         self.devices.iter()
     }
 
-    pub fn controllers(&self) -> impl Iterator<Item=RefMulti<Uuid, Component<Controller>>> {
+    pub fn controllers(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Controller>>> {
         self.controllers.iter()
     }
 
-    pub fn motions(&self) -> impl Iterator<Item=RefMulti<Uuid, Component<Motion>>> {
+    pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
         self.motions.iter()
     }
 
@@ -59,9 +70,7 @@ impl Engine {
 
     pub fn add_update_channel(&self, id: &Uuid) -> Receiver<()> {
         let (send, recv) = crossbeam_channel::bounded(1);
-        self.updates.entry(*id)
-            .or_insert(Vec::new())
-            .push(send);
+        self.updates.entry(*id).or_insert(Vec::new()).push(send);
         recv
     }
 }
@@ -85,10 +94,16 @@ impl ZInputApi for Engine {
         id
     }
 
-    fn update_controller(&self, id: &Uuid, data: &Controller) -> Result<(), InvalidComponentIdError> {
-        let mut component = self.controllers.get_mut(id)
+    fn update_controller(
+        &self,
+        id: &Uuid,
+        data: &Controller,
+    ) -> Result<(), InvalidComponentIdError> {
+        let mut component = self
+            .controllers
+            .get_mut(id)
             .ok_or(InvalidComponentIdError)?;
-        
+
         component.data.update(data);
 
         match self.updates.get(id) {
@@ -106,9 +121,8 @@ impl ZInputApi for Engine {
     }
 
     fn update_motion(&self, id: &Uuid, data: &Motion) -> Result<(), InvalidComponentIdError> {
-        let mut component = self.motions.get_mut(id)
-            .ok_or(InvalidComponentIdError)?;
-        
+        let mut component = self.motions.get_mut(id).ok_or(InvalidComponentIdError)?;
+
         component.data.update(data);
 
         match self.updates.get(id) {

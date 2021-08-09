@@ -1,13 +1,19 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use crossbeam_channel::{Sender, Receiver};
+use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{api::{Frontend, component::controller::{Button, Controller}}, zinput::engine::Engine};
+use crate::{
+    api::{
+        component::controller::{Button, Controller},
+        Frontend,
+    },
+    zinput::engine::Engine,
+};
 
 const T: &'static str = "frontend:xinput";
 
@@ -17,7 +23,9 @@ pub struct XInput {
 
 impl XInput {
     pub fn new() -> Self {
-        XInput { inner: Mutex::new(Inner::new()) }
+        XInput {
+            inner: Mutex::new(Inner::new()),
+        }
     }
 }
 
@@ -30,7 +38,12 @@ impl Frontend for XInput {
         "xinput"
     }
 
-    fn update_gui(&self, ctx: &eframe::egui::CtxRef, frame: &mut eframe::epi::Frame<'_>, ui: &mut eframe::egui::Ui) {
+    fn update_gui(
+        &self,
+        ctx: &eframe::egui::CtxRef,
+        frame: &mut eframe::epi::Frame<'_>,
+        ui: &mut eframe::egui::Ui,
+    ) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 }
@@ -65,13 +78,27 @@ impl Inner {
         }));
     }
 
-    fn update_gui(&mut self, _ctx: &eframe::egui::CtxRef, _frame: &mut eframe::epi::Frame<'_>, ui: &mut eframe::egui::Ui) {
+    fn update_gui(
+        &mut self,
+        _ctx: &eframe::egui::CtxRef,
+        _frame: &mut eframe::epi::Frame<'_>,
+        ui: &mut eframe::egui::Ui,
+    ) {
         if let Some(engine) = self.engine.clone() {
             egui::ComboBox::from_label("Devices")
-                .selected_text(self.selected_device.and_then(|id| engine.get_device(&id)).map_or("".to_owned(), |dev| dev.name.clone()))
+                .selected_text(
+                    self.selected_device
+                        .and_then(|id| engine.get_device(&id))
+                        .map_or("".to_owned(), |dev| dev.name.clone()),
+                )
                 .show_ui(ui, |ui| {
                     for device_ref in engine.devices() {
-                        if ui.selectable_value(&mut self.selected_device, Some(*device_ref.key()), &device_ref.name)
+                        if ui
+                            .selectable_value(
+                                &mut self.selected_device,
+                                Some(*device_ref.key()),
+                                &device_ref.name,
+                            )
                             .clicked()
                         {
                             self.device.send(*device_ref.key()).unwrap();
@@ -88,11 +115,9 @@ struct Thread {
 }
 
 fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
-    || {
-        match xinput_thread(thread) {
-            Ok(()) => log::info!(target: T, "xinput thread closed"),
-            Err(e) => log::error!(target: T, "xinput thread crashed: {}", e),
-        }
+    || match xinput_thread(thread) {
+        Ok(()) => log::info!(target: T, "xinput thread closed"),
+        Err(e) => log::error!(target: T, "xinput thread crashed: {}", e),
     }
 }
 
@@ -115,7 +140,9 @@ fn xinput_thread(thread: Thread) -> Result<()> {
             Some(id) => id,
             None => loop {
                 match device_change.try_recv() {
-                    Ok(id) => { break id; },
+                    Ok(id) => {
+                        break id;
+                    }
                     Err(_) => {}
                 }
 
@@ -125,10 +152,11 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                 } else {
                     continue;
                 }
-            }
+            },
         };
 
-        let controller_id = match engine.get_device(&cur_device_id)
+        let controller_id = match engine
+            .get_device(&cur_device_id)
             .and_then(|device| device.controller)
         {
             Some(id) => id,
@@ -139,7 +167,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
         };
 
         let update_recv = engine.add_update_channel(&controller_id);
-    
+
         loop {
             crossbeam_channel::select! {
                 recv(device_change) -> id => {
@@ -154,7 +182,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                         Some(controller) => controller,
                         None => break,
                     };
-                    
+
                     update_target(&mut vigem, &target, &controller.data)?;
                 }
             }
@@ -170,30 +198,41 @@ fn update_target(vigem: &mut Vigem, target: &Target, data: &Controller) -> Resul
         }};
     }
 
-    vigem.update(target, &XUSBReport {
-        w_buttons: translate!(data.buttons,
-            Button::A => XButton::A,
-            Button::B => XButton::B,
-            Button::X => XButton::X,
-            Button::Y => XButton::Y,
-            Button::Up => XButton::DpadUp,
-            Button::Down => XButton::DpadDown,
-            Button::Left => XButton::DpadLeft,
-            Button::Right => XButton::DpadRight,
-            Button::Start => XButton::Start,
-            Button::Select => XButton::Back,
-            Button::L1 => XButton::LeftShoulder,
-            Button::R1 => XButton::RightShoulder,
-            Button::LStick => XButton::LeftThumb,
-            Button::RStick => XButton::RightThumb,
-        ),
-        b_left_trigger: if Button::L2.is_pressed(data.buttons) { 255 } else { 0 },
-        b_right_trigger: if Button::R2.is_pressed(data.buttons) { 255 } else { 0 },
-        s_thumb_lx: (((data.left_stick_x as i32) - 128) * 256) as i16,
-        s_thumb_ly: (((data.left_stick_y as i32) - 128) * 256) as i16,
-        s_thumb_rx: (((data.right_stick_x as i32) - 128) * 256) as i16,
-        s_thumb_ry: (((data.right_stick_y as i32) - 128) * 256) as i16,
-    })?;
+    vigem.update(
+        target,
+        &XUSBReport {
+            w_buttons: translate!(data.buttons,
+                Button::A => XButton::A,
+                Button::B => XButton::B,
+                Button::X => XButton::X,
+                Button::Y => XButton::Y,
+                Button::Up => XButton::DpadUp,
+                Button::Down => XButton::DpadDown,
+                Button::Left => XButton::DpadLeft,
+                Button::Right => XButton::DpadRight,
+                Button::Start => XButton::Start,
+                Button::Select => XButton::Back,
+                Button::L1 => XButton::LeftShoulder,
+                Button::R1 => XButton::RightShoulder,
+                Button::LStick => XButton::LeftThumb,
+                Button::RStick => XButton::RightThumb,
+            ),
+            b_left_trigger: if Button::L2.is_pressed(data.buttons) {
+                255
+            } else {
+                0
+            },
+            b_right_trigger: if Button::R2.is_pressed(data.buttons) {
+                255
+            } else {
+                0
+            },
+            s_thumb_lx: (((data.left_stick_x as i32) - 128) * 256) as i16,
+            s_thumb_ly: (((data.left_stick_y as i32) - 128) * 256) as i16,
+            s_thumb_rx: (((data.right_stick_x as i32) - 128) * 256) as i16,
+            s_thumb_ry: (((data.right_stick_y as i32) - 128) * 256) as i16,
+        },
+    )?;
 
     Ok(())
 }

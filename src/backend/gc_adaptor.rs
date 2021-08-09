@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -8,11 +8,9 @@ use parking_lot::Mutex;
 use rusb::UsbContext;
 use uuid::Uuid;
 
-use crate::api::{Backend, BackendStatus, ZInputApi};
-use crate::api::component::{
-    controller::{Button, Controller, ControllerInfo},
-};
+use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::device::DeviceInfo;
+use crate::api::{Backend, BackendStatus, ZInputApi};
 
 const EP_IN: u8 = 0x81;
 const EP_OUT: u8 = 0x02;
@@ -71,7 +69,7 @@ impl GcAdaptorInner {
             status: BackendStatus::Running,
         }
     }
-    
+
     fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
         log::info!(target: T, "driver initializing...");
 
@@ -84,25 +82,41 @@ impl GcAdaptorInner {
             for usb_dev in rusb::devices()
                 .context("failed to find devices")?
                 .iter()
-                .filter(|dev| dev
-                    .device_descriptor()
-                    .ok()
-                    .map(|desc| desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID)
-                    .unwrap_or(false)
-                )
+                .filter(|dev| {
+                    dev.device_descriptor()
+                        .ok()
+                        .map(|desc| {
+                            desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID
+                        })
+                        .unwrap_or(false)
+                })
             {
-                let handle = std::thread::spawn(new_adaptor_thread(usb_dev, next_id.fetch_add(1, Ordering::SeqCst), self.stop.clone(), api.clone()));
+                let handle = std::thread::spawn(new_adaptor_thread(
+                    usb_dev,
+                    next_id.fetch_add(1, Ordering::SeqCst),
+                    self.stop.clone(),
+                    api.clone(),
+                ));
                 self.handles.lock().push(handle);
             }
 
             if rusb::has_hotplug() {
-                log::info!(target: T, "usb driver supports hotplug, registering callback handler");
-                self.callback_registration = rusb::GlobalContext{}.register_callback(
-                    Some(VENDOR_ID),
-                    Some(PRODUCT_ID),
-                    None,
-                    Box::new(CallbackHandler { api, stop: self.stop.clone(), next_id, handles: self.handles.clone() })
-                )
+                log::info!(
+                    target: T,
+                    "usb driver supports hotplug, registering callback handler"
+                );
+                self.callback_registration = rusb::GlobalContext {}
+                    .register_callback(
+                        Some(VENDOR_ID),
+                        Some(PRODUCT_ID),
+                        None,
+                        Box::new(CallbackHandler {
+                            api,
+                            stop: self.stop.clone(),
+                            next_id,
+                            handles: self.handles.clone(),
+                        }),
+                    )
                     .map(Some)
                     .context("failed to register callback handler")?;
             } else {
@@ -142,16 +156,24 @@ struct CallbackHandler {
 
 impl rusb::Hotplug<rusb::GlobalContext> for CallbackHandler {
     fn device_arrived(&mut self, device: rusb::Device<rusb::GlobalContext>) {
-        let handle = std::thread::spawn(new_adaptor_thread(device, self.next_id.fetch_add(1, Ordering::SeqCst), self.stop.clone(), self.api.clone()));
+        let handle = std::thread::spawn(new_adaptor_thread(
+            device,
+            self.next_id.fetch_add(1, Ordering::SeqCst),
+            self.stop.clone(),
+            self.api.clone(),
+        ));
         self.handles.lock().push(handle);
     }
 
-    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {
-        
-    }
+    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {}
 }
 
-fn new_adaptor_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi + Send + Sync>) -> impl FnOnce() {
+fn new_adaptor_thread(
+    usb_dev: rusb::Device<rusb::GlobalContext>,
+    id: u64,
+    stop: Arc<AtomicBool>,
+    api: Arc<dyn ZInputApi + Send + Sync>,
+) -> impl FnOnce() {
     move || {
         log::info!(target: T, "adaptor found, id: {}", id);
         match adaptor_thread(usb_dev, id, stop, api) {
@@ -161,11 +183,23 @@ fn new_adaptor_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop:
     }
 }
 
-fn adaptor_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi + Send + Sync>) -> Result<()> {
+fn adaptor_thread(
+    usb_dev: rusb::Device<rusb::GlobalContext>,
+    id: u64,
+    stop: Arc<AtomicBool>,
+    api: Arc<dyn ZInputApi + Send + Sync>,
+) -> Result<()> {
     let mut adaptor = usb_dev.open().context("failed to open device")?;
-    let iface = usb_dev.active_config_descriptor().context("failed to get active config descriptor")?
-        .interfaces().next().context("failed to find available interface")?.number();
-    adaptor.claim_interface(iface).context("failed to claim interface")?;
+    let iface = usb_dev
+        .active_config_descriptor()
+        .context("failed to get active config descriptor")?
+        .interfaces()
+        .next()
+        .context("failed to find available interface")?
+        .number();
+    adaptor
+        .claim_interface(iface)
+        .context("failed to claim interface")?;
 
     if adaptor.write_interrupt(EP_OUT, &[0x13], Duration::from_secs(5))
         .context("write interrupt error: is the correct driver installed for the device (i.e. using zadig)")?
@@ -187,7 +221,7 @@ fn adaptor_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop: Arc
         if size != 37 || payload[0] != 0x21 {
             continue;
         }
-        
+
         ctrls.update(&payload[1..])?;
     }
 
@@ -221,7 +255,12 @@ impl Controllers {
             let ctrl = match self.bundles[i] {
                 Some((dev, ctrl)) if !is_active => {
                     // remove device
-                    log::info!(target: T, "removing slot {} from adaptor {}", i + 1, self.adaptor_id);
+                    log::info!(
+                        target: T,
+                        "removing slot {} from adaptor {}",
+                        i + 1,
+                        self.adaptor_id
+                    );
 
                     self.api.remove_controller(&ctrl);
                     self.api.remove_device(&dev);
@@ -231,11 +270,22 @@ impl Controllers {
                 Some((_, ctrl)) => ctrl,
                 None if is_active => {
                     // add device
-                    log::info!(target: T, "adding slot {} from adaptor {}", i + 1, self.adaptor_id);
+                    log::info!(
+                        target: T,
+                        "adding slot {} from adaptor {}",
+                        i + 1,
+                        self.adaptor_id
+                    );
 
                     let ctrl = self.api.new_controller(gc_controller_info());
-                    let dev = self.api.new_device(DeviceInfo::new(format!("Gamecube Adaptor Slot {} (Adaptor {})", i + 1, self.adaptor_id))
-                        .with_controller(ctrl));
+                    let dev = self.api.new_device(
+                        DeviceInfo::new(format!(
+                            "Gamecube Adaptor Slot {} (Adaptor {})",
+                            i + 1,
+                            self.adaptor_id
+                        ))
+                        .with_controller(ctrl),
+                    );
                     self.bundles[i] = Some((dev, ctrl));
                     ctrl
                 }
@@ -252,7 +302,7 @@ impl Controllers {
 
             self.api.update_controller(&ctrl, &self.data[i])?;
         }
-        
+
         Ok(())
     }
 }
@@ -265,7 +315,7 @@ impl Drop for Controllers {
                     self.api.remove_device(&dev);
                     self.api.remove_controller(&ctrl);
                 }
-                None => {},
+                None => {}
             }
         }
     }
@@ -318,21 +368,33 @@ fn convert_buttons(data1: u8, data2: u8) -> u64 {
 }
 
 fn gc_controller_info() -> ControllerInfo {
-    let mut info = ControllerInfo { buttons: 0, analogs: 0 }
-        .with_lstick()
-        .with_rstick()
-        .with_l2_analog()
-        .with_r2_analog();
-    
+    let mut info = ControllerInfo {
+        buttons: 0,
+        analogs: 0,
+    }
+    .with_lstick()
+    .with_rstick()
+    .with_l2_analog()
+    .with_r2_analog();
+
     macro_rules! for_buttons {
         ($($button:expr),* $(,)?) => {
             $($button.set_pressed(&mut info.buttons);)*
         }
     }
     for_buttons!(
-        Button::A, Button::B, Button::X, Button::Y,
-        Button::Up, Button::Down, Button::Left, Button::Right,
-        Button::Start, Button::R1, Button::L2, Button::R2
+        Button::A,
+        Button::B,
+        Button::X,
+        Button::Y,
+        Button::Up,
+        Button::Down,
+        Button::Left,
+        Button::Right,
+        Button::Start,
+        Button::R1,
+        Button::L2,
+        Button::R2
     );
 
     info

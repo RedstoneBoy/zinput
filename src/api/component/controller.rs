@@ -96,9 +96,8 @@ impl Button {
     pub const BUTTONS: [Button; 21] = {
         use Button::*;
         [
-            A, B, X, Y, Up, Down, Left, Right,
-            Start, Select, L1, R1, L2, R2,
-            L3, R3, L4, R4, LStick, RStick, Home
+            A, B, X, Y, Up, Down, Left, Right, Start, Select, L1, R1, L2, R2, L3, R3, L4, R4,
+            LStick, RStick, Home,
         ]
     };
 
@@ -140,28 +139,32 @@ impl Button {
 impl std::fmt::Display for Button {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use Button::*;
-        write!(f, "{}", match *self {
-            A      => "A",
-            B      => "B",
-            X      => "X",
-            Y      => "Y",
-            Up     => "Up",
-            Down   => "Down",
-            Left   => "Left",
-            Right  => "Right",
-            Start  => "Start",
-            Select => "Select",
-            L1     => "L1",
-            R1     => "R1",
-            L2     => "L2",
-            R2     => "R2",
-            L3     => "L3",
-            R3     => "R3",
-            L4     => "L4",
-            R4     => "R4",
-            LStick => "LStick",
-            RStick => "RStick",
-            Home   => "Home",
-        })
+        write!(
+            f,
+            "{}",
+            match *self {
+                A => "A",
+                B => "B",
+                X => "X",
+                Y => "Y",
+                Up => "Up",
+                Down => "Down",
+                Left => "Left",
+                Right => "Right",
+                Start => "Start",
+                Select => "Select",
+                L1 => "L1",
+                R1 => "R1",
+                L2 => "L2",
+                R2 => "R2",
+                L3 => "L3",
+                R3 => "R3",
+                L4 => "L4",
+                R4 => "R4",
+                LStick => "LStick",
+                RStick => "RStick",
+                Home => "Home",
+            }
+        )
     }
 }

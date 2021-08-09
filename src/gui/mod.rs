@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
-use crate::{api::{Backend, Frontend}, zinput::engine::Engine};
+use crate::{
+    api::{Backend, Frontend},
+    zinput::engine::Engine,
+};
 
 mod backend;
 mod device_view;
@@ -15,7 +18,11 @@ pub struct Gui {
 }
 
 impl Gui {
-    pub fn new(engine: Arc<Engine>, backends: Vec<Arc<dyn Backend>>, frontends: Vec<Arc<dyn Frontend>>) -> Self {
+    pub fn new(
+        engine: Arc<Engine>,
+        backends: Vec<Arc<dyn Backend>>,
+        frontends: Vec<Arc<dyn Frontend>>,
+    ) -> Self {
         Gui {
             backends: backend::BackendConfig::new(engine.clone(), backends),
             frontends: frontend::FrontendConfig::new(frontends),
