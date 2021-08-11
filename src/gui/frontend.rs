@@ -5,12 +5,12 @@ use eframe::{egui, epi};
 use crate::api::Frontend;
 
 pub struct FrontendConfig {
-    frontends: Vec<Arc<dyn Frontend>>,
+    frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
     selected_frontend: Option<usize>,
 }
 
 impl FrontendConfig {
-    pub fn new(frontends: Vec<Arc<dyn Frontend>>) -> Self {
+    pub fn new(frontends: Vec<Arc<dyn Frontend + Send + Sync>>) -> Self {
         FrontendConfig {
             frontends,
             selected_frontend: None,

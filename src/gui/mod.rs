@@ -21,7 +21,7 @@ impl Gui {
     pub fn new(
         engine: Arc<Engine>,
         backends: Vec<Arc<dyn Backend>>,
-        frontends: Vec<Arc<dyn Frontend>>,
+        frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
     ) -> Self {
         Gui {
             backends: backend::BackendConfig::new(engine.clone(), backends),

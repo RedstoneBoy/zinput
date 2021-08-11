@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
@@ -19,19 +19,21 @@ const T: &'static str = "frontend:xinput";
 
 pub struct XInput {
     inner: Mutex<Inner>,
+    signals: Arc<Signals>,
 }
 
 impl XInput {
     pub fn new() -> Self {
         XInput {
             inner: Mutex::new(Inner::new()),
+            signals: Arc::new(Signals::new()),
         }
     }
 }
 
 impl Frontend for XInput {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine);
+        self.inner.lock().init(engine, self.signals.clone());
     }
 
     fn name(&self) -> &str {
@@ -46,14 +48,22 @@ impl Frontend for XInput {
     ) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
+
+    fn on_component_update(&self, id: &Uuid) {
+        if self.signals.listen_update.lock().contains(id)
+            && !self.signals.update.0.is_full() {
+            // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
+            self.signals.update.0.send(*id).unwrap();
+        }
+    }
 }
 
 struct Inner {
-    device: Sender<Uuid>,
-    device_recv: Option<Receiver<Uuid>>,
+    device: Sender<(usize, Option<Uuid>)>,
+    device_recv: Option<Receiver<(usize, Option<Uuid>)>>,
     engine: Option<Arc<Engine>>,
 
-    selected_device: Option<Uuid>,
+    selected_devices: [Option<Uuid>; 4],
 }
 
 impl Inner {
@@ -64,17 +74,18 @@ impl Inner {
             device_recv: Some(device_recv),
             engine: None,
 
-            selected_device: None,
+            selected_devices: [None; 4],
         }
     }
 }
 
 impl Inner {
-    fn init(&mut self, engine: Arc<Engine>) {
+    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
         self.engine = Some(engine.clone());
         std::thread::spawn(new_xinput_thread(Thread {
             engine,
             device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
+            signals,
         }));
     }
 
@@ -85,33 +96,55 @@ impl Inner {
         ui: &mut eframe::egui::Ui,
     ) {
         if let Some(engine) = self.engine.clone() {
-            egui::ComboBox::from_label("Devices")
+            for i in 0..self.selected_devices.len() {
+                egui::ComboBox::from_label(format!("XInput Controller {}", i + 1))
                 .selected_text(
-                    self.selected_device
+                    self.selected_devices[i]
                         .and_then(|id| engine.get_device(&id))
-                        .map_or("".to_owned(), |dev| dev.name.clone()),
+                        .map_or("[None]".to_owned(), |dev| dev.name.clone()),
                 )
                 .show_ui(ui, |ui| {
+                    if ui.selectable_value(&mut self.selected_devices[i], None, "[None]")
+                        .clicked()
+                    {
+                        self.device.send((i, None)).unwrap();
+                    }
                     for device_ref in engine.devices() {
                         if ui
                             .selectable_value(
-                                &mut self.selected_device,
+                                &mut self.selected_devices[i],
                                 Some(*device_ref.key()),
                                 &device_ref.name,
                             )
                             .clicked()
                         {
-                            self.device.send(*device_ref.key()).unwrap();
+                            self.device.send((i, Some(*device_ref.key()))).unwrap();
                         }
                     }
                 });
+            }
+        }
+    }
+}
+
+struct Signals {
+    listen_update: Mutex<HashSet<Uuid>>,
+    update: (Sender<Uuid>, Receiver<Uuid>),
+}
+
+impl Signals {
+    fn new() -> Self {
+        Signals {
+            listen_update: Mutex::new(HashSet::new()),
+            update: crossbeam_channel::bounded(4),
         }
     }
 }
 
 struct Thread {
     engine: Arc<Engine>,
-    device_change: Receiver<Uuid>,
+    device_change: Receiver<(usize, Option<Uuid>)>,
+    signals: Arc<Signals>,
 }
 
 fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
@@ -125,65 +158,57 @@ fn xinput_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
         device_change,
+        signals,
     } = thread;
 
     let mut vigem = Vigem::new();
-    vigem.connect()?;
+    vigem.connect()?;    
 
-    let mut target = Target::new(vigem::TargetType::Xbox360);
-    vigem.target_add(&mut target)?;
-
-    let mut device_id = None;
+    let mut ids: [Option<(Uuid, Uuid, Target)>; 4] = [None, None, None, None];
 
     loop {
-        let cur_device_id = match device_id {
-            Some(id) => id,
-            None => loop {
-                match device_change.try_recv() {
-                    Ok(id) => {
-                        break id;
-                    }
-                    Err(_) => {}
-                }
-
-                let device = engine.devices().next();
-                if let Some(device) = device {
-                    break *device.key();
-                } else {
-                    continue;
-                }
-            },
-        };
-
-        let controller_id = match engine
-            .get_device(&cur_device_id)
-            .and_then(|device| device.controller)
-        {
-            Some(id) => id,
-            None => {
-                device_id = None;
-                continue;
-            }
-        };
-
-        let update_recv = engine.add_update_channel(&controller_id);
-
         loop {
             crossbeam_channel::select! {
-                recv(device_change) -> id => {
-                    device_id = match id {
-                        Ok(id) => Some(id),
-                        Err(_) => None,
-                    };
-                    break;
-                }
-                recv(update_recv) -> _ => {
-                    let controller = match engine.get_controller(&controller_id) {
-                        Some(controller) => controller,
-                        None => break,
-                    };
+                recv(device_change) -> device_change => {
+                    match device_change {
+                        Ok((idx, Some(device_id))) => {
+                            if let Some((_, cid, target)) = &mut ids[idx] {
+                                vigem.target_remove(target)?;
+                                signals.listen_update.lock().remove(cid);
+                            }
 
-                    update_target(&mut vigem, &target, &controller.data)?;
+                            if let Some(controller_id) = engine.get_device(&device_id)
+                                .and_then(|device| device.controller)
+                            {
+                                let mut target = Target::new(vigem::TargetType::Xbox360);
+                                vigem.target_add(&mut target)?;
+                                ids[idx] = Some((device_id, controller_id, target));
+                                signals.listen_update.lock().insert(controller_id);
+                            }
+                        }
+                        Ok((idx, None)) => {
+                            if let Some((_, cid, target)) = ids[idx].as_mut() {
+                                vigem.target_remove(target)?;
+                                signals.listen_update.lock().remove(cid);
+                            }
+                            ids[idx] = None;
+                        }
+                        Err(_) => {
+                            // todo
+                        }
+                    }
+                },
+                recv(signals.update.1) -> _ => {
+                    for bundle in &ids {
+                        if let Some((_, cid, target)) = bundle.as_ref() {
+                            let controller = match engine.get_controller(cid) {
+                                Some(controller) => controller,
+                                None => break,
+                            };
+
+                            update_target(&mut vigem, &target, &controller.data)?;
+                        }
+                    }
                 }
             }
         }

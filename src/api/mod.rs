@@ -32,6 +32,8 @@ pub trait Frontend {
     fn name(&self) -> &str;
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {}
+
+    fn on_component_update(&self, _id: &Uuid) {}
 }
 
 pub trait ZInputApi {

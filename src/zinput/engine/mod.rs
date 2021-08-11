@@ -1,4 +1,4 @@
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Sender;
 use dashmap::{
     mapref::{multiple::RefMulti, one::Ref},
     DashMap,
@@ -12,23 +12,27 @@ use crate::api::{
         Component, ComponentData,
     },
     device::DeviceInfo,
-    InvalidComponentIdError, ZInputApi,
+    InvalidComponentIdError,
+    ZInputApi,
 };
+
+pub mod vc;
 
 pub struct Engine {
     devices: DashMap<Uuid, DeviceInfo>,
     controllers: DashMap<Uuid, Component<Controller>>,
     motions: DashMap<Uuid, Component<Motion>>,
-    updates: DashMap<Uuid, Vec<Sender<()>>>,
+
+    update_channel: Sender<Uuid>,
 }
 
 impl Engine {
-    pub fn new() -> Self {
+    pub fn new(update_channel: Sender<Uuid>) -> Self {
         Engine {
             devices: DashMap::new(),
             controllers: DashMap::new(),
             motions: DashMap::new(),
-            updates: DashMap::new(),
+            update_channel,
         }
     }
 
@@ -67,12 +71,6 @@ impl Engine {
     pub fn get_motion(&self, id: &Uuid) -> Option<Ref<Uuid, Component<Motion>>> {
         self.motions.get(id)
     }
-
-    pub fn add_update_channel(&self, id: &Uuid) -> Receiver<()> {
-        let (send, recv) = crossbeam_channel::bounded(1);
-        self.updates.entry(*id).or_insert(Vec::new()).push(send);
-        recv
-    }
 }
 
 impl ZInputApi for Engine {
@@ -104,17 +102,24 @@ impl ZInputApi for Engine {
             .get_mut(id)
             .ok_or(InvalidComponentIdError)?;
 
-        component.data.update(data);
-
-        match self.updates.get(id) {
-            Some(senders) => {
-                for sender in senders.value() {
-                    if sender.is_empty() {
-                        sender.send(()).unwrap();
-                    }
-                }
+        // TEMP:
+        let data = {
+            let mut data = data.clone();
+            use crate::api::component::controller::Button;
+            if data.l2_analog >= 200 {
+                Button::L2.set_pressed(&mut data.buttons);
             }
-            None => {}
+            if data.r2_analog >= 200 {
+                Button::R2.set_pressed(&mut data.buttons);
+            }
+            data
+        };
+
+        component.data.update(&data);
+
+        match self.update_channel.send(*id) {
+            Ok(()) => {},
+            Err(_) => {},
         }
 
         Ok(())
@@ -125,15 +130,9 @@ impl ZInputApi for Engine {
 
         component.data.update(data);
 
-        match self.updates.get(id) {
-            Some(senders) => {
-                for sender in senders.value() {
-                    if sender.is_empty() {
-                        sender.send(()).unwrap();
-                    }
-                }
-            }
-            None => {}
+        match self.update_channel.send(*id) {
+            Ok(()) => {},
+            Err(_) => {},
         }
 
         Ok(())
