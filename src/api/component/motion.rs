@@ -5,11 +5,11 @@ pub struct MotionInfo {
     pub has_accel: bool,
 }
 
-impl Default for MotionInfo {
-    fn default() -> Self {
+impl MotionInfo {
+    pub fn new(has_gyro: bool, has_accel: bool) -> Self {
         MotionInfo {
-            has_gyro: true,
-            has_accel: true,
+            has_gyro,
+            has_accel,
         }
     }
 }

@@ -152,7 +152,7 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Resul
         .set_read_timeout(Some(Duration::from_secs(1)))?;
 
     let controller_id = api.new_controller(ControllerInfo::default());
-    let motion_id = api.new_motion(MotionInfo::default());
+    let motion_id = api.new_motion(MotionInfo::new(true, true));
     let device_id = api.new_device(
         DeviceInfo::new(format!("Swi Controller"))
             .with_controller(controller_id)

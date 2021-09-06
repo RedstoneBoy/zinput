@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam_channel::{Receiver, select};
+use crossbeam_channel::{select, Receiver};
 use uuid::Uuid;
 
 use crate::api::Frontend;
@@ -11,15 +11,15 @@ pub struct Thread {
 }
 
 pub fn new_event_thread(thread: Thread) -> impl FnOnce() {
-    move || {
-        event_thread(thread)
-    }
+    move || event_thread(thread)
 }
 
-fn event_thread(Thread {
-    update_channel,
-    frontends,
-}: Thread) {
+fn event_thread(
+    Thread {
+        update_channel,
+        frontends,
+    }: Thread,
+) {
     loop {
         select! {
             recv(update_channel) -> uuid => {

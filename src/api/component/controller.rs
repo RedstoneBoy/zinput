@@ -101,7 +101,7 @@ impl Button {
         ]
     };
 
-    const fn bit(&self) -> u64 {
+    pub const fn bit(&self) -> u64 {
         match self {
             Button::A => 0,
             Button::B => 1,

@@ -50,8 +50,7 @@ impl Frontend for XInput {
     }
 
     fn on_component_update(&self, id: &Uuid) {
-        if self.signals.listen_update.lock().contains(id)
-            && !self.signals.update.0.is_full() {
+        if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
             // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
             self.signals.update.0.send(*id).unwrap();
         }
@@ -98,30 +97,31 @@ impl Inner {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
                 egui::ComboBox::from_label(format!("XInput Controller {}", i + 1))
-                .selected_text(
-                    self.selected_devices[i]
-                        .and_then(|id| engine.get_device(&id))
-                        .map_or("[None]".to_owned(), |dev| dev.name.clone()),
-                )
-                .show_ui(ui, |ui| {
-                    if ui.selectable_value(&mut self.selected_devices[i], None, "[None]")
-                        .clicked()
-                    {
-                        self.device.send((i, None)).unwrap();
-                    }
-                    for device_ref in engine.devices() {
+                    .selected_text(
+                        self.selected_devices[i]
+                            .and_then(|id| engine.get_device(&id))
+                            .map_or("[None]".to_owned(), |dev| dev.name.clone()),
+                    )
+                    .show_ui(ui, |ui| {
                         if ui
-                            .selectable_value(
-                                &mut self.selected_devices[i],
-                                Some(*device_ref.key()),
-                                &device_ref.name,
-                            )
+                            .selectable_value(&mut self.selected_devices[i], None, "[None]")
                             .clicked()
                         {
-                            self.device.send((i, Some(*device_ref.key()))).unwrap();
+                            self.device.send((i, None)).unwrap();
                         }
-                    }
-                });
+                        for device_ref in engine.devices() {
+                            if ui
+                                .selectable_value(
+                                    &mut self.selected_devices[i],
+                                    Some(*device_ref.key()),
+                                    &device_ref.name,
+                                )
+                                .clicked()
+                            {
+                                self.device.send((i, Some(*device_ref.key()))).unwrap();
+                            }
+                        }
+                    });
             }
         }
     }
@@ -162,7 +162,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
     } = thread;
 
     let mut vigem = Vigem::new();
-    vigem.connect()?;    
+    vigem.connect()?;
 
     let mut ids: [Option<(Uuid, Uuid, Target)>; 4] = [None, None, None, None];
 
@@ -203,7 +203,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                         if let Some((_, cid, target)) = bundle.as_ref() {
                             let controller = match engine.get_controller(cid) {
                                 Some(controller) => controller,
-                                None => break,
+                                None => continue,
                             };
 
                             update_target(&mut vigem, &target, &controller.data)?;

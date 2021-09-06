@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -8,9 +9,12 @@ use parking_lot::Mutex;
 use rusb::UsbContext;
 use uuid::Uuid;
 
-use crate::api::{Backend, BackendStatus, ZInputApi};
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
+use crate::api::component::motion::{Motion, MotionInfo};
 use crate::api::device::DeviceInfo;
+use crate::api::{Backend, BackendStatus, ZInputApi};
+
+const EP_IN: u8 = 0x82;
 
 const VENDOR_ID: u16 = 0x28DE;
 const PRODUCT_ID: u16 = 0x1142;
@@ -63,7 +67,7 @@ impl Inner {
             status: BackendStatus::Running,
         }
     }
-    
+
     fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
         log::info!(target: T, "driver initializing...");
 
@@ -76,25 +80,41 @@ impl Inner {
             for usb_dev in rusb::devices()
                 .context("failed to find devices")?
                 .iter()
-                .filter(|dev| dev
-                    .device_descriptor()
-                    .ok()
-                    .map(|desc| desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID)
-                    .unwrap_or(false)
-                )
+                .filter(|dev| {
+                    dev.device_descriptor()
+                        .ok()
+                        .map(|desc| {
+                            desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID
+                        })
+                        .unwrap_or(false)
+                })
             {
-                let handle = std::thread::spawn(new_controller_thread(usb_dev, next_id.fetch_add(1, Ordering::SeqCst), self.stop.clone(), api.clone()));
+                let handle = std::thread::spawn(new_controller_thread(
+                    usb_dev,
+                    next_id.fetch_add(1, Ordering::SeqCst),
+                    self.stop.clone(),
+                    api.clone(),
+                ));
                 self.handles.lock().push(handle);
             }
 
             if rusb::has_hotplug() {
-                log::info!(target: T, "usb driver supports hotplug, registering callback handler");
-                self.callback_registration = rusb::GlobalContext{}.register_callback(
-                    Some(VENDOR_ID),
-                    Some(PRODUCT_ID),
-                    None,
-                    Box::new(CallbackHandler { api, stop: self.stop.clone(), next_id, handles: self.handles.clone() })
-                )
+                log::info!(
+                    target: T,
+                    "usb driver supports hotplug, registering callback handler"
+                );
+                self.callback_registration = rusb::GlobalContext {}
+                    .register_callback(
+                        Some(VENDOR_ID),
+                        Some(PRODUCT_ID),
+                        None,
+                        Box::new(CallbackHandler {
+                            api,
+                            stop: self.stop.clone(),
+                            next_id,
+                            handles: self.handles.clone(),
+                        }),
+                    )
                     .map(Some)
                     .context("failed to register callback handler")?;
             } else {
@@ -134,16 +154,24 @@ struct CallbackHandler {
 
 impl rusb::Hotplug<rusb::GlobalContext> for CallbackHandler {
     fn device_arrived(&mut self, device: rusb::Device<rusb::GlobalContext>) {
-        let handle = std::thread::spawn(new_controller_thread(device, self.next_id.fetch_add(1, Ordering::SeqCst), self.stop.clone(), self.api.clone()));
+        let handle = std::thread::spawn(new_controller_thread(
+            device,
+            self.next_id.fetch_add(1, Ordering::SeqCst),
+            self.stop.clone(),
+            self.api.clone(),
+        ));
         self.handles.lock().push(handle);
     }
 
-    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {
-        
-    }
+    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {}
 }
 
-fn new_controller_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi + Send + Sync>) -> impl FnOnce() {
+fn new_controller_thread(
+    usb_dev: rusb::Device<rusb::GlobalContext>,
+    id: u64,
+    stop: Arc<AtomicBool>,
+    api: Arc<dyn ZInputApi + Send + Sync>,
+) -> impl FnOnce() {
     move || {
         log::info!(target: T, "controller found, id: {}", id);
         match controller_thread(usb_dev, id, stop, api) {
@@ -153,174 +181,243 @@ fn new_controller_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, st
     }
 }
 
-fn controller_thread(usb_dev: rusb::Device<rusb::GlobalContext>, id: u64, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi + Send + Sync>) -> Result<()> {
+fn controller_thread(
+    usb_dev: rusb::Device<rusb::GlobalContext>,
+    id: u64,
+    stop: Arc<AtomicBool>,
+    api: Arc<dyn ZInputApi + Send + Sync>,
+) -> Result<()> {
     let mut sc = usb_dev.open().context("failed to open device")?;
-    let iface = usb_dev.active_config_descriptor().context("failed to get active config descriptor")?
-        .interfaces().next().context("failed to find available interface")?.number();
-    sc.claim_interface(iface).context("failed to claim interface")?;
+    let iface = usb_dev
+        .config_descriptor(0)
+        .context("failed to get active config descriptor")?
+        .interfaces()
+        .find(|inter| {
+            inter.descriptors().any(|desc| {
+                desc.class_code() == 3 && desc.sub_class_code() == 0 && desc.protocol_code() == 0
+            })
+        })
+        .context("failed to find available interface")?
+        .number();
+    sc.claim_interface(iface)
+        .context("failed to claim interface")?;
 
     // TODO: Initialize controller
-    
 
-    let mut ctrls = Controllers::new(id, api);
+    let mut bundle = SCBundle::new(id, api);
 
-    let mut payload = [0u8; 37];
+    let mut buf = [0u8; 64];
 
     while !stop.load(Ordering::Acquire) {
-        let size = match sc.read_interrupt(EP_IN, &mut payload, Duration::from_millis(2000)) {
+        let size = match sc.read_interrupt(EP_IN, &mut buf, Duration::from_millis(2000)) {
             Ok(size) => size,
+            Err(rusb::Error::Timeout) => continue,
             Err(rusb::Error::NoDevice) => break,
             Err(err) => return Err(err.into()),
         };
-        if size != 37 || payload[0] != 0x21 {
+        if size != 64 {
             continue;
         }
-        
-        ctrls.update(&payload[1..])?;
+
+        bundle.update(&buf)?;
     }
 
     Ok(())
 }
 
-struct Controllers {
+struct SCBundle {
     api: Arc<dyn ZInputApi + Send + Sync>,
     adaptor_id: u64,
-    bundles: [Option<(Uuid, Uuid)>; 4],
-    data: [Controller; 4],
+    device_id: Uuid,
+    controller_id: Uuid,
+    motion_id: Uuid,
+    controller: Controller,
+    motion: Motion,
 }
 
-impl Controllers {
+impl SCBundle {
     fn new(adaptor_id: u64, api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
-        Controllers {
+        let controller_id = api.new_controller(sc_controller_info());
+        let motion_id = api.new_motion(MotionInfo::new(true, true));
+        let device_id = api.new_device(
+            DeviceInfo::new(format!("Steam Controller (Adaptor {})", adaptor_id))
+                .with_controller(controller_id)
+                .with_motion(motion_id),
+        );
+
+        SCBundle {
             api,
             adaptor_id,
-            bundles: [None; 4],
-            data: [Default::default(); 4],
+            device_id,
+            controller_id,
+            motion_id,
+            controller: Default::default(),
+            motion: Default::default(),
         }
     }
 
-    fn update(&mut self, data: &[u8]) -> Result<()> {
-        for i in 0..4 {
-            let data = &data[(i * 9)..][..9];
+    fn update(&mut self, data: &[u8; 64]) -> Result<()> {
+        let buttons = u32::from_le_bytes(data[7..11].try_into().unwrap());
+        let ltrig = data[11];
+        let rtrig = data[12];
+        let lpad_x = i16::from_le_bytes(data[16..18].try_into().unwrap());
+        let lpad_y = i16::from_le_bytes(data[18..20].try_into().unwrap());
+        let rpad_x = i16::from_le_bytes(data[20..22].try_into().unwrap());
+        let rpad_y = i16::from_le_bytes(data[22..24].try_into().unwrap());
 
-            let is_active = data[0] & (STATE_NORMAL | STATE_WAVEBIRD);
-            let is_active = is_active == STATE_NORMAL || is_active == STATE_WAVEBIRD;
+        self.update_controller(buttons, ltrig, rtrig, lpad_x, lpad_y, rpad_x, rpad_y);
 
-            let ctrl = match self.bundles[i] {
-                Some((dev, ctrl)) if !is_active => {
-                    // remove device
-                    log::info!(target: T, "removing slot {} from adaptor {}", i + 1, self.adaptor_id);
+        // TODO: Motion
+        // let gpitch = i16::from_le_bytes(data[34..36].try_into().unwrap());
+        // let groll = i16::from_le_bytes(data[36..38].try_into().unwrap());
+        // let gyaw = i16::from_le_bytes(data[38..40].try_into().unwrap());
+        // let q1 = i16::from_le_bytes(data[40..42].try_into().unwrap());
+        // let q2 = i16::from_le_bytes(data[42..44].try_into().unwrap());
+        // let q3 = i16::from_le_bytes(data[44..46].try_into().unwrap());
+        // let q4 = i16::from_le_bytes(data[46..48].try_into().unwrap());
 
-                    self.api.remove_controller(&ctrl);
-                    self.api.remove_device(&dev);
-                    self.bundles[i] = None;
-                    continue;
-                }
-                Some((_, ctrl)) => ctrl,
-                None if is_active => {
-                    // add device
-                    log::info!(target: T, "adding slot {} from adaptor {}", i + 1, self.adaptor_id);
+        self.api
+            .update_controller(&self.controller_id, &self.controller)?;
 
-                    let ctrl = self.api.new_controller(gc_controller_info());
-                    let dev = self.api.new_device(DeviceInfo::new(format!("Gamecube Adaptor Slot {} (Adaptor {})", i + 1, self.adaptor_id))
-                        .with_controller(ctrl));
-                    self.bundles[i] = Some((dev, ctrl));
-                    ctrl
-                }
-                None => continue,
-            };
-
-            self.data[i].buttons = convert_buttons(data[1], data[2]);
-            self.data[i].left_stick_x = data[3];
-            self.data[i].left_stick_y = data[4];
-            self.data[i].right_stick_x = data[5];
-            self.data[i].right_stick_y = data[6];
-            self.data[i].l2_analog = data[7];
-            self.data[i].r2_analog = data[8];
-
-            self.api.update_controller(&ctrl, &self.data[i])?;
-        }
-        
         Ok(())
     }
-}
 
-impl Drop for Controllers {
-    fn drop(&mut self) {
-        for i in 0..4 {
-            match self.bundles[i] {
-                Some((dev, ctrl)) => {
-                    self.api.remove_device(&dev);
-                    self.api.remove_controller(&ctrl);
-                }
-                None => {},
+    fn update_controller(
+        &mut self,
+        buttons: u32,
+        ltrig: u8,
+        rtrig: u8,
+        lpad_x: i16,
+        lpad_y: i16,
+        rpad_x: i16,
+        rpad_y: i16,
+    ) {
+        macro_rules! convert {
+            ($out:expr => $($scbutton:expr, $button:expr $(, if $guard:expr)?);* $(;)?) => {
+                $(if $scbutton.is_pressed(buttons) $(&& $guard)? {
+                    $button.set_pressed($out);
+                })*
             }
         }
-    }
-}
 
-fn convert_buttons(data1: u8, data2: u8) -> u64 {
-    enum GcButton {
-        Start = 0,
-        Z = 1,
-        R = 2,
-        L = 3,
-        A = 8,
-        B = 9,
-        X = 10,
-        Y = 11,
-        Left = 12,
-        Right = 13,
-        Down = 14,
-        Up = 15,
-    }
+        let lpad_touch = SCButton::LPadTouch.is_pressed(buttons);
 
-    let buttons = ((data1 as u16) << 8) | (data2 as u16);
+        let mut new_buttons = if lpad_touch {
+            self.controller.buttons & (1 << Button::LStick.bit())
+        } else {
+            self.controller.buttons
+                & ((1 << Button::Up.bit())
+                    | (1 << Button::Down.bit())
+                    | (1 << Button::Left.bit())
+                    | (1 << Button::Right.bit()))
+        };
 
-    let mut out = 0u64;
+        convert!(&mut new_buttons =>
+            SCButton::RClick, Button::RStick;
+            SCButton::LClick, Button::LStick, if !lpad_touch;
+            SCButton::LClick, Button::Up,    if lpad_touch && lpad_y >= 0 && lpad_y  > lpad_x && lpad_y  > -lpad_x;
+            SCButton::LClick, Button::Down,  if lpad_touch && lpad_y <  0 && -lpad_y > lpad_x && -lpad_y > -lpad_x;
+            SCButton::LClick, Button::Left,  if lpad_touch && lpad_x <  0 && -lpad_x > lpad_y && -lpad_x > -lpad_y;
+            SCButton::LClick, Button::Right, if lpad_touch && lpad_x >= 0 && lpad_x  > lpad_y && lpad_x  > -lpad_y;
+            SCButton::RGrip,  Button::R3;
+            SCButton::LGrip,  Button::L3;
+            SCButton::Start,  Button::Start;
+            SCButton::Steam,  Button::Home;
+            SCButton::Back,   Button::Select;
+            SCButton::A,      Button::A;
+            SCButton::X,      Button::X;
+            SCButton::B,      Button::B;
+            SCButton::Y,      Button::Y;
+            SCButton::Lb,     Button::L1;
+            SCButton::Rb,     Button::R1;
+            SCButton::Lt,     Button::L2;
+            SCButton::Rt,     Button::R2;
+        );
 
-    macro_rules! convert {
-        ($($gcbutton:expr, $button:expr);* $(;)?) => {
-            $(if (buttons >> ($gcbutton as u16)) & 1 == 1 {
-                $button.set_pressed(&mut out);
-            })*
+        self.controller.buttons = new_buttons;
+
+        self.controller.l2_analog = ltrig;
+        self.controller.r2_analog = rtrig;
+        self.controller.right_stick_x = ((rpad_x / 256) + 128) as u8;
+        self.controller.right_stick_y = ((rpad_y / 256) + 128) as u8;
+        if !lpad_touch {
+            self.controller.left_stick_x = ((lpad_x / 256) + 128) as u8;
+            self.controller.left_stick_y = ((lpad_y / 256) + 128) as u8;
         }
     }
-
-    convert!(
-        GcButton::Start, Button::Start;
-        GcButton::Z,     Button::R1;
-        GcButton::R,     Button::R2;
-        GcButton::L,     Button::L2;
-        GcButton::A,     Button::A;
-        GcButton::B,     Button::B;
-        GcButton::X,     Button::X;
-        GcButton::Y,     Button::Y;
-        GcButton::Left,  Button::Left;
-        GcButton::Right, Button::Right;
-        GcButton::Down,  Button::Down;
-        GcButton::Up,    Button::Up;
-    );
-
-    out
 }
 
-fn gc_controller_info() -> ControllerInfo {
-    let mut info = ControllerInfo { buttons: 0, analogs: 0 }
-        .with_lstick()
-        .with_rstick()
-        .with_l2_analog()
-        .with_r2_analog();
-    
+impl Drop for SCBundle {
+    fn drop(&mut self) {
+        self.api.remove_device(&self.device_id);
+        self.api.remove_controller(&self.controller_id);
+        self.api.remove_motion(&self.motion_id);
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum SCButton {
+    // RPadTouch = 28,
+    LPadTouch = 27,
+    RClick = 26,
+    LClick = 25,
+    RGrip = 24,
+    LGrip = 23,
+    Start = 22,
+    Steam = 21,
+    Back = 20,
+    A = 15,
+    X = 14,
+    B = 13,
+    Y = 12,
+    Lb = 11,
+    Rb = 10,
+    Lt = 9,
+    Rt = 8,
+}
+
+impl SCButton {
+    #[inline(always)]
+    pub fn is_pressed(&self, buttons: u32) -> bool {
+        (buttons >> *self as u32) & 1 != 0
+    }
+}
+
+fn sc_controller_info() -> ControllerInfo {
+    let mut info = ControllerInfo {
+        buttons: 0,
+        analogs: 0,
+    }
+    .with_lstick()
+    .with_rstick()
+    .with_l2_analog()
+    .with_r2_analog();
+
     macro_rules! for_buttons {
         ($($button:expr),* $(,)?) => {
             $($button.set_pressed(&mut info.buttons);)*
         }
     }
     for_buttons!(
-        Button::A, Button::B, Button::X, Button::Y,
-        Button::Up, Button::Down, Button::Left, Button::Right,
-        Button::Start, Button::R1, Button::L2, Button::R2
+        Button::A,
+        Button::B,
+        Button::X,
+        Button::Y,
+        Button::Up,
+        Button::Down,
+        Button::Left,
+        Button::Right,
+        Button::Start,
+        Button::Select,
+        Button::L1,
+        Button::R1,
+        Button::L2,
+        Button::R2,
+        Button::L3,
+        Button::R3,
+        Button::LStick,
+        Button::RStick,
+        Button::Home,
     );
 
     info

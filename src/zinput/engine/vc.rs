@@ -8,14 +8,11 @@ pub struct Virtual {
 }
 
 impl Virtual {
-    pub fn update(&self, engine: &Engine, component_id: &Uuid) {
-
-    }
+    pub fn update(&self, engine: &Engine, component_id: &Uuid) {}
 }
 
 struct VirtualDevice {
     controller: Option<Uuid>,
     motion: Option<Uuid>,
     // mappings: Mappings,
-    
 }

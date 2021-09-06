@@ -12,8 +12,7 @@ use crate::api::{
         Component, ComponentData,
     },
     device::DeviceInfo,
-    InvalidComponentIdError,
-    ZInputApi,
+    InvalidComponentIdError, ZInputApi,
 };
 
 pub mod vc;
@@ -118,8 +117,8 @@ impl ZInputApi for Engine {
         component.data.update(&data);
 
         match self.update_channel.send(*id) {
-            Ok(()) => {},
-            Err(_) => {},
+            Ok(()) => {}
+            Err(_) => {}
         }
 
         Ok(())
@@ -131,8 +130,8 @@ impl ZInputApi for Engine {
         component.data.update(data);
 
         match self.update_channel.send(*id) {
-            Ok(()) => {},
-            Err(_) => {},
+            Ok(()) => {}
+            Err(_) => {}
         }
 
         Ok(())
