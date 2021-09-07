@@ -4,6 +4,7 @@ pub struct DeviceInfo {
     pub name: String,
     pub controller: Option<Uuid>,
     pub motion: Option<Uuid>,
+    pub touch_pads: Vec<Uuid>,
 }
 
 impl DeviceInfo {
@@ -12,6 +13,7 @@ impl DeviceInfo {
             name,
             controller: None,
             motion: None,
+            touch_pads: Vec::new(),
         }
     }
 
@@ -22,6 +24,11 @@ impl DeviceInfo {
 
     pub fn with_motion(mut self, motion: Uuid) -> Self {
         self.motion = Some(motion);
+        self
+    }
+
+    pub fn with_touch_pad(mut self, touch_pad: Uuid) -> Self {
+        self.touch_pads.push(touch_pad);
         self
     }
 }

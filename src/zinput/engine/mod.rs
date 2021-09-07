@@ -9,6 +9,7 @@ use crate::api::{
     component::{
         controller::{Controller, ControllerInfo},
         motion::{Motion, MotionInfo},
+        touch_pad::{TouchPad, TouchPadInfo},
         Component, ComponentData,
     },
     device::DeviceInfo,
@@ -21,6 +22,7 @@ pub struct Engine {
     devices: DashMap<Uuid, DeviceInfo>,
     controllers: DashMap<Uuid, Component<Controller>>,
     motions: DashMap<Uuid, Component<Motion>>,
+    touch_pads: DashMap<Uuid, Component<TouchPad>>,
 
     update_channel: Sender<Uuid>,
 }
@@ -31,6 +33,7 @@ impl Engine {
             devices: DashMap::new(),
             controllers: DashMap::new(),
             motions: DashMap::new(),
+            touch_pads: DashMap::new(),
             update_channel,
         }
     }
@@ -45,6 +48,10 @@ impl Engine {
 
     pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
         self.motions.iter()
+    }
+
+    pub fn touch_pads(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<TouchPad>>> {
+        self.touch_pads.iter()
     }
 
     pub fn has_device(&self, id: &Uuid) -> bool {
@@ -70,6 +77,10 @@ impl Engine {
     pub fn get_motion(&self, id: &Uuid) -> Option<Ref<Uuid, Component<Motion>>> {
         self.motions.get(id)
     }
+
+    pub fn get_touch_pad(&self, id: &Uuid) -> Option<Ref<Uuid, Component<TouchPad>>> {
+        self.touch_pads.get(id)
+    }
 }
 
 impl ZInputApi for Engine {
@@ -82,6 +93,12 @@ impl ZInputApi for Engine {
     fn new_motion(&self, info: MotionInfo) -> Uuid {
         let id = Uuid::new_v4();
         self.motions.insert(id, Component::new(info));
+        id
+    }
+
+    fn new_touch_pad(&self, info: TouchPadInfo) -> Uuid {
+        let id = Uuid::new_v4();
+        self.touch_pads.insert(id, Component::new(info));
         id
     }
 
@@ -137,12 +154,29 @@ impl ZInputApi for Engine {
         Ok(())
     }
 
+    fn update_touch_pad(&self, id: &Uuid, data: &TouchPad) -> Result<(), InvalidComponentIdError> {
+        let mut component = self.touch_pads.get_mut(id).ok_or(InvalidComponentIdError)?;
+
+        component.data.update(data);
+
+        match self.update_channel.send(*id) {
+            Ok(()) => {}
+            Err(_) => {}
+        }
+
+        Ok(())
+    }
+
     fn remove_controller(&self, id: &Uuid) {
         self.controllers.remove(id);
     }
 
     fn remove_motion(&self, id: &Uuid) {
         self.motions.remove(id);
+    }
+
+    fn remove_touch_pad(&self, id: &Uuid) {
+        self.touch_pads.remove(id);
     }
 
     fn remove_device(&self, id: &Uuid) {

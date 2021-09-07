@@ -3,7 +3,10 @@ use std::sync::Arc;
 use eframe::{egui, epi};
 use uuid::Uuid;
 
-use crate::{api::component::controller::Button, zinput::engine::Engine};
+use crate::{
+    api::component::{controller::Button, touch_pad::TouchPadShape},
+    zinput::engine::Engine,
+};
 
 pub struct DeviceView {
     engine: Arc<Engine>,
@@ -95,7 +98,7 @@ impl DeviceView {
                                         + egui::vec2(30.0, 30.0),
                                 },
                             );
-                            Self::paint_joystick(&painter, x, y);
+                            Self::paint_joystick(&painter, x, y, true);
                             ui.expand_to_include_rect(painter.clip_rect());
                         });
                     }
@@ -168,10 +171,54 @@ impl DeviceView {
                         .monospace(),
                 );
             }
+
+            ui.separator();
+
+            if let Some(device) = &self
+                .selected_controller
+                .and_then(|id| self.engine.get_device(&id))
+            {
+                for (i, touch_pad) in device
+                    .touch_pads
+                    .iter()
+                    .filter_map(|tid| self.engine.get_touch_pad(tid))
+                    .enumerate()
+                {
+                    ui.heading(format!("Touch Pad #{}", i + 1));
+                    ui.horizontal(|ui| {
+                        let mut label = egui::Label::new("Pressed");
+                        if touch_pad.data.pressed {
+                            label = label.underline();
+                        }
+                        ui.add(label);
+                        let mut label = egui::Label::new("Touched");
+                        if touch_pad.data.touched {
+                            label = label.underline();
+                        }
+                        ui.add(label);
+
+                        let painter = egui::Painter::new(
+                            ui.ctx().clone(),
+                            ui.layer_id(),
+                            egui::Rect {
+                                min: ui.available_rect_before_wrap().min,
+                                max: ui.available_rect_before_wrap().min + egui::vec2(60.0, 60.0),
+                            },
+                        );
+                        Self::paint_joystick(
+                            &painter,
+                            (touch_pad.data.touch_x / 256) as u8,
+                            (touch_pad.data.touch_y / 256) as u8,
+                            touch_pad.info.shape == TouchPadShape::Circle,
+                        );
+                        ui.expand_to_include_rect(painter.clip_rect());
+                    });
+                }
+            }
         });
     }
 
-    fn paint_joystick(painter: &egui::Painter, x: u8, y: u8) {
+    fn paint_joystick(painter: &egui::Painter, x: u8, y: u8, draw_circle: bool) {
         let x = (x as f32) / 255.0;
         let y = 1.0 - (y as f32) / 255.0;
 
@@ -182,11 +229,13 @@ impl DeviceView {
 
         let center = clip_rect.min + offset + egui::vec2(0.5, 0.5) * scale;
 
-        painter.circle_stroke(
-            center,
-            f32::min(scale.x / 2.0, scale.y / 2.0),
-            egui::Stroke::new(1.0, egui::Rgba::from_rgb(0.3, 0.3, 0.3)),
-        );
+        if draw_circle {
+            painter.circle_stroke(
+                center,
+                f32::min(scale.x / 2.0, scale.y / 2.0),
+                egui::Stroke::new(1.0, egui::Rgba::from_rgb(0.3, 0.3, 0.3)),
+            );
+        }
 
         painter.circle_filled(center, 1.0, egui::Rgba::from_rgb(1.0, 0.3, 0.1));
 

@@ -46,7 +46,7 @@ impl Default for ControllerInfo {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
 pub struct Controller {
     pub buttons: u64,
     pub left_stick_x: u8,
@@ -57,6 +57,22 @@ pub struct Controller {
     pub r1_analog: u8,
     pub l2_analog: u8,
     pub r2_analog: u8,
+}
+
+impl Default for Controller {
+    fn default() -> Self {
+        Controller {
+            buttons: 0,
+            left_stick_x: 127,
+            left_stick_y: 127,
+            right_stick_x: 127,
+            right_stick_y: 127,
+            l1_analog: 0,
+            r1_analog: 0,
+            l2_analog: 0,
+            r2_analog: 0,
+        }
+    }
 }
 
 impl ComponentData for Controller {

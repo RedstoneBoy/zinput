@@ -1,5 +1,6 @@
 pub mod controller;
 pub mod motion;
+pub mod touch_pad;
 
 pub trait ComponentData: Default {
     type Info;

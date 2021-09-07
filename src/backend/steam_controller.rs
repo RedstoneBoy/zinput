@@ -4,13 +4,14 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
 use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::component::motion::{Motion, MotionInfo};
+use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
 use crate::api::device::DeviceInfo;
 use crate::api::{Backend, BackendStatus, ZInputApi};
 
@@ -231,18 +232,27 @@ struct SCBundle {
     device_id: Uuid,
     controller_id: Uuid,
     motion_id: Uuid,
+    touch_left_id: Uuid,
+    touch_right_id: Uuid,
     controller: Controller,
     motion: Motion,
+    touch_left: TouchPad,
+    touch_right: TouchPad,
 }
 
 impl SCBundle {
     fn new(adaptor_id: u64, api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
         let controller_id = api.new_controller(sc_controller_info());
         let motion_id = api.new_motion(MotionInfo::new(true, true));
+        let touch_left_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
+        let touch_right_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
+
         let device_id = api.new_device(
             DeviceInfo::new(format!("Steam Controller (Adaptor {})", adaptor_id))
                 .with_controller(controller_id)
-                .with_motion(motion_id),
+                .with_motion(motion_id)
+                .with_touch_pad(touch_left_id)
+                .with_touch_pad(touch_right_id),
         );
 
         SCBundle {
@@ -251,8 +261,12 @@ impl SCBundle {
             device_id,
             controller_id,
             motion_id,
+            touch_left_id,
+            touch_right_id,
             controller: Default::default(),
             motion: Default::default(),
+            touch_left: Default::default(),
+            touch_right: Default::default(),
         }
     }
 
@@ -266,6 +280,7 @@ impl SCBundle {
         let rpad_y = i16::from_le_bytes(data[22..24].try_into().unwrap());
 
         self.update_controller(buttons, ltrig, rtrig, lpad_x, lpad_y, rpad_x, rpad_y);
+        self.update_touch_pads(buttons, lpad_x, lpad_y, rpad_x, rpad_y);
 
         // TODO: Motion
         // let gpitch = i16::from_le_bytes(data[34..36].try_into().unwrap());
@@ -279,6 +294,10 @@ impl SCBundle {
         self.api
             .update_controller(&self.controller_id, &self.controller)?;
 
+        self.api
+            .update_touch_pad(&self.touch_left_id, &self.touch_left)?;
+        self.api
+            .update_touch_pad(&self.touch_right_id, &self.touch_right)?;
         Ok(())
     }
 
@@ -345,6 +364,32 @@ impl SCBundle {
             self.controller.left_stick_y = ((lpad_y / 256) + 128) as u8;
         }
     }
+
+    fn update_touch_pads(
+        &mut self,
+        buttons: u32,
+        lpad_x: i16,
+        lpad_y: i16,
+        rpad_x: i16,
+        rpad_y: i16,
+    ) {
+        self.touch_right.touch_x = (rpad_x as i32 - i16::MIN as i32) as u32 as u16;
+        self.touch_right.touch_y = (rpad_y as i32 - i16::MIN as i32) as u32 as u16;
+        self.touch_right.pressed = SCButton::RClick.is_pressed(buttons);
+        self.touch_right.touched = SCButton::RPadTouch.is_pressed(buttons);
+
+        if SCButton::LPadTouch.is_pressed(buttons) {
+            self.touch_left.touched = true;
+            self.touch_left.pressed = SCButton::LClick.is_pressed(buttons);
+            self.touch_left.touch_x = (lpad_x as i32 - i16::MIN as i32) as u32 as u16;
+            self.touch_left.touch_y = (lpad_y as i32 - i16::MIN as i32) as u32 as u16;
+        } else {
+            self.touch_left.pressed = false;
+            self.touch_left.touched = false;
+            self.touch_left.touch_x = u16::MAX / 2;
+            self.touch_left.touch_y = u16::MAX / 2;
+        }
+    }
 }
 
 impl Drop for SCBundle {
@@ -352,12 +397,14 @@ impl Drop for SCBundle {
         self.api.remove_device(&self.device_id);
         self.api.remove_controller(&self.controller_id);
         self.api.remove_motion(&self.motion_id);
+        self.api.remove_touch_pad(&self.touch_left_id);
+        self.api.remove_touch_pad(&self.touch_right_id);
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum SCButton {
-    // RPadTouch = 28,
+    RPadTouch = 28,
     LPadTouch = 27,
     RClick = 26,
     LClick = 25,
