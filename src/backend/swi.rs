@@ -254,9 +254,12 @@ impl SwitchConnection {
         // Rotations Per Second -> Degrees Per Second
         const GYRO_SCALE: f32 = 360.0;
 
-        motion.accel_x = f32::from_le_bytes(self.data[6..10].try_into().unwrap());
-        motion.accel_y = f32::from_le_bytes(self.data[10..14].try_into().unwrap());
-        motion.accel_z = f32::from_le_bytes(self.data[14..18].try_into().unwrap());
+        let accel_x = f32::from_le_bytes(self.data[6..10].try_into().unwrap());
+        let accel_y = f32::from_le_bytes(self.data[10..14].try_into().unwrap());
+        let accel_z = f32::from_le_bytes(self.data[14..18].try_into().unwrap());
+        motion.accel_x = accel_x;
+        motion.accel_y = accel_z;
+        motion.accel_z = -accel_y;
         motion.gyro_pitch = f32::from_le_bytes(self.data[18..22].try_into().unwrap()) * GYRO_SCALE;
         motion.gyro_roll = f32::from_le_bytes(self.data[22..26].try_into().unwrap()) * -GYRO_SCALE;
         motion.gyro_yaw = f32::from_le_bytes(self.data[26..30].try_into().unwrap()) * GYRO_SCALE;
