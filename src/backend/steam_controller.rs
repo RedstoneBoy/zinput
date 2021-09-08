@@ -20,6 +20,17 @@ const EP_IN: u8 = 0x82;
 const VENDOR_ID: u16 = 0x28DE;
 const PRODUCT_ID: u16 = 0x1142;
 
+const ENABLE_MOTION: [u8; 64] = [
+    0x87, 0x15, 0x32, 0x84, 0x03, 0x18, 0x00, 0x00,
+    0x31, 0x02, 0x00, 0x08, 0x07, 0x00, 0x07, 0x07,
+    0x00, 0x30, 0x18, 0x00, 0x2f, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
 const T: &'static str = "backend:steam_controller";
 
 pub struct SteamController {
@@ -203,7 +214,9 @@ fn controller_thread(
     sc.claim_interface(iface)
         .context("failed to claim interface")?;
 
-    // TODO: Initialize controller
+    sc.write_control(0x21, 0x09, 0x0300, 1,
+        &ENABLE_MOTION,
+        Duration::from_secs(3))?;
 
     let mut bundle = SCBundle::new(id, api);
 
@@ -281,11 +294,18 @@ impl SCBundle {
 
         self.update_controller(buttons, ltrig, rtrig, lpad_x, lpad_y, rpad_x, rpad_y);
         self.update_touch_pads(buttons, lpad_x, lpad_y, rpad_x, rpad_y);
+        
 
         // TODO: Motion
-        // let gpitch = i16::from_le_bytes(data[34..36].try_into().unwrap());
-        // let groll = i16::from_le_bytes(data[36..38].try_into().unwrap());
-        // let gyaw = i16::from_le_bytes(data[38..40].try_into().unwrap());
+        let accelx = i16::from_le_bytes(data[28..30].try_into().unwrap());
+        let accely = i16::from_le_bytes(data[30..32].try_into().unwrap());
+        let accelz = i16::from_le_bytes(data[32..34].try_into().unwrap());
+        let gpitch = i16::from_le_bytes(data[34..36].try_into().unwrap());
+        let groll = i16::from_le_bytes(data[36..38].try_into().unwrap());
+        let gyaw = i16::from_le_bytes(data[38..40].try_into().unwrap());
+
+        self.update_motion(accelx, accely, accelz, gpitch, groll, gyaw);
+
         // let q1 = i16::from_le_bytes(data[40..42].try_into().unwrap());
         // let q2 = i16::from_le_bytes(data[42..44].try_into().unwrap());
         // let q3 = i16::from_le_bytes(data[44..46].try_into().unwrap());
@@ -293,7 +313,9 @@ impl SCBundle {
 
         self.api
             .update_controller(&self.controller_id, &self.controller)?;
-
+        self.api
+            .update_motion(&self.motion_id, &self.motion)?;
+        
         self.api
             .update_touch_pad(&self.touch_left_id, &self.touch_left)?;
         self.api
@@ -389,6 +411,26 @@ impl SCBundle {
             self.touch_left.touch_x = u16::MAX / 2;
             self.touch_left.touch_y = u16::MAX / 2;
         }
+    }
+
+    fn update_motion(
+        &mut self,
+        accelx: i16,
+        accely: i16,
+        accelz: i16,
+        gpitch: i16,
+        groll: i16,
+        gyaw: i16
+    ) {
+        const ACCEL_SCALE: f32 = 2.0 / 32768.0;
+        const GYRO_SCALE: f32 = 2000.0 / 32768.0;
+
+        self.motion.accel_x = accelx as f32 * -ACCEL_SCALE;
+        self.motion.accel_y = accelz as f32 * -ACCEL_SCALE;
+        self.motion.accel_z = accely as f32 * ACCEL_SCALE;
+        self.motion.gyro_pitch = gpitch as f32 * GYRO_SCALE;
+        self.motion.gyro_roll = groll as f32 * GYRO_SCALE;
+        self.motion.gyro_yaw = gyaw as f32 * GYRO_SCALE;
     }
 }
 

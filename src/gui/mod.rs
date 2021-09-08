@@ -10,11 +10,13 @@ use crate::{
 mod backend;
 mod device_view;
 mod frontend;
+mod motion_cmp;
 
 pub struct Gui {
     backends: backend::BackendConfig,
     frontends: frontend::FrontendConfig,
     cv: device_view::DeviceView,
+    motion: motion_cmp::MotionCmp,
 }
 
 impl Gui {
@@ -26,7 +28,8 @@ impl Gui {
         Gui {
             backends: backend::BackendConfig::new(engine.clone(), backends),
             frontends: frontend::FrontendConfig::new(frontends),
-            cv: device_view::DeviceView::new(engine),
+            cv: device_view::DeviceView::new(engine.clone()),
+            motion: motion_cmp::MotionCmp::new(engine),
         }
     }
 }
@@ -36,6 +39,7 @@ impl epi::App for Gui {
         self.backends.update(ctx, frame);
         self.frontends.update(ctx, frame);
         self.cv.update(ctx, frame);
+        self.motion.update(ctx, frame);
         ctx.request_repaint();
     }
 
