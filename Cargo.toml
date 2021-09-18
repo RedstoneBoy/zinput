@@ -8,8 +8,10 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+crc = "1.8"
 crossbeam-channel = "0.5"
 dashmap = "4.0"
+dsu_protocol = { path = "../dsu_protocol" }
 eframe = "0.13"
 log = "0.4"
 parking_lot = "0.11"

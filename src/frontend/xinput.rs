@@ -167,47 +167,45 @@ fn xinput_thread(thread: Thread) -> Result<()> {
     let mut ids: [Option<(Uuid, Uuid, Target)>; 4] = [None, None, None, None];
 
     loop {
-        loop {
-            crossbeam_channel::select! {
-                recv(device_change) -> device_change => {
-                    match device_change {
-                        Ok((idx, Some(device_id))) => {
-                            if let Some((_, cid, target)) = &mut ids[idx] {
-                                vigem.target_remove(target)?;
-                                signals.listen_update.lock().remove(cid);
-                            }
+        crossbeam_channel::select! {
+            recv(device_change) -> device_change => {
+                match device_change {
+                    Ok((idx, Some(device_id))) => {
+                        if let Some((_, cid, target)) = &mut ids[idx] {
+                            vigem.target_remove(target)?;
+                            signals.listen_update.lock().remove(cid);
+                        }
 
-                            if let Some(controller_id) = engine.get_device(&device_id)
-                                .and_then(|device| device.controller)
-                            {
-                                let mut target = Target::new(vigem::TargetType::Xbox360);
-                                vigem.target_add(&mut target)?;
-                                ids[idx] = Some((device_id, controller_id, target));
-                                signals.listen_update.lock().insert(controller_id);
-                            }
-                        }
-                        Ok((idx, None)) => {
-                            if let Some((_, cid, target)) = ids[idx].as_mut() {
-                                vigem.target_remove(target)?;
-                                signals.listen_update.lock().remove(cid);
-                            }
-                            ids[idx] = None;
-                        }
-                        Err(_) => {
-                            // todo
+                        if let Some(controller_id) = engine.get_device(&device_id)
+                            .and_then(|device| device.controller)
+                        {
+                            let mut target = Target::new(vigem::TargetType::Xbox360);
+                            vigem.target_add(&mut target)?;
+                            ids[idx] = Some((device_id, controller_id, target));
+                            signals.listen_update.lock().insert(controller_id);
                         }
                     }
-                },
-                recv(signals.update.1) -> _ => {
-                    for bundle in &ids {
-                        if let Some((_, cid, target)) = bundle.as_ref() {
-                            let controller = match engine.get_controller(cid) {
-                                Some(controller) => controller,
-                                None => continue,
-                            };
-
-                            update_target(&mut vigem, &target, &controller.data)?;
+                    Ok((idx, None)) => {
+                        if let Some((_, cid, target)) = ids[idx].as_mut() {
+                            vigem.target_remove(target)?;
+                            signals.listen_update.lock().remove(cid);
                         }
+                        ids[idx] = None;
+                    }
+                    Err(_) => {
+                        // todo
+                    }
+                }
+            },
+            recv(signals.update.1) -> _ => {
+                for bundle in &ids {
+                    if let Some((_, cid, target)) = bundle.as_ref() {
+                        let controller = match engine.get_controller(cid) {
+                            Some(controller) => controller,
+                            None => continue,
+                        };
+
+                        update_target(&mut vigem, &target, &controller.data)?;
                     }
                 }
             }
@@ -222,6 +220,8 @@ fn update_target(vigem: &mut Vigem, target: &Target, data: &Controller) -> Resul
             $(| if $from.is_pressed($data) { $to } else { XButton::Nothing })*
         }};
     }
+
+    // TODO: Fix triggers
 
     vigem.update(
         target,
