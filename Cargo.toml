@@ -19,4 +19,7 @@ rusb = "0.8"
 simple_logger = "1.11"
 swi_protocol = { path = "../swi_protocol" }
 uuid = { version = "0.8", features = ["v4"] }
+
+
+[target.'cfg(windows)'.dependencies]
 vigem = "0.9"
