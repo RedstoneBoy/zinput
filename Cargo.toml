@@ -22,4 +22,5 @@ uuid = { version = "0.8", features = ["v4"] }
 
 
 [target.'cfg(windows)'.dependencies]
+rusty-xinput = "1.2"
 vigem = "0.9"

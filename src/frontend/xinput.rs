@@ -241,16 +241,17 @@ fn update_target(vigem: &mut Vigem, target: &Target, data: &Controller) -> Resul
                 Button::R1 => XButton::RightShoulder,
                 Button::LStick => XButton::LeftThumb,
                 Button::RStick => XButton::RightThumb,
+                Button::Home => XButton::Guide,
             ),
             b_left_trigger: if Button::L2.is_pressed(data.buttons) {
                 255
             } else {
-                0
+                data.l2_analog
             },
             b_right_trigger: if Button::R2.is_pressed(data.buttons) {
                 255
             } else {
-                0
+                data.r2_analog
             },
             s_thumb_lx: (((data.left_stick_x as i32) - 128) * 256) as i16,
             s_thumb_ly: (((data.left_stick_y as i32) - 128) * 256) as i16,
