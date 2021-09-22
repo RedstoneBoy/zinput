@@ -1,3 +1,5 @@
+pub mod analogs;
+pub mod buttons;
 pub mod controller;
 pub mod motion;
 pub mod touch_pad;
