@@ -190,6 +190,16 @@ fn adaptor_thread(
     api: Arc<dyn ZInputApi + Send + Sync>,
 ) -> Result<()> {
     let mut adaptor = usb_dev.open().context("failed to open device")?;
+
+    match adaptor.set_auto_detach_kernel_driver(true) {
+        Ok(()) => {},
+        Err(rusb::Error::NotSupported) => {},
+        Err(err) => {
+            Err(err)
+                .context("failed to auto-detach kernel drivers")?;
+        }
+    }
+
     let iface = usb_dev
         .active_config_descriptor()
         .context("failed to get active config descriptor")?
@@ -197,6 +207,7 @@ fn adaptor_thread(
         .next()
         .context("failed to find available interface")?
         .number();
+    
     adaptor
         .claim_interface(iface)
         .context("failed to claim interface")?;
