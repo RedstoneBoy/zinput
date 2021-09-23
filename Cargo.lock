@@ -495,6 +495,7 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 [[package]]
 name = "dsu_protocol"
 version = "0.1.0"
+source = "git+https://github.com/RedstoneBoy/dsu_protocol#49435a6e3d0de3a06a9dac784b50f9c43000aa57"
 
 [[package]]
 name = "eframe"
@@ -1376,6 +1377,7 @@ checksum = "6446ced80d6c486436db5c078dde11a9f73d42b57fb273121e160b84f63d894c"
 [[package]]
 name = "swi_protocol"
 version = "0.1.0"
+source = "git+https://github.com/RedstoneBoy/swi_protocol#39bab81cb46d626a417c5b0a1758dcd0d6174afa"
 
 [[package]]
 name = "syn"

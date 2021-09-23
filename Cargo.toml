@@ -11,14 +11,14 @@ anyhow = "1.0"
 crc = "1.8"
 crossbeam-channel = "0.5"
 dashmap = "4.0"
-dsu_protocol = { path = "../dsu_protocol" }
+dsu_protocol = { git = "https://github.com/RedstoneBoy/dsu_protocol" }
 eframe = "0.13"
 log = "0.4"
 parking_lot = "0.11"
 paste = "1.0"
 rusb = "0.8"
 simple_logger = "1.11"
-swi_protocol = { path = "../swi_protocol" }
+swi_protocol = { git = "https://github.com/RedstoneBoy/swi_protocol" }
 uuid = { version = "0.8", features = ["v4"] }
 
 
