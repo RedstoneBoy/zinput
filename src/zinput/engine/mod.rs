@@ -15,8 +15,6 @@ use crate::api::{
     InvalidComponentIdError,
 };
 
-pub mod vc;
-
 macro_rules! engine_struct {
     ($struct_name:ident ; $($field_name:ident : $ctype:ty),* $(,)?) => {
         paste! {
