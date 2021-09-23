@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs::File, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, fs::{File, OpenOptions}, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
@@ -210,7 +210,10 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                                 id
                             });
                         
-                        let uinput_device = File::open(&uinput)
+                        let uinput_device = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .open(&uinput)
                             .context("failed to open uinput device")?;
                         
                         let uinput_device = UInputHandle::new(uinput_device);
