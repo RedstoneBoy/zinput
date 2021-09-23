@@ -21,8 +21,11 @@ simple_logger = "1.11"
 swi_protocol = { git = "https://github.com/RedstoneBoy/swi_protocol" }
 uuid = { version = "0.8", features = ["v4"] }
 
-
 [target.'cfg(windows)'.dependencies]
 rusty-xinput = "1.2"
 vigem = "0.9"
 winapi = { version = "0.3", features = ["hidpi", "hidusage", "windef", "winuser"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+input-linux = "0.5"
+udev = "0.6"
