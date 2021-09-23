@@ -1,15 +1,16 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fs::File, path::PathBuf, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
+use input_linux::{AbsoluteAxis, EventKind, Key, UInputHandle};
 use parking_lot::Mutex;
 use uuid::Uuid;
-use vigem::{Target, Vigem, XButton, XUSBReport};
 
 use crate::{
     api::{
         component::controller::{Button, Controller},
+        component::motion::Motion,
         Frontend,
     },
     zinput::engine::Engine,
@@ -161,51 +162,109 @@ fn uinput_thread(thread: Thread) -> Result<()> {
         signals,
     } = thread;
 
-    let mut vigem = Vigem::new();
-    vigem.connect()?;
+    let uinput = init_uinput()?;
 
-    let mut ids: [Option<(Uuid, Uuid, Target)>; 4] = [None, None, None, None];
+    let mut joysticks = Vec::<Joystick>::new();
 
     loop {
         crossbeam_channel::select! {
             recv(device_change) -> device_change => {
                 match device_change {
                     Ok((idx, Some(device_id))) => {
-                        if let Some((_, cid, target)) = &mut ids[idx] {
-                            vigem.target_remove(target)?;
-                            signals.listen_update.lock().remove(cid);
+                        if let Some(joystick) = joysticks.get(idx) {
+                            let mut signals = signals.listen_update.lock();
+                            signals.remove(&joystick.controller_id);
+                            if let Some(motion_id) = &joystick.motion_id {
+                                signals.remove(motion_id);
+                            }
                         }
 
-                        if let Some(controller_id) = engine.get_device(&device_id)
+                        if idx > joysticks.len() {
+                            log::error!(target: T, "tried to add controller to index {} but there are only {} joysticks", idx, joysticks.len());
+                            continue;
+                        }
+
+                        let name = match engine.get_device(&device_id) {
+                            Some(device) => device.name.clone(),
+                            None => {
+                                log::error!(target: T, "tried to add non-existent controller");
+                                continue;
+                            }
+                        };
+
+                        let controller_id = match engine.get_device(&device_id)
                             .and_then(|device| device.controller)
                         {
-                            let mut target = Target::new(vigem::TargetType::Xbox360);
-                            vigem.target_add(&mut target)?;
-                            ids[idx] = Some((device_id, controller_id, target));
-                            signals.listen_update.lock().insert(controller_id);
-                        }
+                            Some(id) => id,
+                            None => {
+                                log::error!(target: T, "tried to add controller without controller component");
+                                continue;
+                            }
+                        };
+                        signals.listen_update.lock().insert(controller_id);
+
+                        let motion_id = engine.get_device(&device_id)
+                            .and_then(|device| device.motion)
+                            .map(|id| {
+                                signals.listen_update.lock().insert(id);
+                                id
+                            });
+                        
+                        let uinput_device = File::open(&uinput)
+                            .context("failed to open uinput device")?;
+                        
+                        let uinput_device = UInputHandle::new(uinput_device);
+
+                        let joystick = Joystick::new(&name, device_id, controller_id, motion_id, uinput_device)?;
+                        
+                        joysticks.insert(idx, joystick);
                     }
                     Ok((idx, None)) => {
-                        if let Some((_, cid, target)) = ids[idx].as_mut() {
-                            vigem.target_remove(target)?;
-                            signals.listen_update.lock().remove(cid);
+                        if let Some(joystick) = joysticks.get(idx) {
+                            let mut signals = signals.listen_update.lock();
+                            signals.remove(&joystick.controller_id);
+                            if let Some(motion_id) = &joystick.motion_id {
+                                signals.remove(motion_id);
+                            }
+
+                            joysticks.remove(idx);
+                        } else {
+                            log::error!(target: T, "tried to remove controller out of bounds at index {} when len is {}", idx, joysticks.len());
                         }
-                        ids[idx] = None;
                     }
                     Err(_) => {
                         // todo
                     }
                 }
             },
-            recv(signals.update.1) -> _ => {
-                for bundle in &ids {
-                    if let Some((_, cid, target)) = bundle.as_ref() {
-                        let controller = match engine.get_controller(cid) {
+            recv(signals.update.1) -> uid => {
+                let uid = match uid {
+                    Ok(uid) => uid,
+                    Err(_) => {
+                        // todo
+                        continue;
+                    }
+                };
+
+                for joystick in &joysticks {
+                    if joystick.controller_id == uid {
+                        let controller = match engine.get_controller(&uid) {
                             Some(controller) => controller,
                             None => continue,
                         };
 
-                        update_target(&mut vigem, &target, &controller.data)?;
+                        joystick.update_controller(&controller.data)?;
+                    } else {
+                        if let Some(motion_id) = &joystick.motion_id {
+                            if motion_id == &uid {
+                                let motion = match engine.get_motion(&uid) {
+                                    Some(motion) => motion,
+                                    None => continue,
+                                };
+        
+                                joystick.update_motion(&motion.data)?;
+                            }
+                        }
                     }
                 }
             }
@@ -213,52 +272,92 @@ fn uinput_thread(thread: Thread) -> Result<()> {
     }
 }
 
-fn update_target(vigem: &mut Vigem, target: &Target, data: &Controller) -> Result<()> {
-    macro_rules! translate {
-        ($data:expr, $($from:expr => $to:expr),* $(,)?) => {{
-            XButton::empty()
-            $(| if $from.is_pressed($data) { $to } else { XButton::Nothing })*
-        }};
+struct Joystick {
+    device_id: Uuid,
+    controller_id: Uuid,
+    motion_id: Option<Uuid>,
+
+    uinput_device: UInputHandle<File>,
+}
+
+impl Joystick {
+    fn new(name: &str, device_id: Uuid, controller_id: Uuid, motion_id: Option<Uuid>, uinput_device: UInputHandle<File>) -> Result<Self> {
+        macro_rules! keybits {
+            ($device:expr, $($key:expr),* $(,)?) => {
+                $($device.set_keybit($key)?;)*
+            }
+        }
+
+        let ud = uinput_device;
+
+        ud.set_evbit(EventKind::Key)?;
+        keybits!(ud,
+            Key::ButtonNorth,
+            Key::ButtonSouth,
+            Key::ButtonEast,
+            Key::ButtonWest,
+            Key::ButtonDpadDown,
+            Key::ButtonDpadLeft,
+            Key::ButtonDpadRight,
+            Key::ButtonDpadUp,
+            Key::ButtonStart,
+            Key::ButtonSelect,
+            Key::ButtonTL,
+            Key::ButtonTR,
+            Key::ButtonTL2,
+            Key::ButtonTR2,
+            Key::ButtonThumbl,
+            Key::ButtonThumbr,
+            Key::ButtonConfig,
+        );
+
+        ud.set_evbit(EventKind::Absolute)?;
+        ud.set_absbit(AbsoluteAxis::X)?;
+        ud.set_absbit(AbsoluteAxis::Y)?;
+        ud.set_absbit(AbsoluteAxis::RX)?;
+        ud.set_absbit(AbsoluteAxis::RY)?;
+        ud.set_absbit(AbsoluteAxis::Z)?;
+        ud.set_absbit(AbsoluteAxis::RZ)?;
+
+        ud.create(
+            &input_linux::InputId::default(),
+            name.as_bytes(),
+            0,
+            &[],
+        ).context("failed to create uinput device")?;
+        
+        todo!()
+    }
+    
+    fn update_controller(&self, data: &Controller) -> Result<()> {
+        // TODO: update
+    
+        Ok(())
     }
 
-    // TODO: Fix triggers
+    fn update_motion(&self, data: &Motion) -> Result<()> {
+        // TODO: update
+    
+        Ok(())
+    }
+}
 
-    vigem.update(
-        target,
-        &XUSBReport {
-            w_buttons: translate!(data.buttons,
-                Button::A => XButton::A,
-                Button::B => XButton::B,
-                Button::X => XButton::X,
-                Button::Y => XButton::Y,
-                Button::Up => XButton::DpadUp,
-                Button::Down => XButton::DpadDown,
-                Button::Left => XButton::DpadLeft,
-                Button::Right => XButton::DpadRight,
-                Button::Start => XButton::Start,
-                Button::Select => XButton::Back,
-                Button::L1 => XButton::LeftShoulder,
-                Button::R1 => XButton::RightShoulder,
-                Button::LStick => XButton::LeftThumb,
-                Button::RStick => XButton::RightThumb,
-                Button::Home => XButton::Guide,
-            ),
-            b_left_trigger: if Button::L2.is_pressed(data.buttons) {
-                255
-            } else {
-                data.l2_analog
-            },
-            b_right_trigger: if Button::R2.is_pressed(data.buttons) {
-                255
-            } else {
-                data.r2_analog
-            },
-            s_thumb_lx: (((data.left_stick_x as i32) - 128) * 256) as i16,
-            s_thumb_ly: (((data.left_stick_y as i32) - 128) * 256) as i16,
-            s_thumb_rx: (((data.right_stick_x as i32) - 128) * 256) as i16,
-            s_thumb_ry: (((data.right_stick_y as i32) - 128) * 256) as i16,
-        },
-    )?;
+impl Drop for Joystick {
+    fn drop(&mut self) {
+        match self.uinput_device.dev_destroy() {
+            Ok(()) => {},
+            Err(err) => log::warn!(target: T, "failed to destroy uinput device: {}", err),
+        }
+    }
+}
 
-    Ok(())
+fn init_uinput() -> Result<PathBuf> {
+    let mut udev = udev::Enumerator::new()?;
+    udev.match_subsystem("misc")?;
+    udev.match_sysname("uinput")?;
+    let mut devices = udev.scan_devices()?;
+    let uinput_device = devices.next().ok_or(anyhow::anyhow!("uinput system not found"))?;
+    let uinput_devnode = uinput_device.devnode().ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
+
+    Ok(uinput_devnode.to_owned())
 }

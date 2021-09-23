@@ -26,5 +26,6 @@ rusty-xinput = "1.2"
 vigem = "0.9"
 winapi = { version = "0.3", features = ["hidpi", "hidusage", "windef", "winuser"] }
 
-[target.'cfg(linux)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
+input-linux = "0.5"
 udev = "0.6"
