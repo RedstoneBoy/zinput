@@ -5,7 +5,8 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use winapi::{shared::{hidpi, hidusage, minwindef, windef}, um::{libloaderapi::GetModuleHandleW, winuser}};
 
-use crate::api::{Backend, BackendStatus, ZInputApi, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::api::{Plugin, PluginKind, PluginStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
 
@@ -21,8 +22,8 @@ impl RawInput {
     }
 }
 
-impl Backend for RawInput {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+impl Plugin for RawInput {
+    fn init(&self, zinput_api: Arc<Engine>) {
         *self.state.lock() = Some(Inner::new(zinput_api));
     }
 
@@ -30,10 +31,10 @@ impl Backend for RawInput {
         *self.state.lock() = None;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         match &*self.state.lock() {
             Some(inner) => inner.status(),
-            None => BackendStatus::Stopped,
+            None => PluginStatus::Stopped,
         }
     }
 
@@ -41,22 +42,22 @@ impl Backend for RawInput {
         "raw_input"
     }
 
-    fn update_gui(&self, _ctx: &eframe::egui::CtxRef, _frame: &mut eframe::epi::Frame<'_>, _ui: &mut eframe::egui::Ui) {
-        
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 }
 
 struct Inner {
     hwnd_opt: Arc<Mutex<Option<Hwnd>>>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 
     handle: Option<JoinHandle<()>>,
 }
 
 impl Inner {
-    fn new(api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(api: Arc<Engine>) -> Self {
         let hwnd_opt = Arc::new(Mutex::new(None));
-        let status = Arc::new(Mutex::new(BackendStatus::Running));
+        let status = Arc::new(Mutex::new(PluginStatus::Running));
 
         let handle = Some(std::thread::spawn(new_raw_input_thread(Thread {
             api: api,
@@ -72,7 +73,7 @@ impl Inner {
         }
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.lock().clone()
     }
 }
@@ -81,7 +82,7 @@ impl Drop for Inner {
     fn drop(&mut self) {
         // wait until the raw input thread either creates a window or fails to create one
         while self.hwnd_opt.lock().is_none()
-            && matches!(&*self.status.lock(), &BackendStatus::Running)
+            && matches!(&*self.status.lock(), &PluginStatus::Running)
         {
             std::thread::sleep(Duration::from_secs(1));
         }
@@ -108,9 +109,9 @@ struct Hwnd(*mut windef::HWND__);
 unsafe impl Send for Hwnd {}
 
 struct Thread {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     hwnd_opt: Arc<Mutex<Option<Hwnd>>>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 fn new_raw_input_thread(thread: Thread) -> impl FnOnce() {
@@ -120,11 +121,11 @@ fn new_raw_input_thread(thread: Thread) -> impl FnOnce() {
         match raw_input_thread(thread) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
-                *status.lock() = BackendStatus::Stopped;
+                *status.lock() = PluginStatus::Stopped;
             }
             Err(err) => {
                 log::error!(target: T, "driver crashed: {:#}", err);
-                *status.lock() = BackendStatus::Error(format!("driver crashed: {:#}", err));
+                *status.lock() = PluginStatus::Error(format!("driver crashed: {:#}", err));
             }
         }
     }
@@ -220,14 +221,14 @@ fn raw_input_thread(thread: Thread) -> Result<()> {
 }
 
 struct State {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     joysticks: HashMap<usize, Joystick>,
 
     device_list: Vec<winuser::RAWINPUTDEVICELIST>,
 }
 
 impl State {
-    fn new(api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(api: Arc<Engine>) -> Self {
         State {
             api,
             joysticks: HashMap::new(),
@@ -445,7 +446,7 @@ fn is_joystick(handle: *mut c_void) -> Result<bool> {
     Ok(true)
 }
 
-fn get_joystick_info(api: &(dyn ZInputApi + Send + Sync), handle: *mut c_void) -> Result<Joystick> {
+fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
     let mut preparsed_len = 0;
     if unsafe { winuser::GetRawInputDeviceInfoW(
         handle,

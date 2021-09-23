@@ -14,12 +14,13 @@ use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
 use uuid::Uuid;
 
-use crate::api::component::{
+use crate::api::{PluginKind, component::{
     controller::{Button, Controller, ControllerInfo},
     motion::{Motion, MotionInfo},
-};
+}};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus, ZInputApi};
+use crate::api::{Plugin, PluginStatus};
+use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:xinput";
 
@@ -35,8 +36,8 @@ impl XInput {
     }
 }
 
-impl Backend for XInput {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+impl Plugin for XInput {
+    fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
 
@@ -44,7 +45,7 @@ impl Backend for XInput {
         self.inner.lock().stop()
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.inner.lock().status()
     }
 
@@ -52,15 +53,15 @@ impl Backend for XInput {
         "xinput"
     }
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
-        
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 }
 
 struct Inner {
     handle: Option<std::thread::JoinHandle<()>>,
     stop: Arc<AtomicBool>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 impl Inner {
@@ -68,12 +69,12 @@ impl Inner {
         Inner {
             handle: None,
             stop: Arc::new(AtomicBool::new(false)),
-            status: Arc::new(Mutex::new(BackendStatus::Running)),
+            status: Arc::new(Mutex::new(PluginStatus::Running)),
         }
     }
 
-    fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
-        *self.status.lock() = BackendStatus::Running;
+    fn init(&mut self, api: Arc<Engine>) {
+        *self.status.lock() = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
         self.handle = Some(std::thread::spawn(new_xinput_thread(Thread {
             status: self.status.clone(),
@@ -90,10 +91,10 @@ impl Inner {
                 Err(_) => log::info!(target: T, "driver panicked"),
             }
         }
-        *self.status.lock() = BackendStatus::Stopped;
+        *self.status.lock() = PluginStatus::Stopped;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.lock().clone()
     }
 }
@@ -105,9 +106,9 @@ impl Drop for XInput {
 }
 
 struct Thread {
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 }
 
 fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
@@ -119,11 +120,11 @@ fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
         match xinput_thread(thread) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
-                *status.lock() = BackendStatus::Stopped;
+                *status.lock() = PluginStatus::Stopped;
             }
             Err(err) => {
                 log::error!(target: T, "driver crashed: {:#}", err);
-                *status.lock() = BackendStatus::Error(format!("driver crashed: {:#}", err));
+                *status.lock() = PluginStatus::Error(format!("driver crashed: {:#}", err));
             }
         }
     }
@@ -163,13 +164,13 @@ fn xinput_thread(thread: Thread) -> Result<()> {
 }
 
 struct Controllers {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     controllers: [Option<XController>; 4],
     xinput: XInputHandle,
 }
 
 impl Controllers {
-    fn new(api: Arc<dyn ZInputApi + Send + Sync>, xinput: XInputHandle) -> Self {
+    fn new(api: Arc<Engine>, xinput: XInputHandle) -> Self {
         Controllers {
             api,
             controllers: [None, None, None, None],
@@ -241,7 +242,7 @@ struct XController {
 }
 
 impl XController {
-    fn new(api: &(dyn ZInputApi + Send + Sync), id: usize) -> Self {
+    fn new(api: &(Engine), id: usize) -> Self {
         let controller_id = api.new_controller(xinput_controller_info());
         let device_id = api.new_device(DeviceInfo::new(format!("XInput Controller {}", id + 1))
             .with_controller(controller_id));
@@ -253,7 +254,7 @@ impl XController {
         }
     }
 
-    fn update(&mut self, api: &(dyn ZInputApi + Send + Sync), state: &XInputState) -> Result<()> {
+    fn update(&mut self, api: &(Engine), state: &XInputState) -> Result<()> {
         macro_rules! translate {
             ($state:expr, $($from:ident => $to:expr),* $(,)?) => {{
                 let mut buttons = 0;

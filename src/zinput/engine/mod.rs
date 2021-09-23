@@ -6,7 +6,7 @@ use dashmap::{
 use paste::paste;
 use uuid::Uuid;
 
-use crate::api::{InvalidComponentIdError, ZInputApi, component::{Component, ComponentData, analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion, touch_pad::TouchPad}, device::DeviceInfo};
+use crate::api::{InvalidComponentIdError, component::{Component, ComponentData, analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion, touch_pad::TouchPad}, device::DeviceInfo};
 
 pub mod vc;
 
@@ -39,24 +39,24 @@ macro_rules! engine_struct {
                 })*
             }
 
-            impl ZInputApi for Engine {
-                fn new_device(&self, info: DeviceInfo) -> Uuid {
+            impl Engine {
+                pub fn new_device(&self, info: DeviceInfo) -> Uuid {
                     let id = Uuid::new_v4();
                     self.devices.insert(id, info);
                     id
                 }
 
-                fn remove_device(&self, id: &Uuid) {
+                pub fn remove_device(&self, id: &Uuid) {
                     self.devices.remove(id);
                 }
 
-                $(fn [< new_ $field_name >](&self, info: <$ctype as ComponentData>::Info) -> Uuid {
+                $(pub fn [< new_ $field_name >](&self, info: <$ctype as ComponentData>::Info) -> Uuid {
                     let id = Uuid::new_v4();
                     self.[< $field_name s >].insert(id, Component::new(info));
                     id
                 })*
 
-                $(fn [< update_ $field_name >](&self, id: &Uuid, data: &$ctype) -> Result<(), InvalidComponentIdError> {
+                $(pub fn [< update_ $field_name >](&self, id: &Uuid, data: &$ctype) -> Result<(), InvalidComponentIdError> {
                     let mut component = self.[< $field_name s >].get_mut(id).ok_or(InvalidComponentIdError)?;
 
                     component.data.update(data);
@@ -69,7 +69,7 @@ macro_rules! engine_struct {
                     Ok(())
                 })*
 
-                $(fn [< remove_ $field_name >](&self, id: &Uuid) {
+                $(pub fn [< remove_ $field_name >](&self, id: &Uuid) {
                     self.[< $field_name s >].remove(id);
                 })*
             }

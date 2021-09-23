@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus, ZInputApi};
+use crate::api::{Plugin, PluginKind, PluginStatus};
+use crate::zinput::engine::Engine;
 
 const EP_IN: u8 = 0x81;
 const EP_OUT: u8 = 0x02;
@@ -35,8 +36,8 @@ impl GcAdaptor {
     }
 }
 
-impl Backend for GcAdaptor {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+impl Plugin for GcAdaptor {
+    fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
 
@@ -44,12 +45,16 @@ impl Backend for GcAdaptor {
         self.inner.lock().stop()
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.inner.lock().status()
     }
 
     fn name(&self) -> &str {
         "gc_adaptor"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 }
 
@@ -57,7 +62,7 @@ struct GcAdaptorInner {
     callback_registration: Option<rusb::Registration<rusb::GlobalContext>>,
     handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     stop: Arc<AtomicBool>,
-    status: BackendStatus,
+    status: PluginStatus,
 }
 
 impl GcAdaptorInner {
@@ -66,14 +71,14 @@ impl GcAdaptorInner {
             callback_registration: None,
             handles: Arc::new(Mutex::new(Vec::new())),
             stop: Arc::new(AtomicBool::new(false)),
-            status: BackendStatus::Running,
+            status: PluginStatus::Running,
         }
     }
 
-    fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&mut self, api: Arc<Engine>) {
         log::info!(target: T, "driver initializing...");
 
-        self.status = BackendStatus::Running;
+        self.status = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
 
         match || -> Result<()> {
@@ -128,7 +133,7 @@ impl GcAdaptorInner {
             Ok(()) => log::info!(target: T, "driver initalized"),
             Err(err) => {
                 log::error!(target: T, "driver failed to initalize: {:#}", err);
-                self.status = BackendStatus::Error("driver failed to initialize".to_owned());
+                self.status = PluginStatus::Error("driver failed to initialize".to_owned());
             }
         }
     }
@@ -139,16 +144,16 @@ impl GcAdaptorInner {
             let _ = handle.join();
         }
         self.stop.store(false, Ordering::Release);
-        self.status = BackendStatus::Stopped;
+        self.status = PluginStatus::Stopped;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.clone()
     }
 }
 
 struct CallbackHandler {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     stop: Arc<AtomicBool>,
     next_id: Arc<AtomicU64>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -172,7 +177,7 @@ fn new_adaptor_thread(
     usb_dev: rusb::Device<rusb::GlobalContext>,
     id: u64,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 ) -> impl FnOnce() {
     move || {
         log::info!(target: T, "adaptor found, id: {}", id);
@@ -187,7 +192,7 @@ fn adaptor_thread(
     usb_dev: rusb::Device<rusb::GlobalContext>,
     id: u64,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 ) -> Result<()> {
     let mut adaptor = usb_dev.open().context("failed to open device")?;
 
@@ -240,14 +245,14 @@ fn adaptor_thread(
 }
 
 struct Controllers {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     adaptor_id: u64,
     bundles: [Option<(Uuid, Uuid)>; 4],
     data: [Controller; 4],
 }
 
 impl Controllers {
-    fn new(adaptor_id: u64, api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(adaptor_id: u64, api: Arc<Engine>) -> Self {
         Controllers {
             api,
             adaptor_id,

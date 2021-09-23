@@ -1,4 +1,14 @@
-use std::{collections::HashSet, fs::{File, OpenOptions}, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashSet,
+    fs::{File, OpenOptions},
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
@@ -10,7 +20,7 @@ use uuid::Uuid;
 use crate::{
     api::{
         component::controller::{Button, Controller},
-        Frontend,
+        Plugin, PluginKind, PluginStatus,
     },
     zinput::engine::Engine,
 };
@@ -31,13 +41,25 @@ impl UInput {
     }
 }
 
-impl Frontend for UInput {
+impl Plugin for UInput {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
     }
 
+    fn stop(&self) {
+        self.inner.lock().stop();
+    }
+
+    fn status(&self) -> PluginStatus {
+        self.inner.lock().status.lock().clone()
+    }
+
     fn name(&self) -> &str {
         "uinput"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Frontend
     }
 
     fn update_gui(
@@ -59,10 +81,16 @@ impl Frontend for UInput {
 
 struct Inner {
     device: Sender<(usize, Option<Uuid>)>,
-    device_recv: Option<Receiver<(usize, Option<Uuid>)>>,
+    device_recv: Receiver<(usize, Option<Uuid>)>,
     engine: Option<Arc<Engine>>,
 
     selected_devices: [Option<Uuid>; 4],
+
+    status: Arc<Mutex<PluginStatus>>,
+
+    handle: Option<JoinHandle<()>>,
+
+    stop: Arc<AtomicBool>,
 }
 
 impl Inner {
@@ -70,10 +98,16 @@ impl Inner {
         let (device, device_recv) = crossbeam_channel::unbounded();
         Inner {
             device,
-            device_recv: Some(device_recv),
+            device_recv,
             engine: None,
 
             selected_devices: [None; 4],
+
+            status: Arc::new(Mutex::new(PluginStatus::Stopped)),
+
+            handle: None,
+
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -81,11 +115,28 @@ impl Inner {
 impl Inner {
     fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
         self.engine = Some(engine.clone());
-        std::thread::spawn(new_uinput_thread(Thread {
+
+        *self.status.lock() = PluginStatus::Running;
+        self.stop.store(false, Ordering::Release);
+
+        self.handle = Some(std::thread::spawn(new_uinput_thread(Thread {
             engine,
-            device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
+            device_change: self.device_recv.clone(),
             signals,
-        }));
+            status: self.status.clone(),
+            stop: self.stop.clone(),
+        })));
+    }
+
+    fn stop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+
+        if let Some(handle) = std::mem::replace(&mut self.handle, None) {
+            match handle.join() {
+                Ok(()) => {}
+                Err(_) => log::error!(target: T, "error joining dsus thread"),
+            }
+        }
     }
 
     fn update_gui(
@@ -145,12 +196,23 @@ struct Thread {
     engine: Arc<Engine>,
     device_change: Receiver<(usize, Option<Uuid>)>,
     signals: Arc<Signals>,
+    status: Arc<Mutex<PluginStatus>>,
+    stop: Arc<AtomicBool>,
 }
 
 fn new_uinput_thread(thread: Thread) -> impl FnOnce() {
-    || match uinput_thread(thread) {
-        Ok(()) => log::info!(target: T, "uinput thread closed"),
-        Err(e) => log::error!(target: T, "uinput thread crashed: {}", e),
+    || {
+        let status = thread.status.clone();
+        match uinput_thread(thread) {
+            Ok(()) => {
+                log::info!(target: T, "uinput thread closed");
+                *status.lock() = PluginStatus::Stopped;
+            }
+            Err(e) => {
+                log::error!(target: T, "uinput thread crashed: {}", e);
+                *status.lock() = PluginStatus::Error(format!("uinput thread crashed: {}", e));
+            }
+        }
     }
 }
 
@@ -159,6 +221,8 @@ fn uinput_thread(thread: Thread) -> Result<()> {
         engine,
         device_change,
         signals,
+        stop,
+        ..
     } = thread;
 
     let uinput = init_uinput()?;
@@ -198,17 +262,17 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                             }
                         };
                         signals.listen_update.lock().insert(controller_id);
-                        
+
                         let uinput_device = OpenOptions::new()
                             .read(true)
                             .write(true)
                             .open(&uinput)
                             .context("failed to open uinput device")?;
-                        
+
                         let uinput_device = UInputHandle::new(uinput_device);
 
                         let joystick = Joystick::new(&name, controller_id, uinput_device)?;
-                        
+
                         joysticks.insert(idx, joystick);
                     }
                     Ok((idx, None)) => {
@@ -246,8 +310,15 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                     }
                 }
             }
+            default(Duration::from_secs(1)) => {
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+            }
         }
     }
+
+    Ok(())
 }
 
 struct Joystick {
@@ -267,7 +338,8 @@ impl Joystick {
         let ud = uinput_device;
 
         ud.set_evbit(EventKind::Key)?;
-        keybits!(ud,
+        keybits!(
+            ud,
             Key::ButtonNorth,
             Key::ButtonSouth,
             Key::ButtonEast,
@@ -295,22 +367,48 @@ impl Joystick {
         ud.set_absbit(AbsoluteAxis::Z)?;
         ud.set_absbit(AbsoluteAxis::RZ)?;
 
-        const DEFAULT_INFO: AbsoluteInfo = AbsoluteInfo { value: 0, minimum: 0, maximum: 255, fuzz: 0, flat: 0, resolution: 0 };
+        const DEFAULT_INFO: AbsoluteInfo = AbsoluteInfo {
+            value: 0,
+            minimum: 0,
+            maximum: 255,
+            fuzz: 0,
+            flat: 0,
+            resolution: 0,
+        };
 
         ud.create(
             &input_linux::InputId::default(),
             name.as_bytes(),
             0,
             &[
-                AbsoluteInfoSetup { axis: AbsoluteAxis::X, info: DEFAULT_INFO },
-                AbsoluteInfoSetup { axis: AbsoluteAxis::Y, info: DEFAULT_INFO },
-                AbsoluteInfoSetup { axis: AbsoluteAxis::RX, info: DEFAULT_INFO },
-                AbsoluteInfoSetup { axis: AbsoluteAxis::RY, info: DEFAULT_INFO },
-                AbsoluteInfoSetup { axis: AbsoluteAxis::Z, info: DEFAULT_INFO },
-                AbsoluteInfoSetup { axis: AbsoluteAxis::RZ, info: DEFAULT_INFO },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::X,
+                    info: DEFAULT_INFO,
+                },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::Y,
+                    info: DEFAULT_INFO,
+                },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::RX,
+                    info: DEFAULT_INFO,
+                },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::RY,
+                    info: DEFAULT_INFO,
+                },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::Z,
+                    info: DEFAULT_INFO,
+                },
+                AbsoluteInfoSetup {
+                    axis: AbsoluteAxis::RZ,
+                    info: DEFAULT_INFO,
+                },
             ],
-        ).context("failed to create uinput device")?;
-        
+        )
+        .context("failed to create uinput device")?;
+
         Ok(Joystick {
             controller_id,
 
@@ -320,7 +418,7 @@ impl Joystick {
 
     fn update_controller(&self, data: &Controller) -> Result<()> {
         use input_linux::sys as ils;
-        
+
         macro_rules! make_events {
             (
                 buttons { $($btnfrom:expr => $btnto:expr),* $(,)? }
@@ -385,7 +483,7 @@ impl Joystick {
         while written < events.len() {
             written += self.uinput_device.write(&events[written..])?;
         }
-    
+
         Ok(())
     }
 }
@@ -393,7 +491,7 @@ impl Joystick {
 impl Drop for Joystick {
     fn drop(&mut self) {
         match self.uinput_device.dev_destroy() {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(err) => log::warn!(target: T, "failed to destroy uinput device: {}", err),
         }
     }
@@ -404,8 +502,12 @@ fn init_uinput() -> Result<PathBuf> {
     udev.match_subsystem("misc")?;
     udev.match_sysname("uinput")?;
     let mut devices = udev.scan_devices()?;
-    let uinput_device = devices.next().ok_or(anyhow::anyhow!("uinput system not found"))?;
-    let uinput_devnode = uinput_device.devnode().ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
+    let uinput_device = devices
+        .next()
+        .ok_or(anyhow::anyhow!("uinput system not found"))?;
+    let uinput_devnode = uinput_device
+        .devnode()
+        .ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
 
     Ok(uinput_devnode.to_owned())
 }
