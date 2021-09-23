@@ -48,7 +48,7 @@ impl DeviceView {
                 .map(|ctrl| ctrl.data.clone())
             {
                 ui.heading("Controller");
-                egui::Grid::new("buttons").show(ui, |ui| {
+                egui::Grid::new("controller_buttons").show(ui, |ui| {
                     let mut col = 0;
                     for button in std::array::IntoIter::new(Button::BUTTONS) {
                         let mut label = egui::Label::new(format!("{}", button));
@@ -134,8 +134,6 @@ impl DeviceView {
                 }
             }
 
-            ui.separator();
-
             if let Some(motion_data) = self
                 .selected_controller
                 .and_then(|id| self.engine.get_device(&id))
@@ -143,6 +141,8 @@ impl DeviceView {
                 .and_then(|id| self.engine.get_motion(&id))
                 .map(|motion| motion.data.clone())
             {
+                ui.separator();
+
                 ui.heading("Motion");
 
                 ui.add(
@@ -172,7 +172,7 @@ impl DeviceView {
                 );
             }
 
-            ui.separator();
+            let mut need_separator = true;
 
             if let Some(device) = &self
                 .selected_controller
@@ -184,6 +184,11 @@ impl DeviceView {
                     .filter_map(|tid| self.engine.get_touch_pad(tid))
                     .enumerate()
                 {
+                    if need_separator {
+                        ui.separator();
+                        need_separator = false;
+                    }
+
                     ui.heading(format!("Touch Pad #{}", i + 1));
                     ui.horizontal(|ui| {
                         let mut label = egui::Label::new("Pressed");
@@ -212,6 +217,79 @@ impl DeviceView {
                             touch_pad.info.shape == TouchPadShape::Circle,
                         );
                         ui.expand_to_include_rect(painter.clip_rect());
+                    });
+                }
+
+                need_separator = true;
+
+                for (analog_comp_index, analog) in device
+                    .analogs
+                    .iter()
+                    .filter_map(|tid| self.engine.get_analog(tid))
+                    .enumerate()
+                {
+                    if need_separator {
+                        ui.separator();
+                        need_separator = false;
+                    }
+
+                    ui.heading(format!("Analogs #{}", analog_comp_index));
+
+                    for i in 0..analog.data.analogs.len() {
+                        let value = analog.data.analogs[i];
+                        ui.horizontal(|ui| {
+                            ui.add(
+                                egui::Label::new(format!(
+                                    "Analog {}: {:+0.2}",
+                                    i,
+                                    (value as f32) / 255.0
+                                ))
+                                .monospace(),
+                            );
+    
+                            let painter = egui::Painter::new(
+                                ui.ctx().clone(),
+                                ui.layer_id(),
+                                egui::Rect {
+                                    min: ui.available_rect_before_wrap().min,
+                                    max: ui.available_rect_before_wrap().min + egui::vec2(50.0, 20.0),
+                                },
+                            );
+                            Self::paint_trigger(&painter, value);
+                            ui.expand_to_include_rect(painter.clip_rect());
+                        });
+                    }
+                }
+
+                need_separator = true;
+
+                for (button_comp_index, buttons) in device
+                    .buttons
+                    .iter()
+                    .filter_map(|tid| self.engine.get_button(tid))
+                    .enumerate()
+                {
+                    if need_separator {
+                        ui.separator();
+                        need_separator = false;
+                    }
+
+                    ui.heading(format!("Buttons #{}", button_comp_index));
+
+                    egui::Grid::new(format!("buttons{}", button_comp_index)).show(ui, |ui| {
+                        let mut col = 0;
+                        for i in 0..64 {
+                            let mut label = egui::Label::new(format!("{}", i));
+                            if (buttons.data.buttons >> i) & 1 == 1 {
+                                label = label.underline();
+                            }
+                            ui.add(label);
+                            col += 1;
+                            if col >= 8 {
+                                ui.end_row();
+                                col = 0;
+                            }
+                        }
                     });
                 }
             }
