@@ -6,9 +6,7 @@ pub struct AnalogsInfo {
 
 impl Default for AnalogsInfo {
     fn default() -> Self {
-        AnalogsInfo {
-            analogs: 0,
-        }
+        AnalogsInfo { analogs: 0 }
     }
 }
 
@@ -19,9 +17,7 @@ pub struct Analogs {
 
 impl Default for Analogs {
     fn default() -> Self {
-        Analogs {
-            analogs: [0; 8],
-        }
+        Analogs { analogs: [0; 8] }
     }
 }
 

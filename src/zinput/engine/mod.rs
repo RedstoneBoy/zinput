@@ -6,7 +6,14 @@ use dashmap::{
 use paste::paste;
 use uuid::Uuid;
 
-use crate::api::{InvalidComponentIdError, component::{Component, ComponentData, analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion, touch_pad::TouchPad}, device::DeviceInfo};
+use crate::api::{
+    component::{
+        analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion,
+        touch_pad::TouchPad, Component, ComponentData,
+    },
+    device::DeviceInfo,
+    InvalidComponentIdError,
+};
 
 pub mod vc;
 
@@ -16,20 +23,20 @@ macro_rules! engine_struct {
             pub struct $struct_name {
                 devices: DashMap<Uuid, DeviceInfo>,
                 $([< $field_name s >]: DashMap<Uuid, Component<$ctype>>,)*
-    
+
                 update_channel: Sender<Uuid>,
             }
-    
+
             impl Engine {
                 pub fn new(update_channel: Sender<Uuid>) -> Self {
                     Engine {
                         devices: DashMap::new(),
                         $([< $field_name s >]: DashMap::new(),)*
-    
+
                         update_channel,
                     }
                 }
-    
+
                 $(pub fn [< has_ $field_name >](&self, id: &Uuid) -> bool {
                     self.[< $field_name s >].contains_key(id)
                 })*
@@ -90,19 +97,19 @@ impl Engine {
     pub fn devices(&self) -> impl Iterator<Item = RefMulti<Uuid, DeviceInfo>> {
         self.devices.iter()
     }
-/*
-    pub fn controllers(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Controller>>> {
-        self.controllers.iter()
-    }
+    /*
+        pub fn controllers(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Controller>>> {
+            self.controllers.iter()
+        }
 
-    pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
-        self.motions.iter()
-    }
+        pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
+            self.motions.iter()
+        }
 
-    pub fn touch_pads(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<TouchPad>>> {
-        self.touch_pads.iter()
-    }
-*/
+        pub fn touch_pads(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<TouchPad>>> {
+            self.touch_pads.iter()
+        }
+    */
     pub fn has_device(&self, id: &Uuid) -> bool {
         self.devices.contains_key(id)
     }

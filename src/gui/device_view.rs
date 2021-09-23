@@ -246,13 +246,14 @@ impl DeviceView {
                                 ))
                                 .monospace(),
                             );
-    
+
                             let painter = egui::Painter::new(
                                 ui.ctx().clone(),
                                 ui.layer_id(),
                                 egui::Rect {
                                     min: ui.available_rect_before_wrap().min,
-                                    max: ui.available_rect_before_wrap().min + egui::vec2(50.0, 20.0),
+                                    max: ui.available_rect_before_wrap().min
+                                        + egui::vec2(50.0, 20.0),
                                 },
                             );
                             Self::paint_trigger(&painter, value);

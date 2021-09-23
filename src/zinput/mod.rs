@@ -3,7 +3,10 @@ use std::{sync::Arc, thread::JoinHandle};
 use crossbeam_channel::Receiver;
 use uuid::Uuid;
 
-use crate::{api::{Plugin, PluginKind}, gui::Gui};
+use crate::{
+    api::{Plugin, PluginKind},
+    gui::Gui,
+};
 
 pub mod engine;
 mod events;
@@ -46,10 +49,7 @@ impl ZInput {
         }));
         self.event_thread_handler = Some(event_thread_handler);
 
-        let app = Gui::new(
-            self.engine.clone(),
-            self.plugins.clone(),
-        );
+        let app = Gui::new(self.engine.clone(), self.plugins.clone());
         let options = eframe::NativeOptions::default();
 
         // TODO: make sure program stops cleanly

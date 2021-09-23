@@ -6,9 +6,7 @@ pub struct ButtonsInfo {
 
 impl Default for ButtonsInfo {
     fn default() -> Self {
-        ButtonsInfo {
-            buttons: 0,
-        }
+        ButtonsInfo { buttons: 0 }
     }
 }
 
@@ -19,9 +17,7 @@ pub struct Buttons {
 
 impl Default for Buttons {
     fn default() -> Self {
-        Buttons {
-            buttons: 0,
-        }
+        Buttons { buttons: 0 }
     }
 }
 

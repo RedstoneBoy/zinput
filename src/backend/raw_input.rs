@@ -1,11 +1,30 @@
-use std::{collections::HashMap, ffi::{OsStr, c_void}, mem::{self, MaybeUninit}, os::windows::prelude::OsStrExt, ptr::{self, null_mut}, sync::Arc, thread::JoinHandle, time::Duration};
+use std::{
+    collections::HashMap,
+    ffi::{c_void, OsStr},
+    mem::{self, MaybeUninit},
+    os::windows::prelude::OsStrExt,
+    ptr::{self, null_mut},
+    sync::Arc,
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::Result;
 use parking_lot::Mutex;
 use uuid::Uuid;
-use winapi::{shared::{hidpi, hidusage, minwindef, windef}, um::{libloaderapi::GetModuleHandleW, winuser}};
+use winapi::{
+    shared::{hidpi, hidusage, minwindef, windef},
+    um::{libloaderapi::GetModuleHandleW, winuser},
+};
 
-use crate::api::{Plugin, PluginKind, PluginStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::api::{
+    component::{
+        analogs::{Analogs, AnalogsInfo},
+        buttons::{Buttons, ButtonsInfo},
+    },
+    device::DeviceInfo,
+    Plugin, PluginKind, PluginStatus,
+};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
@@ -96,7 +115,7 @@ impl Drop for Inner {
 
         if let Some(handle) = mem::replace(&mut self.handle, None) {
             match handle.join() {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(_) => {
                     log::error!(target: T, "error joining input thread!");
                 }
@@ -116,7 +135,7 @@ struct Thread {
 
 fn new_raw_input_thread(thread: Thread) -> impl FnOnce() {
     move || {
-        let status  = thread.status.clone();
+        let status = thread.status.clone();
 
         match raw_input_thread(thread) {
             Ok(()) => {
@@ -143,11 +162,7 @@ impl Drop for WindowClass {
 }
 
 fn raw_input_thread(thread: Thread) -> Result<()> {
-    let Thread {
-        api,
-        hwnd_opt,
-        ..
-    } = thread;
+    let Thread { api, hwnd_opt, .. } = thread;
 
     let class_name = "ZInput RawInput Backend".os_str();
     let window_title = "zinput raw_input".os_str();
@@ -173,12 +188,10 @@ fn raw_input_thread(thread: Thread) -> Result<()> {
             class_name.as_ptr(),
             window_title.as_ptr(),
             0,
-
             winuser::CW_USEDEFAULT,
             winuser::CW_USEDEFAULT,
             winuser::CW_USEDEFAULT,
             winuser::CW_USEDEFAULT,
-
             ptr::null_mut(),
             ptr::null_mut(),
             hinst,
@@ -196,10 +209,10 @@ fn raw_input_thread(thread: Thread) -> Result<()> {
 
             register_raw_input(hwnd)?;
             update_device_list(state);
-    
+
             winuser::SetWindowLongPtrW(hwnd, winuser::GWLP_USERDATA, state as *mut _ as _);
         }
-        
+
         log::info!(target: T, "driver initialized");
 
         let mut msg: winuser::MSG = mem::zeroed();
@@ -274,18 +287,26 @@ fn register_raw_input(hwnd: *mut windef::HWND__) -> Result<()> {
         hwndTarget: hwnd as _,
     };
 
-    if unsafe { winuser::RegisterRawInputDevices(
-        &device,
-        1,
-        mem::size_of::<winuser::RAWINPUTDEVICE>() as u32
-    ) } == 0 {
+    if unsafe {
+        winuser::RegisterRawInputDevices(
+            &device,
+            1,
+            mem::size_of::<winuser::RAWINPUTDEVICE>() as u32,
+        )
+    } == 0
+    {
         anyhow::bail!("failed to register raw input devices");
     }
 
     Ok(())
 }
 
-unsafe extern "system" fn window_proc(hwnd: windef::HWND, msg: u32, wparam: usize, lparam: isize) -> isize {
+unsafe extern "system" fn window_proc(
+    hwnd: windef::HWND,
+    msg: u32,
+    wparam: usize,
+    lparam: isize,
+) -> isize {
     let state = winuser::GetWindowLongPtrW(hwnd, winuser::GWLP_USERDATA) as usize as *mut State;
     let state = &mut *state;
 
@@ -296,7 +317,7 @@ unsafe extern "system" fn window_proc(hwnd: windef::HWND, msg: u32, wparam: usiz
         }
         winuser::WM_INPUT => {
             let mut dw_size = 0;
-            
+
             winuser::GetRawInputData(
                 lparam as usize as _,
                 winuser::RID_INPUT,
@@ -313,15 +334,18 @@ unsafe extern "system" fn window_proc(hwnd: windef::HWND, msg: u32, wparam: usiz
                 &mut raw_input as *mut _ as _,
                 &mut dw_size,
                 mem::size_of::<winuser::RAWINPUTHEADER>() as u32,
-            ) != dw_size {
+            ) != dw_size
+            {
                 log::error!(target: T, "incorrect size returned for raw input!");
             }
 
             if raw_input.header.dwType == winuser::RIM_TYPEHID {
-                match update_device(state, raw_input.header.hDevice as usize, &raw_input.data.hid()) {
-                    Ok(()) => {
-                        
-                    }
+                match update_device(
+                    state,
+                    raw_input.header.hDevice as usize,
+                    &raw_input.data.hid(),
+                ) {
+                    Ok(()) => {}
                     Err(err) => {
                         log::warn!(target: T, "failed to update device: {}", err);
                     }
@@ -349,11 +373,10 @@ fn update_device_list(state: &mut State) {
     } = state;
 
     let mut num_devices = 0;
-    if unsafe { winuser::GetRawInputDeviceList(
-        ptr::null_mut(),
-        &mut num_devices,
-        DEVICE_LIST_SIZE
-    ) } == u32::MAX {
+    if unsafe {
+        winuser::GetRawInputDeviceList(ptr::null_mut(), &mut num_devices, DEVICE_LIST_SIZE)
+    } == u32::MAX
+    {
         log::warn!(target: T, "failed to get number of devices connected");
         return;
     }
@@ -361,17 +384,17 @@ fn update_device_list(state: &mut State) {
     device_list.clear();
     device_list.reserve_exact(num_devices as usize);
 
-    let list_result = unsafe { winuser::GetRawInputDeviceList(
-        device_list.as_mut_ptr(),
-        &mut num_devices,
-        DEVICE_LIST_SIZE
-    ) };
+    let list_result = unsafe {
+        winuser::GetRawInputDeviceList(device_list.as_mut_ptr(), &mut num_devices, DEVICE_LIST_SIZE)
+    };
     if list_result == u32::MAX {
         log::warn!(target: T, "failed to get device list");
         return;
     }
 
-    unsafe { device_list.set_len(list_result as usize); }
+    unsafe {
+        device_list.set_len(list_result as usize);
+    }
     device_list.retain(|dev| dev.dwType == winuser::RIM_TYPEHID);
 
     let mut all_devices = Vec::new();
@@ -386,7 +409,7 @@ fn update_device_list(state: &mut State) {
         }
 
         match is_joystick(handle) {
-            Ok(true) => {},
+            Ok(true) => {}
             Ok(false) => continue,
             Err(err) => {
                 log::warn!(target: T, "{}", err);
@@ -421,13 +444,15 @@ fn update_device_list(state: &mut State) {
 fn is_joystick(handle: *mut c_void) -> Result<bool> {
     let mut dev_info_size = mem::size_of::<winuser::RID_DEVICE_INFO>();
     let mut dev_info: winuser::RID_DEVICE_INFO = unsafe { mem::zeroed() };
-    
-    let result = unsafe { winuser::GetRawInputDeviceInfoW(
-        handle,
-        winuser::RIDI_DEVICEINFO,
-        &mut dev_info as *mut _ as _,
-        &mut dev_info_size as *mut _ as _
-    ) };
+
+    let result = unsafe {
+        winuser::GetRawInputDeviceInfoW(
+            handle,
+            winuser::RIDI_DEVICEINFO,
+            &mut dev_info as *mut _ as _,
+            &mut dev_info_size as *mut _ as _,
+        )
+    };
     if result == u32::MAX {
         anyhow::bail!("failed to get raw input device info");
     }
@@ -437,8 +462,7 @@ fn is_joystick(handle: *mut c_void) -> Result<bool> {
     }
 
     unsafe {
-        if dev_info.u.hid().usUsagePage != 0x01
-            || dev_info.u.hid().usUsage != 0x04 {
+        if dev_info.u.hid().usUsagePage != 0x01 || dev_info.u.hid().usUsage != 0x04 {
             return Ok(false);
         }
     }
@@ -448,74 +472,105 @@ fn is_joystick(handle: *mut c_void) -> Result<bool> {
 
 fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
     let mut preparsed_len = 0;
-    if unsafe { winuser::GetRawInputDeviceInfoW(
-        handle,
-        winuser::RIDI_PREPARSEDDATA,
-        ptr::null_mut(),
-        &mut preparsed_len,
-    ) } != 0 {
+    if unsafe {
+        winuser::GetRawInputDeviceInfoW(
+            handle,
+            winuser::RIDI_PREPARSEDDATA,
+            ptr::null_mut(),
+            &mut preparsed_len,
+        )
+    } != 0
+    {
         anyhow::bail!("failed to get preparsed data length");
     }
     let mut preparsed = Vec::<u8>::with_capacity(preparsed_len as usize);
-    let preparsed_result = unsafe { winuser::GetRawInputDeviceInfoW(
-        handle,
-        winuser::RIDI_PREPARSEDDATA,
-        preparsed.as_mut_ptr() as _,
-        &mut preparsed_len,
-    ) };
+    let preparsed_result = unsafe {
+        winuser::GetRawInputDeviceInfoW(
+            handle,
+            winuser::RIDI_PREPARSEDDATA,
+            preparsed.as_mut_ptr() as _,
+            &mut preparsed_len,
+        )
+    };
     if preparsed_result == 0 || preparsed_result == u32::MAX {
         anyhow::bail!("failed to get preparsed data");
     }
-    unsafe { preparsed.set_len(preparsed_result as usize); }
+    unsafe {
+        preparsed.set_len(preparsed_result as usize);
+    }
 
     let mut caps = MaybeUninit::zeroed();
-    if unsafe { hidpi::HidP_GetCaps(preparsed.as_mut_ptr() as _, caps.as_mut_ptr()) } != hidpi::HIDP_STATUS_SUCCESS {
+    if unsafe { hidpi::HidP_GetCaps(preparsed.as_mut_ptr() as _, caps.as_mut_ptr()) }
+        != hidpi::HIDP_STATUS_SUCCESS
+    {
         anyhow::bail!("failed to get device capabilities");
     }
     let caps = unsafe { caps.assume_init() };
 
-    let mut button_caps: Vec<hidpi::HIDP_BUTTON_CAPS> = Vec::with_capacity(caps.NumberInputButtonCaps as usize);
+    let mut button_caps: Vec<hidpi::HIDP_BUTTON_CAPS> =
+        Vec::with_capacity(caps.NumberInputButtonCaps as usize);
     let mut button_caps_len = caps.NumberInputButtonCaps;
-    if unsafe { hidpi::HidP_GetButtonCaps(
-        hidpi::HidP_Input,
-        button_caps.as_mut_ptr() as _,
-        &mut button_caps_len,
-        preparsed.as_mut_ptr() as _,
-    ) } != hidpi::HIDP_STATUS_SUCCESS {
+    if unsafe {
+        hidpi::HidP_GetButtonCaps(
+            hidpi::HidP_Input,
+            button_caps.as_mut_ptr() as _,
+            &mut button_caps_len,
+            preparsed.as_mut_ptr() as _,
+        )
+    } != hidpi::HIDP_STATUS_SUCCESS
+    {
         anyhow::bail!("failed to get device button capabilities");
     }
-    unsafe { button_caps.set_len(button_caps_len as usize); }
+    unsafe {
+        button_caps.set_len(button_caps_len as usize);
+    }
 
     let mut total_buttons = 0;
     for button_cap in &button_caps {
-        total_buttons += unsafe { button_cap.u.Range().UsageMax - button_cap.u.Range().UsageMin + 1 };
+        total_buttons +=
+            unsafe { button_cap.u.Range().UsageMax - button_cap.u.Range().UsageMin + 1 };
     }
     if total_buttons > 64 {
-        log::warn!(target: T, "joystick {} has more than 64 buttons", handle as usize);
+        log::warn!(
+            target: T,
+            "joystick {} has more than 64 buttons",
+            handle as usize
+        );
     }
 
     let mut value_caps = Vec::with_capacity(caps.NumberInputValueCaps as usize);
     let mut value_caps_len = caps.NumberInputValueCaps;
-    if unsafe { hidpi::HidP_GetValueCaps(
-        hidpi::HidP_Input,
-        value_caps.as_mut_ptr() as _,
-        &mut value_caps_len,
-        preparsed.as_mut_ptr() as _,
-    ) } != hidpi::HIDP_STATUS_SUCCESS {
+    if unsafe {
+        hidpi::HidP_GetValueCaps(
+            hidpi::HidP_Input,
+            value_caps.as_mut_ptr() as _,
+            &mut value_caps_len,
+            preparsed.as_mut_ptr() as _,
+        )
+    } != hidpi::HIDP_STATUS_SUCCESS
+    {
         anyhow::bail!("failed to get device value capabilities");
     }
-    unsafe { value_caps.set_len(value_caps_len as usize); }
+    unsafe {
+        value_caps.set_len(value_caps_len as usize);
+    }
 
     if value_caps_len > 8 {
-        log::warn!(target: T, "joystick {} has more than 8 analogs", handle as usize);
+        log::warn!(
+            target: T,
+            "joystick {} has more than 8 analogs",
+            handle as usize
+        );
     }
 
     // todo: meta info
     let analog_id = api.new_analog(AnalogsInfo::default());
     let button_id = api.new_button(ButtonsInfo::default());
-    let device_id = api.new_device(DeviceInfo::new(format!("Raw Input Device {}", handle as u64))
-        .with_analogs(analog_id)
-        .with_buttons(button_id));
+    let device_id = api.new_device(
+        DeviceInfo::new(format!("Raw Input Device {}", handle as u64))
+            .with_analogs(analog_id)
+            .with_buttons(button_id),
+    );
 
     Ok(Joystick {
         button_caps,
@@ -539,29 +594,36 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
     joystick.data.buttons.buttons = 0;
 
     let mut bitset_offset = 0;
-    
+
     for button_caps in &joystick.button_caps {
-        let num_buttons = unsafe { button_caps.u.Range().UsageMax - button_caps.u.Range().UsageMin + 1 };
+        let num_buttons =
+            unsafe { button_caps.u.Range().UsageMax - button_caps.u.Range().UsageMin + 1 };
         let mut num_pressed = num_buttons as u32;
         joystick.buttons.clear();
         joystick.buttons.reserve_exact(num_buttons as usize);
-        if unsafe { hidpi::HidP_GetUsages(
-            hidpi::HidP_Input,
-            button_caps.UsagePage,
-            0,
-            joystick.buttons.as_mut_ptr(),
-            &mut num_pressed,
-            joystick.preparsed.as_mut_ptr() as _,
-            data.bRawData.as_ptr() as _,
-            data.dwSizeHid,
-        ) } != hidpi::HIDP_STATUS_SUCCESS {
+        if unsafe {
+            hidpi::HidP_GetUsages(
+                hidpi::HidP_Input,
+                button_caps.UsagePage,
+                0,
+                joystick.buttons.as_mut_ptr(),
+                &mut num_pressed,
+                joystick.preparsed.as_mut_ptr() as _,
+                data.bRawData.as_ptr() as _,
+                data.dwSizeHid,
+            )
+        } != hidpi::HIDP_STATUS_SUCCESS
+        {
             anyhow::bail!("failed to get usages");
         }
 
-        unsafe { joystick.buttons.set_len(num_pressed as usize); }
+        unsafe {
+            joystick.buttons.set_len(num_pressed as usize);
+        }
 
         for &usage in &joystick.buttons {
-            let bit_index = unsafe { (usage - button_caps.u.Range().UsageMin) as usize + bitset_offset };
+            let bit_index =
+                unsafe { (usage - button_caps.u.Range().UsageMin) as usize + bitset_offset };
             if bit_index < 64 {
                 joystick.data.buttons.buttons |= 1 << bit_index as u64;
             }
@@ -573,16 +635,18 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
     let mut value_index = 0;
     for value_caps in &joystick.value_caps {
         let mut value = 0;
-        let value_result = unsafe {  hidpi::HidP_GetUsageValue(
-            hidpi::HidP_Input,
-            value_caps.UsagePage,
-            0,
-            value_caps.u.Range().UsageMin,
-            &mut value,
-            joystick.preparsed.as_mut_ptr() as _,
-            data.bRawData.as_ptr() as _,
-            data.dwSizeHid,
-        ) };
+        let value_result = unsafe {
+            hidpi::HidP_GetUsageValue(
+                hidpi::HidP_Input,
+                value_caps.UsagePage,
+                0,
+                value_caps.u.Range().UsageMin,
+                &mut value,
+                joystick.preparsed.as_mut_ptr() as _,
+                data.bRawData.as_ptr() as _,
+                data.dwSizeHid,
+            )
+        };
 
         if value_result == hidpi::HIDP_STATUS_INCOMPATIBLE_REPORT_ID {
             continue;
@@ -601,7 +665,8 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
         } else if value as i32 <= value_caps.LogicalMin {
             0.0
         } else {
-            ((value as i32 as f32) - (value_caps.LogicalMin as f32)) / (value_caps.LogicalMax as f32 - value_caps.LogicalMin as f32)
+            ((value as i32 as f32) - (value_caps.LogicalMin as f32))
+                / (value_caps.LogicalMax as f32 - value_caps.LogicalMin as f32)
         };
 
         joystick.data.analogs.analogs[value_index] = (value * 255.0) as u8;
@@ -609,9 +674,13 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
         value_index += 1;
     }
 
-    state.api.update_analog(&joystick.analog_id, &joystick.data.analogs)?;
-    state.api.update_button(&joystick.button_id, &joystick.data.buttons)?;
-    
+    state
+        .api
+        .update_analog(&joystick.analog_id, &joystick.data.analogs)?;
+    state
+        .api
+        .update_button(&joystick.button_id, &joystick.data.buttons)?;
+
     Ok(())
 }
 

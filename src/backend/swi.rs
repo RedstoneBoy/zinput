@@ -13,11 +13,14 @@ use eframe::{egui, epi};
 use parking_lot::Mutex;
 use swi_protocol::{SwiButton, SwiPacket};
 
-use crate::api::{PluginKind, component::{
-    controller::{Button, Controller, ControllerInfo},
-    motion::{Motion, MotionInfo},
-}};
 use crate::api::device::DeviceInfo;
+use crate::api::{
+    component::{
+        controller::{Button, Controller, ControllerInfo},
+        motion::{Motion, MotionInfo},
+    },
+    PluginKind,
+};
 use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 

@@ -14,11 +14,14 @@ use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
 use uuid::Uuid;
 
-use crate::api::{PluginKind, component::{
-    controller::{Button, Controller, ControllerInfo},
-    motion::{Motion, MotionInfo},
-}};
 use crate::api::device::DeviceInfo;
+use crate::api::{
+    component::{
+        controller::{Button, Controller, ControllerInfo},
+        motion::{Motion, MotionInfo},
+    },
+    PluginKind,
+};
 use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
@@ -131,11 +134,7 @@ fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
 }
 
 fn xinput_thread(thread: Thread) -> Result<()> {
-    let Thread {
-        status,
-        stop,
-        api,
-    } = thread;
+    let Thread { status, stop, api } = thread;
 
     let xinput = XInputHandle::load_default()
         .map_err(|err| anyhow::anyhow!("failed to load xinput: {:?}", err))?;
@@ -244,9 +243,10 @@ struct XController {
 impl XController {
     fn new(api: &(Engine), id: usize) -> Self {
         let controller_id = api.new_controller(xinput_controller_info());
-        let device_id = api.new_device(DeviceInfo::new(format!("XInput Controller {}", id + 1))
-            .with_controller(controller_id));
-        
+        let device_id = api.new_device(
+            DeviceInfo::new(format!("XInput Controller {}", id + 1)).with_controller(controller_id),
+        );
+
         XController {
             device_id,
             controller_id,
@@ -292,7 +292,7 @@ impl XController {
         self.controller.left_stick_y = ((lpad_y / 256) + 128) as u8;
         self.controller.right_stick_x = ((rpad_x / 256) + 128) as u8;
         self.controller.right_stick_y = ((rpad_y / 256) + 128) as u8;
-        
+
         api.update_controller(&self.controller_id, &self.controller)?;
 
         Ok(())

@@ -13,9 +13,8 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::gc_adaptor::GcAdaptor::new()));
     zinput.add_plugin(Arc::new(backend::steam_controller::SteamController::new()));
     zinput.add_plugin(Arc::new(backend::swi::Swi::new()));
-    
+
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()));
-    
 
     #[cfg(target_os = "windows")]
     {
@@ -28,6 +27,6 @@ fn main() {
     {
         zinput.add_plugin(Arc::new(frontend::uinput::UInput::new()));
     }
-    
+
     zinput.run();
 }

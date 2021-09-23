@@ -2,14 +2,11 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
-use crate::{
-    api::Plugin,
-    zinput::engine::Engine,
-};
+use crate::{api::Plugin, zinput::engine::Engine};
 
-mod plugins;
 mod device_view;
 mod motion_cmp;
+mod plugins;
 
 pub struct Gui {
     plugins: plugins::PluginConfig,
@@ -18,10 +15,7 @@ pub struct Gui {
 }
 
 impl Gui {
-    pub fn new(
-        engine: Arc<Engine>,
-        plugins: Vec<Arc<dyn Plugin + Send + Sync>>,
-    ) -> Self {
+    pub fn new(engine: Arc<Engine>, plugins: Vec<Arc<dyn Plugin + Send + Sync>>) -> Self {
         Gui {
             plugins: plugins::PluginConfig::new(engine.clone(), plugins),
             cv: device_view::DeviceView::new(engine.clone()),

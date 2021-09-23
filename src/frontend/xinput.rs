@@ -15,7 +15,13 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{api::{Plugin, PluginKind, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
+use crate::{
+    api::{
+        component::controller::{Button, Controller},
+        Plugin, PluginKind, PluginStatus,
+    },
+    zinput::engine::Engine,
+};
 
 const T: &'static str = "frontend:xinput";
 

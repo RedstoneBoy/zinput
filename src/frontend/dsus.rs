@@ -23,10 +23,16 @@ use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::{api::{Plugin, PluginKind, PluginStatus, component::{
+use crate::{
+    api::{
+        component::{
             controller::{Button, Controller},
             motion::Motion,
-        }}, zinput::engine::Engine};
+        },
+        Plugin, PluginKind, PluginStatus,
+    },
+    zinput::engine::Engine,
+};
 
 const T: &'static str = "frontend:dsus";
 
