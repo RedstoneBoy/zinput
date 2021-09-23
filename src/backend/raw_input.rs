@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use winapi::{shared::{hidpi, hidusage, minwindef, windef}, um::{libloaderapi::GetModuleHandleW, winuser}};
 
-use crate::api::{Backend, BackendStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::api::{Backend, PluginStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
@@ -31,10 +31,10 @@ impl Backend for RawInput {
         *self.state.lock() = None;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         match &*self.state.lock() {
             Some(inner) => inner.status(),
-            None => BackendStatus::Stopped,
+            None => PluginStatus::Stopped,
         }
     }
 
@@ -49,7 +49,7 @@ impl Backend for RawInput {
 
 struct Inner {
     hwnd_opt: Arc<Mutex<Option<Hwnd>>>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 
     handle: Option<JoinHandle<()>>,
 }
@@ -57,7 +57,7 @@ struct Inner {
 impl Inner {
     fn new(api: Arc<Engine>) -> Self {
         let hwnd_opt = Arc::new(Mutex::new(None));
-        let status = Arc::new(Mutex::new(BackendStatus::Running));
+        let status = Arc::new(Mutex::new(PluginStatus::Running));
 
         let handle = Some(std::thread::spawn(new_raw_input_thread(Thread {
             api: api,
@@ -73,7 +73,7 @@ impl Inner {
         }
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.lock().clone()
     }
 }
@@ -82,7 +82,7 @@ impl Drop for Inner {
     fn drop(&mut self) {
         // wait until the raw input thread either creates a window or fails to create one
         while self.hwnd_opt.lock().is_none()
-            && matches!(&*self.status.lock(), &BackendStatus::Running)
+            && matches!(&*self.status.lock(), &PluginStatus::Running)
         {
             std::thread::sleep(Duration::from_secs(1));
         }
@@ -111,7 +111,7 @@ unsafe impl Send for Hwnd {}
 struct Thread {
     api: Arc<Engine>,
     hwnd_opt: Arc<Mutex<Option<Hwnd>>>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 fn new_raw_input_thread(thread: Thread) -> impl FnOnce() {
@@ -121,11 +121,11 @@ fn new_raw_input_thread(thread: Thread) -> impl FnOnce() {
         match raw_input_thread(thread) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
-                *status.lock() = BackendStatus::Stopped;
+                *status.lock() = PluginStatus::Stopped;
             }
             Err(err) => {
                 log::error!(target: T, "driver crashed: {:#}", err);
-                *status.lock() = BackendStatus::Error(format!("driver crashed: {:#}", err));
+                *status.lock() = PluginStatus::Error(format!("driver crashed: {:#}", err));
             }
         }
     }

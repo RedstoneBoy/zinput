@@ -19,7 +19,7 @@ use crate::api::component::{
     motion::{Motion, MotionInfo},
 };
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus};
+use crate::api::{Backend, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:xinput";
@@ -45,7 +45,7 @@ impl Backend for XInput {
         self.inner.lock().stop()
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.inner.lock().status()
     }
 
@@ -61,7 +61,7 @@ impl Backend for XInput {
 struct Inner {
     handle: Option<std::thread::JoinHandle<()>>,
     stop: Arc<AtomicBool>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 impl Inner {
@@ -69,12 +69,12 @@ impl Inner {
         Inner {
             handle: None,
             stop: Arc::new(AtomicBool::new(false)),
-            status: Arc::new(Mutex::new(BackendStatus::Running)),
+            status: Arc::new(Mutex::new(PluginStatus::Running)),
         }
     }
 
     fn init(&mut self, api: Arc<Engine>) {
-        *self.status.lock() = BackendStatus::Running;
+        *self.status.lock() = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
         self.handle = Some(std::thread::spawn(new_xinput_thread(Thread {
             status: self.status.clone(),
@@ -91,10 +91,10 @@ impl Inner {
                 Err(_) => log::info!(target: T, "driver panicked"),
             }
         }
-        *self.status.lock() = BackendStatus::Stopped;
+        *self.status.lock() = PluginStatus::Stopped;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.lock().clone()
     }
 }
@@ -106,7 +106,7 @@ impl Drop for XInput {
 }
 
 struct Thread {
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
     api: Arc<Engine>,
 }
@@ -120,11 +120,11 @@ fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
         match xinput_thread(thread) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
-                *status.lock() = BackendStatus::Stopped;
+                *status.lock() = PluginStatus::Stopped;
             }
             Err(err) => {
                 log::error!(target: T, "driver crashed: {:#}", err);
-                *status.lock() = BackendStatus::Error(format!("driver crashed: {:#}", err));
+                *status.lock() = PluginStatus::Error(format!("driver crashed: {:#}", err));
             }
         }
     }

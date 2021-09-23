@@ -8,15 +8,11 @@ use crate::zinput::engine::Engine;
 pub mod component;
 pub mod device;
 
-use self::component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}, controller::{Controller, ControllerInfo}, motion::{Motion, MotionInfo}, touch_pad::{TouchPad, TouchPadInfo}};
-
-use self::device::DeviceInfo;
-
 pub trait Backend {
     fn init(&self, zinput_api: Arc<Engine>);
     fn stop(&self);
 
-    fn status(&self) -> BackendStatus;
+    fn status(&self) -> PluginStatus;
 
     fn name(&self) -> &str;
 
@@ -49,18 +45,18 @@ impl std::fmt::Display for InvalidComponentIdError {
 }
 
 #[derive(Clone, Debug)]
-pub enum BackendStatus {
+pub enum PluginStatus {
     Running,
     Stopped,
     Error(String),
 }
 
-impl std::fmt::Display for BackendStatus {
+impl std::fmt::Display for PluginStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BackendStatus::Running => write!(f, "running"),
-            BackendStatus::Stopped => write!(f, "stopped"),
-            BackendStatus::Error(err) => write!(f, "error: {}", err),
+            PluginStatus::Running => write!(f, "running"),
+            PluginStatus::Stopped => write!(f, "stopped"),
+            PluginStatus::Error(err) => write!(f, "error: {}", err),
         }
     }
 }

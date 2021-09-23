@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus};
+use crate::api::{Backend, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const EP_IN: u8 = 0x81;
@@ -45,7 +45,7 @@ impl Backend for GcAdaptor {
         self.inner.lock().stop()
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.inner.lock().status()
     }
 
@@ -58,7 +58,7 @@ struct GcAdaptorInner {
     callback_registration: Option<rusb::Registration<rusb::GlobalContext>>,
     handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     stop: Arc<AtomicBool>,
-    status: BackendStatus,
+    status: PluginStatus,
 }
 
 impl GcAdaptorInner {
@@ -67,14 +67,14 @@ impl GcAdaptorInner {
             callback_registration: None,
             handles: Arc::new(Mutex::new(Vec::new())),
             stop: Arc::new(AtomicBool::new(false)),
-            status: BackendStatus::Running,
+            status: PluginStatus::Running,
         }
     }
 
     fn init(&mut self, api: Arc<Engine>) {
         log::info!(target: T, "driver initializing...");
 
-        self.status = BackendStatus::Running;
+        self.status = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
 
         match || -> Result<()> {
@@ -129,7 +129,7 @@ impl GcAdaptorInner {
             Ok(()) => log::info!(target: T, "driver initalized"),
             Err(err) => {
                 log::error!(target: T, "driver failed to initalize: {:#}", err);
-                self.status = BackendStatus::Error("driver failed to initialize".to_owned());
+                self.status = PluginStatus::Error("driver failed to initialize".to_owned());
             }
         }
     }
@@ -140,10 +140,10 @@ impl GcAdaptorInner {
             let _ = handle.join();
         }
         self.stop.store(false, Ordering::Release);
-        self.status = BackendStatus::Stopped;
+        self.status = PluginStatus::Stopped;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.clone()
     }
 }

@@ -18,7 +18,7 @@ use crate::api::component::{
     motion::{Motion, MotionInfo},
 };
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus};
+use crate::api::{Backend, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:swi";
@@ -44,7 +44,7 @@ impl Backend for Swi {
         self.inner.lock().stop()
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.inner.lock().status()
     }
 
@@ -62,7 +62,7 @@ impl Backend for Swi {
 struct Inner {
     handle: Option<std::thread::JoinHandle<()>>,
     stop: Arc<AtomicBool>,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
     address: String,
     old_address: String,
 }
@@ -72,14 +72,14 @@ impl Inner {
         Inner {
             handle: None,
             stop: Arc::new(AtomicBool::new(false)),
-            status: Arc::new(Mutex::new(BackendStatus::Running)),
+            status: Arc::new(Mutex::new(PluginStatus::Running)),
             address: "0.0.0.0:26780".to_owned(),
             old_address: "0.0.0.0:26780".to_owned(),
         }
     }
 
     fn init(&mut self, api: Arc<Engine>) {
-        *self.status.lock() = BackendStatus::Running;
+        *self.status.lock() = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
         self.handle = Some(std::thread::spawn(swi_thread(
             self.address.clone(),
@@ -98,10 +98,10 @@ impl Inner {
                 Err(_) => log::info!(target: T, "driver panicked"),
             }
         }
-        *self.status.lock() = BackendStatus::Stopped;
+        *self.status.lock() = PluginStatus::Stopped;
     }
 
-    fn status(&self) -> BackendStatus {
+    fn status(&self) -> PluginStatus {
         self.status.lock().clone()
     }
 }
@@ -114,7 +114,7 @@ impl Drop for Swi {
 
 fn swi_thread(
     address: String,
-    status: Arc<Mutex<BackendStatus>>,
+    status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
     api: Arc<Engine>,
 ) -> impl FnOnce() {
@@ -124,11 +124,11 @@ fn swi_thread(
         match swi(address, stop, api) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
-                *status.lock() = BackendStatus::Stopped;
+                *status.lock() = PluginStatus::Stopped;
             }
             Err(err) => {
                 log::error!(target: T, "driver crashed: {:#}", err);
-                *status.lock() = BackendStatus::Error(format!("driver crashed: {:#}", err));
+                *status.lock() = PluginStatus::Error(format!("driver crashed: {:#}", err));
             }
         }
     }
