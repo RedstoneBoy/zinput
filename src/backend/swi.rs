@@ -18,7 +18,8 @@ use crate::api::component::{
     motion::{Motion, MotionInfo},
 };
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus, ZInputApi};
+use crate::api::{Backend, BackendStatus};
+use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:swi";
 
@@ -35,7 +36,7 @@ impl Swi {
 }
 
 impl Backend for Swi {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
 
@@ -77,7 +78,7 @@ impl Inner {
         }
     }
 
-    fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&mut self, api: Arc<Engine>) {
         *self.status.lock() = BackendStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
         self.handle = Some(std::thread::spawn(swi_thread(
@@ -115,7 +116,7 @@ fn swi_thread(
     address: String,
     status: Arc<Mutex<BackendStatus>>,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 ) -> impl FnOnce() {
     move || {
         log::info!(target: T, "driver initialized");
@@ -133,7 +134,7 @@ fn swi_thread(
     }
 }
 
-fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Result<()> {
+fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
     const TIMEOUT_KIND: std::io::ErrorKind = {
         #[cfg(target_os = "windows")]
         {

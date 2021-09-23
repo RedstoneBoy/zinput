@@ -13,7 +13,8 @@ use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::component::motion::{Motion, MotionInfo};
 use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, BackendStatus, ZInputApi};
+use crate::api::{Backend, BackendStatus};
+use crate::zinput::engine::Engine;
 
 const EP_IN: u8 = 0x82;
 
@@ -42,7 +43,7 @@ impl SteamController {
 }
 
 impl Backend for SteamController {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
 
@@ -76,7 +77,7 @@ impl Inner {
         }
     }
 
-    fn init(&mut self, api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&mut self, api: Arc<Engine>) {
         log::info!(target: T, "driver initializing...");
 
         self.status = BackendStatus::Running;
@@ -154,7 +155,7 @@ impl Inner {
 }
 
 struct CallbackHandler {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     stop: Arc<AtomicBool>,
     next_id: Arc<AtomicU64>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
@@ -178,7 +179,7 @@ fn new_controller_thread(
     usb_dev: rusb::Device<rusb::GlobalContext>,
     id: u64,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 ) -> impl FnOnce() {
     move || {
         log::info!(target: T, "controller found, id: {}", id);
@@ -193,7 +194,7 @@ fn controller_thread(
     usb_dev: rusb::Device<rusb::GlobalContext>,
     id: u64,
     stop: Arc<AtomicBool>,
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
 ) -> Result<()> {
     let mut sc = usb_dev.open().context("failed to open device")?;
     let iface = usb_dev
@@ -241,7 +242,7 @@ fn controller_thread(
 }
 
 struct SCBundle {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     adaptor_id: u64,
     device_id: Uuid,
     controller_id: Uuid,
@@ -255,7 +256,7 @@ struct SCBundle {
 }
 
 impl SCBundle {
-    fn new(adaptor_id: u64, api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(adaptor_id: u64, api: Arc<Engine>) -> Self {
         let controller_id = api.new_controller(sc_controller_info());
         let motion_id = api.new_motion(MotionInfo::new(true, true));
         let touch_left_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));

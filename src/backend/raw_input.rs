@@ -5,7 +5,8 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use winapi::{shared::{hidpi, hidusage, minwindef, windef}, um::{libloaderapi::GetModuleHandleW, winuser}};
 
-use crate::api::{Backend, BackendStatus, ZInputApi, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::api::{Backend, BackendStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
 
@@ -22,7 +23,7 @@ impl RawInput {
 }
 
 impl Backend for RawInput {
-    fn init(&self, zinput_api: Arc<dyn ZInputApi + Send + Sync>) {
+    fn init(&self, zinput_api: Arc<Engine>) {
         *self.state.lock() = Some(Inner::new(zinput_api));
     }
 
@@ -54,7 +55,7 @@ struct Inner {
 }
 
 impl Inner {
-    fn new(api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(api: Arc<Engine>) -> Self {
         let hwnd_opt = Arc::new(Mutex::new(None));
         let status = Arc::new(Mutex::new(BackendStatus::Running));
 
@@ -108,7 +109,7 @@ struct Hwnd(*mut windef::HWND__);
 unsafe impl Send for Hwnd {}
 
 struct Thread {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     hwnd_opt: Arc<Mutex<Option<Hwnd>>>,
     status: Arc<Mutex<BackendStatus>>,
 }
@@ -220,14 +221,14 @@ fn raw_input_thread(thread: Thread) -> Result<()> {
 }
 
 struct State {
-    api: Arc<dyn ZInputApi + Send + Sync>,
+    api: Arc<Engine>,
     joysticks: HashMap<usize, Joystick>,
 
     device_list: Vec<winuser::RAWINPUTDEVICELIST>,
 }
 
 impl State {
-    fn new(api: Arc<dyn ZInputApi + Send + Sync>) -> Self {
+    fn new(api: Arc<Engine>) -> Self {
         State {
             api,
             joysticks: HashMap::new(),
@@ -445,7 +446,7 @@ fn is_joystick(handle: *mut c_void) -> Result<bool> {
     Ok(true)
 }
 
-fn get_joystick_info(api: &(dyn ZInputApi + Send + Sync), handle: *mut c_void) -> Result<Joystick> {
+fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
     let mut preparsed_len = 0;
     if unsafe { winuser::GetRawInputDeviceInfoW(
         handle,
