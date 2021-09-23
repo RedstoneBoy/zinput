@@ -21,6 +21,7 @@ pub trait Backend {
 
 pub trait Frontend {
     fn init(&self, engine: Arc<Engine>);
+    fn stop(&self);
 
     fn status(&self) -> PluginStatus;
 

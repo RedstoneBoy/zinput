@@ -1,4 +1,12 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
@@ -7,7 +15,13 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{api::{Frontend, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
+use crate::{
+    api::{
+        component::controller::{Button, Controller},
+        Frontend, PluginStatus,
+    },
+    zinput::engine::Engine,
+};
 
 const T: &'static str = "frontend:xinput";
 
@@ -28,6 +42,10 @@ impl XInput {
 impl Frontend for XInput {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
+    }
+
+    fn stop(&self) {
+        self.inner.lock().stop();
     }
 
     fn status(&self) -> PluginStatus {
@@ -63,6 +81,10 @@ struct Inner {
     selected_devices: [Option<Uuid>; 4],
 
     status: Arc<Mutex<PluginStatus>>,
+
+    stop: Arc<AtomicBool>,
+
+    handle: Option<JoinHandle<()>>,
 }
 
 impl Inner {
@@ -76,6 +98,10 @@ impl Inner {
             selected_devices: [None; 4],
 
             status: Arc::new(Mutex::new(PluginStatus::Stopped)),
+
+            stop: Arc::new(AtomicBool::new(false)),
+
+            handle: None,
         }
     }
 }
@@ -85,13 +111,25 @@ impl Inner {
         self.engine = Some(engine.clone());
 
         *self.status.lock() = PluginStatus::Running;
-        
-        std::thread::spawn(new_xinput_thread(Thread {
+
+        self.handle = Some(std::thread::spawn(new_xinput_thread(Thread {
             engine,
             device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
             signals,
             status: self.status.clone(),
-        }));
+            stop: self.stop.clone(),
+        })));
+    }
+
+    fn stop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+
+        if let Some(handle) = std::mem::replace(&mut self.handle, None) {
+            match handle.join() {
+                Ok(()) => {}
+                Err(_) => log::error!(target: T, "error joining xinput thread"),
+            }
+        }
     }
 
     fn update_gui(
@@ -152,6 +190,7 @@ struct Thread {
     device_change: Receiver<(usize, Option<Uuid>)>,
     signals: Arc<Signals>,
     status: Arc<Mutex<PluginStatus>>,
+    stop: Arc<AtomicBool>,
 }
 
 fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
@@ -172,6 +211,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
         engine,
         device_change,
         signals,
+        stop,
         ..
     } = thread;
 
@@ -223,8 +263,15 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                     }
                 }
             }
+            default(Duration::from_secs(1)) => {
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+            }
         }
     }
+
+    Ok(())
 }
 
 fn update_target(vigem: &mut Vigem, target: &Target, data: &Controller) -> Result<()> {

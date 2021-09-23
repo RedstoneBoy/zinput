@@ -1,7 +1,11 @@
 use std::{
     collections::HashSet,
     net::{SocketAddr, UdpSocket},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
@@ -19,10 +23,16 @@ use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::{api::{Frontend, PluginStatus, component::{
+use crate::{
+    api::{
+        component::{
             controller::{Button, Controller},
             motion::Motion,
-        }}, zinput::engine::Engine};
+        },
+        Frontend, PluginStatus,
+    },
+    zinput::engine::Engine,
+};
 
 const T: &'static str = "frontend:dsus";
 
@@ -46,6 +56,10 @@ impl Dsus {
 impl Frontend for Dsus {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
+    }
+
+    fn stop(&self) {
+        self.inner.lock().stop();
     }
 
     fn status(&self) -> PluginStatus {
@@ -76,10 +90,16 @@ impl Frontend for Dsus {
 struct Inner {
     device: Sender<(usize, Option<Uuid>)>,
     device_recv: Option<Receiver<(usize, Option<Uuid>)>>,
+
+    stop: Arc<AtomicBool>,
+
     engine: Option<Arc<Engine>>,
 
     selected_devices: [Option<Uuid>; 4],
     controllers: Arc<Mutex<[bool; 4]>>,
+
+    handle1: Option<JoinHandle<()>>,
+    handle2: Option<JoinHandle<()>>,
 
     status: Arc<Mutex<PluginStatus>>,
 }
@@ -87,13 +107,20 @@ struct Inner {
 impl Inner {
     fn new() -> Self {
         let (device, device_recv) = crossbeam_channel::unbounded();
+
         Inner {
             device,
             device_recv: Some(device_recv),
+
+            stop: Arc::new(AtomicBool::new(false)),
+
             engine: None,
 
             selected_devices: [None; 4],
             controllers: Arc::new(Mutex::new([false; 4])),
+
+            handle1: None,
+            handle2: None,
 
             status: Arc::new(Mutex::new(PluginStatus::Stopped)),
         }
@@ -121,22 +148,42 @@ impl Inner {
 
         *self.status.lock() = PluginStatus::Running;
 
-        std::thread::spawn(new_dsus_thread(Thread {
+        self.handle1 = Some(std::thread::spawn(new_dsus_thread(Thread {
             engine,
             device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
+            stop: self.stop.clone(),
             signals,
 
             conn: conn.clone(),
             clients: clients.clone(),
             status: self.status.clone(),
-        }));
+        })));
 
-        std::thread::spawn(new_dsus_query_thread(QueryThread {
+        self.handle2 = Some(std::thread::spawn(new_dsus_query_thread(QueryThread {
             conn,
             clients,
             controllers: self.controllers.clone(),
             status: self.status.clone(),
-        }));
+            stop: self.stop.clone(),
+        })));
+    }
+
+    fn stop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+
+        if let Some(handle) = std::mem::replace(&mut self.handle1, None) {
+            match handle.join() {
+                Ok(()) => {}
+                Err(_) => log::error!(target: T, "error joining dsus thread"),
+            }
+        }
+
+        if let Some(handle) = std::mem::replace(&mut self.handle2, None) {
+            match handle.join() {
+                Ok(()) => {}
+                Err(_) => log::error!(target: T, "error joining dsus query thread"),
+            }
+        }
     }
 
     fn update_gui(
@@ -215,12 +262,13 @@ struct QueryThread {
     clients: Arc<DashMap<SocketAddr, DsuClient>>,
     controllers: Arc<Mutex<[bool; 4]>>,
     status: Arc<Mutex<PluginStatus>>,
+    stop: Arc<AtomicBool>,
 }
 
 fn new_dsus_query_thread(thread: QueryThread) -> impl FnOnce() {
     || {
         let status = thread.status.clone();
-        
+
         match dsus_query_thread(thread) {
             Ok(()) => log::info!(target: T, "dsus query thread closed"),
             Err(e) => {
@@ -247,6 +295,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
         conn,
         clients,
         controllers,
+        stop,
         ..
     } = thread;
 
@@ -255,7 +304,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
     let mut buf = [0u8; 100];
     let mut crc = crc32::Digest::new(crc32::IEEE);
 
-    loop {
+    while !stop.load(Ordering::Acquire) {
         {
             let now = Instant::now();
             for client in clients.iter() {
@@ -391,7 +440,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
         }
     }
 
-    // Ok(())
+    Ok(())
 }
 
 fn new_dsus_thread(thread: Thread) -> impl FnOnce() {
@@ -410,7 +459,9 @@ fn new_dsus_thread(thread: Thread) -> impl FnOnce() {
 
 struct Thread {
     engine: Arc<Engine>,
+
     device_change: Receiver<(usize, Option<Uuid>)>,
+    stop: Arc<AtomicBool>,
     signals: Arc<Signals>,
 
     conn: Arc<UdpSocket>,
@@ -423,6 +474,7 @@ fn dsus_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
         device_change,
+        stop,
         signals,
         conn,
         clients,
@@ -512,8 +564,15 @@ fn dsus_thread(thread: Thread) -> Result<()> {
 
                 server.send_data(&clients)?;
             }
+            default(Duration::from_secs(1)) => {
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+            }
         }
     }
+
+    Ok(())
 }
 
 struct Server {
