@@ -7,13 +7,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{
-    api::{
-        component::controller::{Button, Controller},
-        Frontend,
-    },
-    zinput::engine::Engine,
-};
+use crate::{api::{Frontend, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
 
 const T: &'static str = "frontend:xinput";
 
@@ -34,6 +28,10 @@ impl XInput {
 impl Frontend for XInput {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
+    }
+
+    fn status(&self) -> PluginStatus {
+        self.inner.lock().status.lock().clone()
     }
 
     fn name(&self) -> &str {
@@ -63,6 +61,8 @@ struct Inner {
     engine: Option<Arc<Engine>>,
 
     selected_devices: [Option<Uuid>; 4],
+
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 impl Inner {
@@ -74,6 +74,8 @@ impl Inner {
             engine: None,
 
             selected_devices: [None; 4],
+
+            status: Arc::new(Mutex::new(PluginStatus::Stopped)),
         }
     }
 }
@@ -81,10 +83,14 @@ impl Inner {
 impl Inner {
     fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
         self.engine = Some(engine.clone());
+
+        *self.status.lock() = PluginStatus::Running;
+        
         std::thread::spawn(new_xinput_thread(Thread {
             engine,
             device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
             signals,
+            status: self.status.clone(),
         }));
     }
 
@@ -145,12 +151,19 @@ struct Thread {
     engine: Arc<Engine>,
     device_change: Receiver<(usize, Option<Uuid>)>,
     signals: Arc<Signals>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
-    || match xinput_thread(thread) {
-        Ok(()) => log::info!(target: T, "xinput thread closed"),
-        Err(e) => log::error!(target: T, "xinput thread crashed: {}", e),
+    || {
+        let status = thread.status.clone();
+        match xinput_thread(thread) {
+            Ok(()) => log::info!(target: T, "xinput thread closed"),
+            Err(e) => {
+                log::error!(target: T, "xinput thread crashed: {}", e);
+                *status.lock() = PluginStatus::Error(format!("xinput thread crashed: {}", e));
+            }
+        }
     }
 }
 
@@ -159,6 +172,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
         engine,
         device_change,
         signals,
+        ..
     } = thread;
 
     let mut vigem = Vigem::new();

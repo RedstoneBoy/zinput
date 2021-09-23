@@ -19,16 +19,10 @@ use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::{
-    api::{
-        component::{
+use crate::{api::{Frontend, PluginStatus, component::{
             controller::{Button, Controller},
             motion::Motion,
-        },
-        Frontend,
-    },
-    zinput::engine::Engine,
-};
+        }}, zinput::engine::Engine};
 
 const T: &'static str = "frontend:dsus";
 
@@ -52,6 +46,10 @@ impl Dsus {
 impl Frontend for Dsus {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
+    }
+
+    fn status(&self) -> PluginStatus {
+        self.inner.lock().status.lock().clone()
     }
 
     fn name(&self) -> &str {
@@ -82,6 +80,8 @@ struct Inner {
 
     selected_devices: [Option<Uuid>; 4],
     controllers: Arc<Mutex<[bool; 4]>>,
+
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 impl Inner {
@@ -94,6 +94,8 @@ impl Inner {
 
             selected_devices: [None; 4],
             controllers: Arc::new(Mutex::new([false; 4])),
+
+            status: Arc::new(Mutex::new(PluginStatus::Stopped)),
         }
     }
 }
@@ -117,6 +119,8 @@ impl Inner {
         );
         let clients = Arc::new(DashMap::new());
 
+        *self.status.lock() = PluginStatus::Running;
+
         std::thread::spawn(new_dsus_thread(Thread {
             engine,
             device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
@@ -124,12 +128,14 @@ impl Inner {
 
             conn: conn.clone(),
             clients: clients.clone(),
+            status: self.status.clone(),
         }));
 
         std::thread::spawn(new_dsus_query_thread(QueryThread {
             conn,
             clients,
             controllers: self.controllers.clone(),
+            status: self.status.clone(),
         }));
     }
 
@@ -208,12 +214,20 @@ struct QueryThread {
     conn: Arc<UdpSocket>,
     clients: Arc<DashMap<SocketAddr, DsuClient>>,
     controllers: Arc<Mutex<[bool; 4]>>,
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 fn new_dsus_query_thread(thread: QueryThread) -> impl FnOnce() {
-    || match dsus_query_thread(thread) {
-        Ok(()) => log::info!(target: T, "dsus query thread closed"),
-        Err(e) => log::error!(target: T, "dsus query thread crashed: {}", e),
+    || {
+        let status = thread.status.clone();
+        
+        match dsus_query_thread(thread) {
+            Ok(()) => log::info!(target: T, "dsus query thread closed"),
+            Err(e) => {
+                log::error!(target: T, "dsus query thread crashed: {}", e);
+                *status.lock() = PluginStatus::Error(format!("dsus query thread crashed: {}", e));
+            }
+        }
     }
 }
 
@@ -233,6 +247,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
         conn,
         clients,
         controllers,
+        ..
     } = thread;
 
     let mut to_remove = Vec::new();
@@ -380,9 +395,16 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
 }
 
 fn new_dsus_thread(thread: Thread) -> impl FnOnce() {
-    || match dsus_thread(thread) {
-        Ok(()) => log::info!(target: T, "dsus thread closed"),
-        Err(e) => log::error!(target: T, "dsus thread crashed: {}", e),
+    || {
+        let status = thread.status.clone();
+
+        match dsus_thread(thread) {
+            Ok(()) => log::info!(target: T, "dsus thread closed"),
+            Err(e) => {
+                log::error!(target: T, "dsus thread crashed: {}", e);
+                *status.lock() = PluginStatus::Error(format!("dsus thread crashed: {}", e));
+            }
+        }
     }
 }
 
@@ -393,6 +415,8 @@ struct Thread {
 
     conn: Arc<UdpSocket>,
     clients: Arc<DashMap<SocketAddr, DsuClient>>,
+
+    status: Arc<Mutex<PluginStatus>>,
 }
 
 fn dsus_thread(thread: Thread) -> Result<()> {
@@ -402,6 +426,7 @@ fn dsus_thread(thread: Thread) -> Result<()> {
         signals,
         conn,
         clients,
+        ..
     } = thread;
 
     let mut server = Server::new(conn);
