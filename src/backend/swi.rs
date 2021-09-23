@@ -139,7 +139,7 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<dyn ZInputApi>) -> Resul
         {
             std::io::ErrorKind::TimedOut
         }
-        #[cfg(target_os = "unix")]
+        #[cfg(target_os = "linux")]
         {
             std::io::ErrorKind::WouldBlock
         }
