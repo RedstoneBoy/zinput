@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
-use crate::api::Frontend;
+use crate::api::Plugin;
 
 pub struct FrontendConfig {
-    frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
+    frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
     selected_frontend: Option<usize>,
 }
 
 impl FrontendConfig {
-    pub fn new(frontends: Vec<Arc<dyn Frontend + Send + Sync>>) -> Self {
+    pub fn new(frontends: Vec<Arc<dyn Plugin + Send + Sync>>) -> Self {
         FrontendConfig {
             frontends,
             selected_frontend: None,

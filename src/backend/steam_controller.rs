@@ -13,7 +13,7 @@ use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::component::motion::{Motion, MotionInfo};
 use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, PluginStatus};
+use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const EP_IN: u8 = 0x82;
@@ -42,7 +42,7 @@ impl SteamController {
     }
 }
 
-impl Backend for SteamController {
+impl Plugin for SteamController {
     fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
@@ -57,6 +57,10 @@ impl Backend for SteamController {
 
     fn name(&self) -> &str {
         "steam_controller"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 }
 

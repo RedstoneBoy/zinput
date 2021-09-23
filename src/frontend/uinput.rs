@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::{
     api::{
         component::controller::{Button, Controller},
-        Frontend, PluginStatus,
+        Plugin, PluginKind, PluginStatus,
     },
     zinput::engine::Engine,
 };
@@ -41,7 +41,7 @@ impl UInput {
     }
 }
 
-impl Frontend for UInput {
+impl Plugin for UInput {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
     }
@@ -56,6 +56,10 @@ impl Frontend for UInput {
 
     fn name(&self) -> &str {
         "uinput"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Frontend
     }
 
     fn update_gui(

@@ -15,13 +15,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{
-    api::{
-        component::controller::{Button, Controller},
-        Frontend, PluginStatus,
-    },
-    zinput::engine::Engine,
-};
+use crate::{api::{Plugin, PluginKind, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
 
 const T: &'static str = "frontend:xinput";
 
@@ -39,7 +33,7 @@ impl XInput {
     }
 }
 
-impl Frontend for XInput {
+impl Plugin for XInput {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
     }
@@ -54,6 +48,10 @@ impl Frontend for XInput {
 
     fn name(&self) -> &str {
         "xinput"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Frontend
     }
 
     fn update_gui(

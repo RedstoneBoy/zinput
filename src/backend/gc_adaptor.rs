@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, PluginStatus};
+use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const EP_IN: u8 = 0x81;
@@ -36,7 +36,7 @@ impl GcAdaptor {
     }
 }
 
-impl Backend for GcAdaptor {
+impl Plugin for GcAdaptor {
     fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
@@ -51,6 +51,10 @@ impl Backend for GcAdaptor {
 
     fn name(&self) -> &str {
         "gc_adaptor"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 }
 

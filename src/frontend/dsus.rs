@@ -23,16 +23,10 @@ use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 
-use crate::{
-    api::{
-        component::{
+use crate::{api::{Plugin, PluginKind, PluginStatus, component::{
             controller::{Button, Controller},
             motion::Motion,
-        },
-        Frontend, PluginStatus,
-    },
-    zinput::engine::Engine,
-};
+        }}, zinput::engine::Engine};
 
 const T: &'static str = "frontend:dsus";
 
@@ -53,7 +47,7 @@ impl Dsus {
     }
 }
 
-impl Frontend for Dsus {
+impl Plugin for Dsus {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine, self.signals.clone());
     }
@@ -68,6 +62,10 @@ impl Frontend for Dsus {
 
     fn name(&self) -> &str {
         "dsus"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Frontend
     }
 
     fn update_gui(

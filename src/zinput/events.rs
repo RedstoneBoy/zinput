@@ -3,12 +3,12 @@ use std::sync::Arc;
 use crossbeam_channel::{select, Receiver};
 use uuid::Uuid;
 
-use crate::api::{Backend, Frontend};
+use crate::api::Plugin;
 
 pub struct Thread {
     pub update_channel: Receiver<Uuid>,
-    pub frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
-    pub backends: Vec<Arc<dyn Backend + Send + Sync>>,
+    pub frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
+    pub backends: Vec<Arc<dyn Plugin + Send + Sync>>,
 }
 
 pub fn new_event_thread(thread: Thread) -> impl FnOnce() {

@@ -13,12 +13,12 @@ use eframe::{egui, epi};
 use parking_lot::Mutex;
 use swi_protocol::{SwiButton, SwiPacket};
 
-use crate::api::component::{
+use crate::api::{PluginKind, component::{
     controller::{Button, Controller, ControllerInfo},
     motion::{Motion, MotionInfo},
-};
+}};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, PluginStatus};
+use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:swi";
@@ -35,7 +35,7 @@ impl Swi {
     }
 }
 
-impl Backend for Swi {
+impl Plugin for Swi {
     fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
@@ -50,6 +50,10 @@ impl Backend for Swi {
 
     fn name(&self) -> &str {
         "swi"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {

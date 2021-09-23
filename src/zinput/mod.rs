@@ -4,7 +4,7 @@ use crossbeam_channel::Receiver;
 use uuid::Uuid;
 
 use crate::{
-    api::{Backend, Frontend},
+    api::Plugin,
     gui::Gui,
 };
 
@@ -14,8 +14,8 @@ mod events;
 use self::engine::Engine;
 
 pub struct ZInput {
-    backends: Vec<Arc<dyn Backend + Send + Sync>>,
-    frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
+    backends: Vec<Arc<dyn Plugin + Send + Sync>>,
+    frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
     engine: Arc<Engine>,
 
     update_receiver: Receiver<Uuid>,
@@ -36,11 +36,11 @@ impl ZInput {
         }
     }
 
-    pub fn add_backend(&mut self, backend: Arc<dyn Backend + Send + Sync>) {
+    pub fn add_backend(&mut self, backend: Arc<dyn Plugin + Send + Sync>) {
         self.backends.push(backend);
     }
 
-    pub fn add_frontend(&mut self, frontend: Arc<dyn Frontend + Send + Sync>) {
+    pub fn add_frontend(&mut self, frontend: Arc<dyn Plugin + Send + Sync>) {
         self.frontends.push(frontend);
     }
 

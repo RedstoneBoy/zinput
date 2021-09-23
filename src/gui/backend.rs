@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
-use crate::{api::Backend, zinput::engine::Engine};
+use crate::{api::Plugin, zinput::engine::Engine};
 
 pub struct BackendConfig {
     engine: Arc<Engine>,
-    backends: Vec<Arc<dyn Backend + Send + Sync>>,
+    backends: Vec<Arc<dyn Plugin + Send + Sync>>,
     selected_backend: Option<usize>,
 }
 
 impl BackendConfig {
-    pub fn new(engine: Arc<Engine>, backends: Vec<Arc<dyn Backend + Send + Sync>>) -> Self {
+    pub fn new(engine: Arc<Engine>, backends: Vec<Arc<dyn Plugin + Send + Sync>>) -> Self {
         BackendConfig {
             engine,
             backends,

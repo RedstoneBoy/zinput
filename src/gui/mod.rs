@@ -3,7 +3,7 @@ use std::sync::Arc;
 use eframe::{egui, epi};
 
 use crate::{
-    api::{Backend, Frontend},
+    api::Plugin,
     zinput::engine::Engine,
 };
 
@@ -22,8 +22,8 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         engine: Arc<Engine>,
-        backends: Vec<Arc<dyn Backend + Send + Sync>>,
-        frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
+        backends: Vec<Arc<dyn Plugin + Send + Sync>>,
+        frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
     ) -> Self {
         Gui {
             backends: backend::BackendConfig::new(engine.clone(), backends),

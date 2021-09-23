@@ -14,12 +14,12 @@ use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
 use uuid::Uuid;
 
-use crate::api::component::{
+use crate::api::{PluginKind, component::{
     controller::{Button, Controller, ControllerInfo},
     motion::{Motion, MotionInfo},
-};
+}};
 use crate::api::device::DeviceInfo;
-use crate::api::{Backend, PluginStatus};
+use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:xinput";
@@ -36,7 +36,7 @@ impl XInput {
     }
 }
 
-impl Backend for XInput {
+impl Plugin for XInput {
     fn init(&self, zinput_api: Arc<Engine>) {
         self.inner.lock().init(zinput_api)
     }
@@ -51,6 +51,10 @@ impl Backend for XInput {
 
     fn name(&self) -> &str {
         "xinput"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {

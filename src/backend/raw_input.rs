@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use winapi::{shared::{hidpi, hidusage, minwindef, windef}, um::{libloaderapi::GetModuleHandleW, winuser}};
 
-use crate::api::{Backend, PluginStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
+use crate::api::{Plugin, PluginKind, PluginStatus, component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}}, device::DeviceInfo};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
@@ -22,7 +22,7 @@ impl RawInput {
     }
 }
 
-impl Backend for RawInput {
+impl Plugin for RawInput {
     fn init(&self, zinput_api: Arc<Engine>) {
         *self.state.lock() = Some(Inner::new(zinput_api));
     }
@@ -40,6 +40,10 @@ impl Backend for RawInput {
 
     fn name(&self) -> &str {
         "raw_input"
+    }
+
+    fn kind(&self) -> PluginKind {
+        PluginKind::Backend
     }
 
     fn update_gui(&self, _ctx: &eframe::egui::CtxRef, _frame: &mut eframe::epi::Frame<'_>, _ui: &mut eframe::egui::Ui) {
