@@ -10,7 +10,6 @@ use uuid::Uuid;
 use crate::{
     api::{
         component::controller::{Button, Controller},
-        component::motion::Motion,
         Frontend,
     },
     zinput::engine::Engine,
@@ -174,9 +173,6 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         if let Some(joystick) = joysticks.get(idx) {
                             let mut signals = signals.listen_update.lock();
                             signals.remove(&joystick.controller_id);
-                            if let Some(motion_id) = &joystick.motion_id {
-                                signals.remove(motion_id);
-                            }
                         }
 
                         if idx > joysticks.len() {
@@ -202,13 +198,6 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                             }
                         };
                         signals.listen_update.lock().insert(controller_id);
-
-                        let motion_id = engine.get_device(&device_id)
-                            .and_then(|device| device.motion)
-                            .map(|id| {
-                                signals.listen_update.lock().insert(id);
-                                id
-                            });
                         
                         let uinput_device = OpenOptions::new()
                             .read(true)
@@ -218,7 +207,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         
                         let uinput_device = UInputHandle::new(uinput_device);
 
-                        let joystick = Joystick::new(&name, controller_id, motion_id, uinput_device)?;
+                        let joystick = Joystick::new(&name, controller_id, uinput_device)?;
                         
                         joysticks.insert(idx, joystick);
                     }
@@ -226,9 +215,6 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         if let Some(joystick) = joysticks.get(idx) {
                             let mut signals = signals.listen_update.lock();
                             signals.remove(&joystick.controller_id);
-                            if let Some(motion_id) = &joystick.motion_id {
-                                signals.remove(motion_id);
-                            }
 
                             joysticks.remove(idx);
                         } else {
@@ -257,17 +243,6 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         };
 
                         joystick.update_controller(&controller.data)?;
-                    } else {
-                        if let Some(motion_id) = &joystick.motion_id {
-                            if motion_id == &uid {
-                                let motion = match engine.get_motion(&uid) {
-                                    Some(motion) => motion,
-                                    None => continue,
-                                };
-        
-                                joystick.update_motion(&motion.data)?;
-                            }
-                        }
                     }
                 }
             }
@@ -277,13 +252,12 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 
 struct Joystick {
     controller_id: Uuid,
-    motion_id: Option<Uuid>,
 
     uinput_device: UInputHandle<File>,
 }
 
 impl Joystick {
-    fn new(name: &str, controller_id: Uuid, motion_id: Option<Uuid>, uinput_device: UInputHandle<File>) -> Result<Self> {
+    fn new(name: &str, controller_id: Uuid, uinput_device: UInputHandle<File>) -> Result<Self> {
         macro_rules! keybits {
             ($device:expr, $($key:expr),* $(,)?) => {
                 $($device.set_keybit($key)?;)*
@@ -339,7 +313,6 @@ impl Joystick {
         
         Ok(Joystick {
             controller_id,
-            motion_id,
 
             uinput_device: ud,
         })
@@ -412,12 +385,6 @@ impl Joystick {
         while written < events.len() {
             written += self.uinput_device.write(&events[written..])?;
         }
-    
-        Ok(())
-    }
-
-    fn update_motion(&self, data: &Motion) -> Result<()> {
-        // TODO: update
     
         Ok(())
     }
