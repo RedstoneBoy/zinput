@@ -73,7 +73,7 @@ impl Plugin for XInput {
 
 struct Inner {
     device: Sender<(usize, Option<Uuid>)>,
-    device_recv: Option<Receiver<(usize, Option<Uuid>)>>,
+    device_recv: Receiver<(usize, Option<Uuid>)>,
     engine: Option<Arc<Engine>>,
 
     selected_devices: [Option<Uuid>; 4],
@@ -90,7 +90,7 @@ impl Inner {
         let (device, device_recv) = crossbeam_channel::unbounded();
         Inner {
             device,
-            device_recv: Some(device_recv),
+            device_recv,
             engine: None,
 
             selected_devices: [None; 4],
@@ -109,10 +109,11 @@ impl Inner {
         self.engine = Some(engine.clone());
 
         *self.status.lock() = PluginStatus::Running;
+        self.stop.store(false, Ordering::Release);
 
         self.handle = Some(std::thread::spawn(new_xinput_thread(Thread {
             engine,
-            device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
+            device_change: self.device_recv.clone(),
             signals,
             status: self.status.clone(),
             stop: self.stop.clone(),
@@ -195,7 +196,10 @@ fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
     || {
         let status = thread.status.clone();
         match xinput_thread(thread) {
-            Ok(()) => log::info!(target: T, "xinput thread closed"),
+            Ok(()) => {
+                log::info!(target: T, "xinput thread closed");
+                *status.lock() = PluginStatus::Stopped;
+            }
             Err(e) => {
                 log::error!(target: T, "xinput thread crashed: {}", e);
                 *status.lock() = PluginStatus::Error(format!("xinput thread crashed: {}", e));

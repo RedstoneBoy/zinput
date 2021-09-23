@@ -45,10 +45,6 @@ impl Plugin for RawInput {
     fn kind(&self) -> PluginKind {
         PluginKind::Backend
     }
-
-    fn update_gui(&self, _ctx: &eframe::egui::CtxRef, _frame: &mut eframe::epi::Frame<'_>, _ui: &mut eframe::egui::Ui) {
-        
-    }
 }
 
 struct Inner {

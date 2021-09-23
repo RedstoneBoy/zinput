@@ -56,10 +56,6 @@ impl Plugin for XInput {
     fn kind(&self) -> PluginKind {
         PluginKind::Backend
     }
-
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
-        
-    }
 }
 
 struct Inner {

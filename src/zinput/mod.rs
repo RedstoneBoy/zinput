@@ -46,17 +46,10 @@ impl ZInput {
         }));
         self.event_thread_handler = Some(event_thread_handler);
 
-        let app = {
-            let mut backends = self.plugins.clone();
-            backends.retain(|plugin| plugin.kind() == PluginKind::Backend);
-            let mut frontends = self.plugins.clone();
-            frontends.retain(|plugin| plugin.kind() == PluginKind::Frontend);
-            Gui::new(
-                self.engine.clone(),
-                backends,
-                frontends,
-            )
-        };
+        let app = Gui::new(
+            self.engine.clone(),
+            self.plugins.clone(),
+        );
         let options = eframe::NativeOptions::default();
 
         // TODO: make sure program stops cleanly

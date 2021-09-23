@@ -87,7 +87,7 @@ impl Plugin for Dsus {
 
 struct Inner {
     device: Sender<(usize, Option<Uuid>)>,
-    device_recv: Option<Receiver<(usize, Option<Uuid>)>>,
+    device_recv: Receiver<(usize, Option<Uuid>)>,
 
     stop: Arc<AtomicBool>,
 
@@ -108,7 +108,7 @@ impl Inner {
 
         Inner {
             device,
-            device_recv: Some(device_recv),
+            device_recv,
 
             stop: Arc::new(AtomicBool::new(false)),
 
@@ -145,10 +145,11 @@ impl Inner {
         let clients = Arc::new(DashMap::new());
 
         *self.status.lock() = PluginStatus::Running;
+        self.stop.store(false, Ordering::Release);
 
         self.handle1 = Some(std::thread::spawn(new_dsus_thread(Thread {
             engine,
-            device_change: std::mem::replace(&mut self.device_recv, None).unwrap(),
+            device_change: self.device_recv.clone(),
             stop: self.stop.clone(),
             signals,
 
@@ -182,6 +183,8 @@ impl Inner {
                 Err(_) => log::error!(target: T, "error joining dsus query thread"),
             }
         }
+
+        *self.status.lock() = PluginStatus::Stopped;
     }
 
     fn update_gui(

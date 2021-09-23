@@ -7,14 +7,12 @@ use crate::{
     zinput::engine::Engine,
 };
 
-mod backend;
+mod plugins;
 mod device_view;
-mod frontend;
 mod motion_cmp;
 
 pub struct Gui {
-    backends: backend::BackendConfig,
-    frontends: frontend::FrontendConfig,
+    plugins: plugins::PluginConfig,
     cv: device_view::DeviceView,
     motion: motion_cmp::MotionCmp,
 }
@@ -22,12 +20,10 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         engine: Arc<Engine>,
-        backends: Vec<Arc<dyn Plugin + Send + Sync>>,
-        frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
+        plugins: Vec<Arc<dyn Plugin + Send + Sync>>,
     ) -> Self {
         Gui {
-            backends: backend::BackendConfig::new(engine.clone(), backends),
-            frontends: frontend::FrontendConfig::new(frontends),
+            plugins: plugins::PluginConfig::new(engine.clone(), plugins),
             cv: device_view::DeviceView::new(engine.clone()),
             motion: motion_cmp::MotionCmp::new(engine),
         }
@@ -36,8 +32,7 @@ impl Gui {
 
 impl epi::App for Gui {
     fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
-        self.backends.update(ctx, frame);
-        self.frontends.update(ctx, frame);
+        self.plugins.update(ctx, frame);
         self.cv.update(ctx, frame);
         self.motion.update(ctx, frame);
         ctx.request_repaint();

@@ -37,7 +37,7 @@ impl std::fmt::Display for InvalidComponentIdError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PluginStatus {
     Running,
     Stopped,
