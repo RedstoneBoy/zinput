@@ -3,7 +3,7 @@ use std::{collections::HashSet, fs::File, path::PathBuf, sync::Arc};
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use input_linux::{AbsoluteAxis, EventKind, Key, UInputHandle};
+use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind, Key, UInputHandle};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -215,7 +215,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         
                         let uinput_device = UInputHandle::new(uinput_device);
 
-                        let joystick = Joystick::new(&name, device_id, controller_id, motion_id, uinput_device)?;
+                        let joystick = Joystick::new(&name, controller_id, motion_id, uinput_device)?;
                         
                         joysticks.insert(idx, joystick);
                     }
@@ -273,7 +273,6 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 }
 
 struct Joystick {
-    device_id: Uuid,
     controller_id: Uuid,
     motion_id: Option<Uuid>,
 
@@ -281,7 +280,7 @@ struct Joystick {
 }
 
 impl Joystick {
-    fn new(name: &str, device_id: Uuid, controller_id: Uuid, motion_id: Option<Uuid>, uinput_device: UInputHandle<File>) -> Result<Self> {
+    fn new(name: &str, controller_id: Uuid, motion_id: Option<Uuid>, uinput_device: UInputHandle<File>) -> Result<Self> {
         macro_rules! keybits {
             ($device:expr, $($key:expr),* $(,)?) => {
                 $($device.set_keybit($key)?;)*
@@ -308,7 +307,7 @@ impl Joystick {
             Key::ButtonTR2,
             Key::ButtonThumbl,
             Key::ButtonThumbr,
-            Key::ButtonConfig,
+            Key::ButtonMode,
         );
 
         ud.set_evbit(EventKind::Absolute)?;
@@ -319,18 +318,97 @@ impl Joystick {
         ud.set_absbit(AbsoluteAxis::Z)?;
         ud.set_absbit(AbsoluteAxis::RZ)?;
 
+        const DEFAULT_INFO: AbsoluteInfo = AbsoluteInfo { value: 0, minimum: 0, maximum: 255, fuzz: 0, flat: 0, resolution: 0 };
+
         ud.create(
             &input_linux::InputId::default(),
             name.as_bytes(),
             0,
-            &[],
+            &[
+                AbsoluteInfoSetup { axis: AbsoluteAxis::X, info: DEFAULT_INFO },
+                AbsoluteInfoSetup { axis: AbsoluteAxis::Y, info: DEFAULT_INFO },
+                AbsoluteInfoSetup { axis: AbsoluteAxis::RX, info: DEFAULT_INFO },
+                AbsoluteInfoSetup { axis: AbsoluteAxis::RY, info: DEFAULT_INFO },
+                AbsoluteInfoSetup { axis: AbsoluteAxis::Z, info: DEFAULT_INFO },
+                AbsoluteInfoSetup { axis: AbsoluteAxis::RZ, info: DEFAULT_INFO },
+            ],
         ).context("failed to create uinput device")?;
         
-        todo!()
+        Ok(Joystick {
+            controller_id,
+            motion_id,
+
+            uinput_device: ud,
+        })
     }
-    
+
     fn update_controller(&self, data: &Controller) -> Result<()> {
-        // TODO: update
+        use input_linux::sys as ils;
+        
+        macro_rules! make_events {
+            (
+                buttons { $($btnfrom:expr => $btnto:expr),* $(,)? }
+                analogs { $($afrom:expr => $ato:expr),* $(,)? }
+            ) => {
+                [
+                    $(ils::input_event {
+                        time: ils::timeval { tv_sec: 0, tv_usec: 0 },
+                        type_: ils::EV_KEY as _,
+                        code: $btnto as _,
+                        value: $btnfrom.is_pressed(data.buttons) as _,
+                    },)*
+                    $(ils::input_event {
+                        time: ils::timeval { tv_sec: 0, tv_usec: 0 },
+                        type_: ils::EV_ABS as _,
+                        code: $ato as _,
+                        value: $afrom as _,
+                    },)*
+                    ils::input_event {
+                        time: ils::timeval { tv_sec: 0, tv_usec: 0 },
+                        type_: ils::EV_SYN as _,
+                        code: ils::SYN_REPORT as _,
+                        value: 0,
+                    }
+                ]
+            };
+        }
+
+        // todo
+
+        let events = make_events! {
+            buttons {
+                Button::A      => ils::BTN_SOUTH,
+                Button::B      => ils::BTN_EAST,
+                Button::X      => ils::BTN_WEST,
+                Button::Y      => ils::BTN_NORTH,
+                Button::Up     => ils::BTN_DPAD_UP,
+                Button::Down   => ils::BTN_DPAD_DOWN,
+                Button::Left   => ils::BTN_DPAD_LEFT,
+                Button::Right  => ils::BTN_DPAD_RIGHT,
+                Button::Start  => ils::BTN_START,
+                Button::Select => ils::BTN_SELECT,
+                Button::L1     => ils::BTN_TL,
+                Button::R1     => ils::BTN_TR,
+                Button::L2     => ils::BTN_TL2,
+                Button::R2     => ils::BTN_TR2,
+                Button::LStick => ils::BTN_THUMBL,
+                Button::RStick => ils::BTN_THUMBR,
+                Button::Home   => ils::BTN_MODE,
+            }
+            analogs {
+                data.left_stick_x  => ils::ABS_X,
+                data.left_stick_y  => ils::ABS_Y,
+                data.right_stick_x => ils::ABS_RX,
+                data.right_stick_y => ils::ABS_RY,
+                data.l2_analog     => ils::ABS_Z,
+                data.r2_analog     => ils::ABS_RZ,
+            }
+        };
+
+        let mut written = 0;
+        while written < events.len() {
+            written += self.uinput_device.write(&events[written..])?;
+        }
     
         Ok(())
     }

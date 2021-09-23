@@ -23,5 +23,11 @@ fn main() {
         zinput.add_backend(Arc::new(backend::xinput::XInput::new()));
         zinput.add_frontend(Arc::new(frontend::xinput::XInput::new()));
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        zinput.add_frontend(Arc::new(frontend::uinput::UInput::new()));
+    }
+    
     zinput.run();
 }
