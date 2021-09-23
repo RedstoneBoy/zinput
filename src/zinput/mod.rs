@@ -14,7 +14,7 @@ mod events;
 use self::engine::Engine;
 
 pub struct ZInput {
-    backends: Vec<Arc<dyn Backend>>,
+    backends: Vec<Arc<dyn Backend + Send + Sync>>,
     frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
     engine: Arc<Engine>,
 
@@ -36,7 +36,7 @@ impl ZInput {
         }
     }
 
-    pub fn add_backend(&mut self, backend: Arc<dyn Backend>) {
+    pub fn add_backend(&mut self, backend: Arc<dyn Backend + Send + Sync>) {
         self.backends.push(backend);
     }
 
@@ -56,6 +56,7 @@ impl ZInput {
         let event_thread_handler = std::thread::spawn(events::new_event_thread(events::Thread {
             update_channel: self.update_receiver.clone(),
             frontends: self.frontends.clone(),
+            backends: self.backends.clone(),
         }));
         self.event_thread_handler = Some(event_thread_handler);
 

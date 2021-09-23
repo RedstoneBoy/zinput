@@ -6,12 +6,12 @@ use crate::{api::Backend, zinput::engine::Engine};
 
 pub struct BackendConfig {
     engine: Arc<Engine>,
-    backends: Vec<Arc<dyn Backend>>,
+    backends: Vec<Arc<dyn Backend + Send + Sync>>,
     selected_backend: Option<usize>,
 }
 
 impl BackendConfig {
-    pub fn new(engine: Arc<Engine>, backends: Vec<Arc<dyn Backend>>) -> Self {
+    pub fn new(engine: Arc<Engine>, backends: Vec<Arc<dyn Backend + Send + Sync>>) -> Self {
         BackendConfig {
             engine,
             backends,

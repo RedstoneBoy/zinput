@@ -22,7 +22,7 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         engine: Arc<Engine>,
-        backends: Vec<Arc<dyn Backend>>,
+        backends: Vec<Arc<dyn Backend + Send + Sync>>,
         frontends: Vec<Arc<dyn Frontend + Send + Sync>>,
     ) -> Self {
         Gui {
