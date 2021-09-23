@@ -54,7 +54,7 @@ impl std::fmt::Display for PluginStatus {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PluginKind {
     Backend,
     Frontend,

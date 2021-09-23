@@ -7,8 +7,7 @@ use crate::api::Plugin;
 
 pub struct Thread {
     pub update_channel: Receiver<Uuid>,
-    pub frontends: Vec<Arc<dyn Plugin + Send + Sync>>,
-    pub backends: Vec<Arc<dyn Plugin + Send + Sync>>,
+    pub plugins: Vec<Arc<dyn Plugin + Send + Sync>>,
 }
 
 pub fn new_event_thread(thread: Thread) -> impl FnOnce() {
@@ -18,8 +17,7 @@ pub fn new_event_thread(thread: Thread) -> impl FnOnce() {
 fn event_thread(
     Thread {
         update_channel,
-        frontends,
-        backends,
+        plugins,
     }: Thread,
 ) {
     loop {
@@ -27,12 +25,8 @@ fn event_thread(
             recv(update_channel) -> uuid => {
                 match uuid {
                     Ok(uuid) => {
-                        for frontend in &frontends {
-                            frontend.on_component_update(&uuid);
-                        }
-
-                        for backend in &backends {
-                            backend.on_component_update(&uuid);
+                        for plugin in &plugins {
+                            plugin.on_component_update(&uuid);
                         }
                     }
                     Err(_) => {}
