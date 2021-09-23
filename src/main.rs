@@ -4,6 +4,7 @@ mod api;
 mod backend;
 mod frontend;
 mod gui;
+mod plugin;
 mod zinput;
 
 fn main() {
@@ -15,6 +16,8 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::swi::Swi::new()));
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()));
+
+    zinput.add_plugin(Arc::new(plugin::virtual_controllers::VirtualControllers::new()));
 
     #[cfg(target_os = "windows")]
     {
