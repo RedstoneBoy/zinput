@@ -12,7 +12,7 @@ macro_rules! vctrl {
     ) => {
         #[derive(Default)]
         pub struct VInput {
-            pub $($sfname: Option<<$sftype as ComponentData>::Info>,)*
+            pub $($sfname: Vec<<$sftype as ComponentData>::Info>,)*
             pub $($mfname: Vec<<$mftype as ComponentData>::Info>,)*
         }
 
