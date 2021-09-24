@@ -16,10 +16,11 @@ pub trait Plugin {
 
     fn name(&self) -> &str;
     fn kind(&self) -> PluginKind;
+    fn events(&self) -> &[EventKind] { &[] }
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {}
 
-    fn on_component_update(&self, _id: &Uuid) {}
+    fn on_event(&self, _event: &Event) {}
 }
 
 #[derive(Debug)]
@@ -69,4 +70,22 @@ impl std::fmt::Display for PluginKind {
             PluginKind::Custom(kind) => write!(f, "custom: {}", kind),
         }
     }
+}
+
+#[derive(Clone)]
+pub enum Event {
+    ComponentUpdate(Uuid),
+}
+
+impl Event {
+    pub fn kind(&self) -> EventKind {
+        match self {
+            Event::ComponentUpdate(_) => EventKind::ComponentUpdate,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum EventKind {
+    ComponentUpdate,
 }

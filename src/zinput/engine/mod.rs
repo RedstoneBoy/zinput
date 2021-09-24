@@ -12,6 +12,7 @@ use crate::api::{
         touch_pad::TouchPad, Component, ComponentData,
     },
     device::DeviceInfo,
+    Event,
     InvalidComponentIdError,
 };
 
@@ -22,16 +23,16 @@ macro_rules! engine_struct {
                 devices: DashMap<Uuid, DeviceInfo>,
                 $([< $field_name s >]: DashMap<Uuid, Component<$ctype>>,)*
 
-                update_channel: Sender<Uuid>,
+                event_channel: Sender<Event>,
             }
 
             impl Engine {
-                pub fn new(update_channel: Sender<Uuid>) -> Self {
+                pub fn new(event_channel: Sender<Event>) -> Self {
                     Engine {
                         devices: DashMap::new(),
                         $([< $field_name s >]: DashMap::new(),)*
 
-                        update_channel,
+                        event_channel,
                     }
                 }
 
@@ -66,7 +67,7 @@ macro_rules! engine_struct {
 
                     component.data.update(data);
 
-                    match self.update_channel.send(*id) {
+                    match self.event_channel.send(Event::ComponentUpdate(*id)) {
                         Ok(()) => {}
                         Err(_) => {}
                     }
