@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::zinput::engine::Engine;
 
+use self::device::DeviceInfo;
+
 pub mod component;
 pub mod device;
 
@@ -72,15 +74,19 @@ impl std::fmt::Display for PluginKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Event {
     ComponentUpdate(Uuid),
+    DeviceAdded(Uuid, DeviceInfo),
+    DeviceRemoved(Uuid),
 }
 
 impl Event {
     pub fn kind(&self) -> EventKind {
         match self {
             Event::ComponentUpdate(_) => EventKind::ComponentUpdate,
+            Event::DeviceAdded(_, _) => EventKind::DeviceAdded,
+            Event::DeviceRemoved(_) => EventKind::DeviceRemoved,
         }
     }
 }
@@ -88,4 +94,6 @@ impl Event {
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EventKind {
     ComponentUpdate,
+    DeviceAdded,
+    DeviceRemoved,
 }

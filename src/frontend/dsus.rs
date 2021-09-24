@@ -89,6 +89,7 @@ impl Plugin for Dsus {
                     self.signals.update.0.send(*id).unwrap();
                 }
             }
+            _ => {}
         }
     }
 }

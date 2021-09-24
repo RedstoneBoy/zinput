@@ -75,6 +75,7 @@ impl Plugin for XInput {
                     self.signals.update.0.send(*id).unwrap();
                 }
             }
+            _ => {}
         }
     }
 }

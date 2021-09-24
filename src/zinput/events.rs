@@ -21,12 +21,13 @@ fn event_thread(
         plugins,
     }: Thread,
 ) {
+    const VEC: Vec<usize> = Vec::new();
     // an array of a vector of an index
     // event_plugin_indices[x][y] = z
     // where x = event index
     //       y = internal plugin index
     //       z = plugin index in plugins vector
-    let mut event_plugin_indices: [Vec<usize>; Event::NUM_INDICES] = [Vec::new(); Event::NUM_INDICES];
+    let mut event_plugin_indices: [Vec<usize>; Event::NUM_INDICES] = [VEC; Event::NUM_INDICES];
     for (index, plugin) in plugins.iter().enumerate() {
         for ekind in plugin.events() {
             event_plugin_indices[ekind.to_index()].push(index);
@@ -67,11 +68,13 @@ impl EventIndex for Event {
 }
 
 impl EventIndex for EventKind {
-    const NUM_INDICES: usize = 1;
+    const NUM_INDICES: usize = 3;
 
     fn to_index(&self) -> usize {
         match self {
             EventKind::ComponentUpdate => 0,
+            EventKind::DeviceAdded => 1,
+            EventKind::DeviceRemoved => 2,
         }
     }
 }

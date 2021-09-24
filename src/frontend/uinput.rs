@@ -83,6 +83,7 @@ impl Plugin for UInput {
                     self.signals.update.0.send(*id).unwrap();
                 }
             }
+            _ => {}
         }
     }
 }

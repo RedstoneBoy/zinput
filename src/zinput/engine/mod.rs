@@ -48,12 +48,20 @@ macro_rules! engine_struct {
             impl Engine {
                 pub fn new_device(&self, info: DeviceInfo) -> Uuid {
                     let id = Uuid::new_v4();
-                    self.devices.insert(id, info);
+                    self.devices.insert(id, info.clone());
+                    match self.event_channel.send(Event::DeviceAdded(id, info)) {
+                        Ok(()) => {},
+                        Err(_) => {}
+                    }
                     id
                 }
 
                 pub fn remove_device(&self, id: &Uuid) {
                     self.devices.remove(id);
+                    match self.event_channel.send(Event::DeviceRemoved(*id)) {
+                        Ok(()) => {},
+                        Err(_) => {}
+                    }
                 }
 
                 $(pub fn [< new_ $field_name >](&self, info: <$ctype as ComponentData>::Info) -> Uuid {
