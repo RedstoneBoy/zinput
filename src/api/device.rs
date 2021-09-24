@@ -1,50 +1,51 @@
+use paste::paste;
 use uuid::Uuid;
+
+use super::component::ComponentData;
+
+macro_rules! components {
+    (
+        single { $($sfname:ident : $sftype:ty),* $(,)? }
+        multiple { $($mfname:ident : $mftype:ty),* $(,)? }
+    ) => {
+        #[derive(Default)]
+        pub struct Components {
+            $(pub $sfname: Option<Uuid>,)*
+            $(pub $mfname: Vec<Uuid>,)*
+        }
+
+        impl Components {
+            paste! {
+                $(
+                    pub fn [< set_ $sfname >](mut self, $sfname: Uuid) -> Self {
+                        self.$sfname = Some($sfname);
+                        self
+                    }
+                )*
+
+                $(
+                    pub fn [< add_ $mfname >](mut self, $mfname: Uuid) -> Self {
+                        self.$mfname.push($mfname);
+                        self
+                    }
+                )*
+            }
+        }
+    };
+}
+
+crate::schema_macro!(components);
 
 pub struct DeviceInfo {
     pub name: String,
-    pub controller: Option<Uuid>,
-    pub motion: Option<Uuid>,
-
-    pub analogs: Vec<Uuid>,
-    pub buttons: Vec<Uuid>,
-    pub touch_pads: Vec<Uuid>,
+    pub components: Components,
 }
 
 impl DeviceInfo {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, components: Components) -> Self {
         DeviceInfo {
             name,
-            controller: None,
-            motion: None,
-
-            analogs: Vec::new(),
-            buttons: Vec::new(),
-            touch_pads: Vec::new(),
+            components,
         }
-    }
-
-    pub fn with_controller(mut self, controller: Uuid) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    pub fn with_motion(mut self, motion: Uuid) -> Self {
-        self.motion = Some(motion);
-        self
-    }
-
-    pub fn with_analogs(mut self, analogs: Uuid) -> Self {
-        self.analogs.push(analogs);
-        self
-    }
-
-    pub fn with_buttons(mut self, buttons: Uuid) -> Self {
-        self.buttons.push(buttons);
-        self
-    }
-
-    pub fn with_touch_pad(mut self, touch_pad: Uuid) -> Self {
-        self.touch_pads.push(touch_pad);
-        self
     }
 }

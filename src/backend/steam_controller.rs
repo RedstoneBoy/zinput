@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::component::motion::{Motion, MotionInfo};
 use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
+use crate::api::device::Components;
 use crate::api::device::DeviceInfo;
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
@@ -266,13 +267,14 @@ impl SCBundle {
         let touch_left_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
         let touch_right_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
 
-        let device_id = api.new_device(
-            DeviceInfo::new(format!("Steam Controller (Adaptor {})", adaptor_id))
-                .with_controller(controller_id)
-                .with_motion(motion_id)
-                .with_touch_pad(touch_left_id)
-                .with_touch_pad(touch_right_id),
-        );
+        let device_id = api.new_device(DeviceInfo::new(
+            format!("Steam Controller (Adaptor {})", adaptor_id),
+            Components::default()
+                .set_controller(controller_id)
+                .set_motion(motion_id)
+                .add_touch_pad(touch_left_id)
+                .add_touch_pad(touch_right_id),
+        ));
 
         SCBundle {
             api,

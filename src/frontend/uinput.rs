@@ -253,7 +253,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                         };
 
                         let controller_id = match engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
+                            .and_then(|device| device.components.controller)
                         {
                             Some(id) => id,
                             None => {

@@ -19,6 +19,7 @@ use crate::api::{
         controller::{Button, Controller, ControllerInfo},
         motion::{Motion, MotionInfo},
     },
+    device::Components,
     PluginKind,
 };
 use crate::api::{Plugin, PluginStatus};
@@ -161,11 +162,12 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
 
     let controller_id = api.new_controller(ControllerInfo::default());
     let motion_id = api.new_motion(MotionInfo::new(true, true));
-    let device_id = api.new_device(
-        DeviceInfo::new(format!("Swi Controller"))
-            .with_controller(controller_id)
-            .with_motion(motion_id),
-    );
+    let device_id = api.new_device(DeviceInfo::new(
+        format!("Swi Controller"),
+        Components::default()
+            .set_controller(controller_id)
+            .set_motion(motion_id),
+    ));
 
     let mut controller = Controller::default();
     let mut motion = Motion::default();

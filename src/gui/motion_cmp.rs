@@ -66,8 +66,8 @@ impl MotionCmp {
                 self.dev2.and_then(|id| self.engine.get_device(&id)),
             ) {
                 if let (Some(motion1), Some(motion2)) = (
-                    dev1.motion.and_then(|id| self.engine.get_motion(&id)),
-                    dev2.motion.and_then(|id| self.engine.get_motion(&id)),
+                    dev1.components.motion.and_then(|id| self.engine.get_motion(&id)),
+                    dev2.components.motion.and_then(|id| self.engine.get_motion(&id)),
                 ) {
                     let motion1 = motion1.data.clone();
                     let motion2 = motion2.data.clone();

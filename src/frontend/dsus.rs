@@ -508,14 +508,14 @@ fn dsus_thread(thread: Thread) -> Result<()> {
                         }
 
                         if let Some(controller_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
+                            .and_then(|device| device.components.controller)
                         {
                             cids[idx] = Some(controller_id);
                             signals.listen_update.lock().insert(controller_id);
                         }
 
                         if let Some(motion_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.motion)
+                            .and_then(|device| device.components.motion)
                         {
                             mids[idx] = Some(motion_id);
                             signals.listen_update.lock().insert(motion_id);

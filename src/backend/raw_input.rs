@@ -22,7 +22,7 @@ use crate::api::{
         analogs::{Analogs, AnalogsInfo},
         buttons::{Buttons, ButtonsInfo},
     },
-    device::DeviceInfo,
+    device::{Components, DeviceInfo},
     Plugin, PluginKind, PluginStatus,
 };
 use crate::zinput::engine::Engine;
@@ -254,8 +254,8 @@ impl State {
 impl Drop for State {
     fn drop(&mut self) {
         for joystick in self.joysticks.values() {
-            self.api.remove_analog(&joystick.analog_id);
-            self.api.remove_button(&joystick.button_id);
+            self.api.remove_analogs(&joystick.analog_id);
+            self.api.remove_buttons(&joystick.button_id);
             self.api.remove_device(&joystick.device_id);
         }
     }
@@ -433,8 +433,8 @@ fn update_device_list(state: &mut State) {
             continue;
         }
 
-        api.remove_analog(&joystick.analog_id);
-        api.remove_button(&joystick.button_id);
+        api.remove_analogs(&joystick.analog_id);
+        api.remove_buttons(&joystick.button_id);
         api.remove_device(&joystick.device_id);
     }
 
@@ -564,13 +564,14 @@ fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
     }
 
     // todo: meta info
-    let analog_id = api.new_analog(AnalogsInfo::default());
-    let button_id = api.new_button(ButtonsInfo::default());
-    let device_id = api.new_device(
-        DeviceInfo::new(format!("Raw Input Device {}", handle as u64))
-            .with_analogs(analog_id)
-            .with_buttons(button_id),
-    );
+    let analog_id = api.new_analogs(AnalogsInfo::default());
+    let button_id = api.new_buttons(ButtonsInfo::default());
+    let device_id = api.new_device(DeviceInfo::new(
+        format!("Raw Input Device {}", handle as u64),
+        Components::default()
+            .add_analogs(analog_id)
+            .add_buttons(button_id),
+    ));
 
     Ok(Joystick {
         button_caps,
@@ -676,10 +677,10 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
 
     state
         .api
-        .update_analog(&joystick.analog_id, &joystick.data.analogs)?;
+        .update_analogs(&joystick.analog_id, &joystick.data.analogs)?;
     state
         .api
-        .update_button(&joystick.button_id, &joystick.data.buttons)?;
+        .update_buttons(&joystick.button_id, &joystick.data.buttons)?;
 
     Ok(())
 }

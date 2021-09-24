@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
 use uuid::Uuid;
 
-use crate::api::device::DeviceInfo;
+use crate::api::device::{Components, DeviceInfo};
 use crate::api::{
     component::{
         controller::{Button, Controller, ControllerInfo},
@@ -243,9 +243,10 @@ struct XController {
 impl XController {
     fn new(api: &(Engine), id: usize) -> Self {
         let controller_id = api.new_controller(xinput_controller_info());
-        let device_id = api.new_device(
-            DeviceInfo::new(format!("XInput Controller {}", id + 1)).with_controller(controller_id),
-        );
+        let device_id = api.new_device(DeviceInfo::new(
+            format!("XInput Controller {}", id + 1),
+            Components::default().set_controller(controller_id),
+        ));
 
         XController {
             device_id,

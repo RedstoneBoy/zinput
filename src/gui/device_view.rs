@@ -43,7 +43,7 @@ impl DeviceView {
             if let Some(controller_data) = self
                 .selected_controller
                 .and_then(|id| self.engine.get_device(&id))
-                .and_then(|dev| dev.controller)
+                .and_then(|dev| dev.components.controller)
                 .and_then(|id| self.engine.get_controller(&id))
                 .map(|ctrl| ctrl.data.clone())
             {
@@ -137,7 +137,7 @@ impl DeviceView {
             if let Some(motion_data) = self
                 .selected_controller
                 .and_then(|id| self.engine.get_device(&id))
-                .and_then(|dev| dev.motion)
+                .and_then(|dev| dev.components.motion)
                 .and_then(|id| self.engine.get_motion(&id))
                 .map(|motion| motion.data.clone())
             {
@@ -179,7 +179,8 @@ impl DeviceView {
                 .and_then(|id| self.engine.get_device(&id))
             {
                 for (i, touch_pad) in device
-                    .touch_pads
+                    .components
+                    .touch_pad
                     .iter()
                     .filter_map(|tid| self.engine.get_touch_pad(tid))
                     .enumerate()
@@ -223,9 +224,10 @@ impl DeviceView {
                 need_separator = true;
 
                 for (analog_comp_index, analog) in device
+                    .components
                     .analogs
                     .iter()
-                    .filter_map(|tid| self.engine.get_analog(tid))
+                    .filter_map(|tid| self.engine.get_analogs(tid))
                     .enumerate()
                 {
                     if need_separator {
@@ -265,9 +267,10 @@ impl DeviceView {
                 need_separator = true;
 
                 for (button_comp_index, buttons) in device
+                    .components
                     .buttons
                     .iter()
-                    .filter_map(|tid| self.engine.get_button(tid))
+                    .filter_map(|tid| self.engine.get_buttons(tid))
                     .enumerate()
                 {
                     if need_separator {

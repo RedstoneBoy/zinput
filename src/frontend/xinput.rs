@@ -239,7 +239,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                         }
 
                         if let Some(controller_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
+                            .and_then(|device| device.components.controller)
                         {
                             let mut target = Target::new(vigem::TargetType::Xbox360);
                             vigem.target_add(&mut target)?;

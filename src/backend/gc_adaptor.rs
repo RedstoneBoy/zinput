@@ -9,7 +9,7 @@ use rusb::UsbContext;
 use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
-use crate::api::device::DeviceInfo;
+use crate::api::device::{Components, DeviceInfo};
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
@@ -293,14 +293,14 @@ impl Controllers {
                     );
 
                     let ctrl = self.api.new_controller(gc_controller_info());
-                    let dev = self.api.new_device(
-                        DeviceInfo::new(format!(
+                    let dev = self.api.new_device(DeviceInfo::new(
+                        format!(
                             "Gamecube Adaptor Slot {} (Adaptor {})",
                             i + 1,
                             self.adaptor_id
-                        ))
-                        .with_controller(ctrl),
-                    );
+                        ),
+                        Components::default().set_controller(ctrl),
+                    ));
                     self.bundles[i] = Some((dev, ctrl));
                     ctrl
                 }

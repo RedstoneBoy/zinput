@@ -16,9 +16,9 @@ use crate::api::{
 };
 
 macro_rules! engine_struct {
-    ($struct_name:ident ; $($field_name:ident : $ctype:ty),* $(,)?) => {
+    ($($field_name:ident : $ctype:ty),* $(,)?) => {
         paste! {
-            pub struct $struct_name {
+            pub struct Engine {
                 devices: DashMap<Uuid, DeviceInfo>,
                 $([< $field_name s >]: DashMap<Uuid, Component<$ctype>>,)*
 
@@ -82,14 +82,7 @@ macro_rules! engine_struct {
     };
 }
 
-engine_struct!(Engine;
-    controller: Controller,
-    motion: Motion,
-
-    analog: Analogs,
-    button: Buttons,
-    touch_pad: TouchPad,
-);
+crate::schema_macro!(unified engine_struct);
 
 impl Engine {
     pub fn devices(&self) -> impl Iterator<Item = RefMulti<Uuid, DeviceInfo>> {

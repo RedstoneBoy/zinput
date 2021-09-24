@@ -1,5 +1,7 @@
 use crate::api::{Plugin, PluginKind, PluginStatus};
 
+mod vcontroller;
+
 pub struct VirtualControllers {}
 
 impl VirtualControllers {
