@@ -13,7 +13,7 @@ use std::{
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind, Key, UInputHandle};
+use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, ILEventKind, Key, UInputHandle};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -345,7 +345,7 @@ impl Joystick {
 
         let ud = uinput_device;
 
-        ud.set_evbit(EventKind::Key)?;
+        ud.set_evbit(ILEventKind::Key)?;
         keybits!(
             ud,
             Key::ButtonNorth,
@@ -367,7 +367,7 @@ impl Joystick {
             Key::ButtonMode,
         );
 
-        ud.set_evbit(EventKind::Absolute)?;
+        ud.set_evbit(ILEventKind::Absolute)?;
         ud.set_absbit(AbsoluteAxis::X)?;
         ud.set_absbit(AbsoluteAxis::Y)?;
         ud.set_absbit(AbsoluteAxis::RX)?;
