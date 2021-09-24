@@ -15,13 +15,7 @@ use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 
-use crate::{
-    api::{
-        component::controller::{Button, Controller},
-        Plugin, PluginKind, PluginStatus,
-    },
-    zinput::engine::Engine,
-};
+use crate::{api::{Event, EventKind, Plugin, PluginKind, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
 
 const T: &'static str = "frontend:xinput";
 
@@ -60,6 +54,10 @@ impl Plugin for XInput {
         PluginKind::Frontend
     }
 
+    fn events(&self) -> &[EventKind] {
+        &[EventKind::ComponentUpdate]
+    }
+
     fn update_gui(
         &self,
         ctx: &eframe::egui::CtxRef,
@@ -69,10 +67,15 @@ impl Plugin for XInput {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 
-    fn on_component_update(&self, id: &Uuid) {
-        if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
-            // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-            self.signals.update.0.send(*id).unwrap();
+    fn on_event(&self, event: &Event) {
+        match event {
+            Event::ComponentUpdate(id) => {
+                if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
+                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
+                    self.signals.update.0.send(*id).unwrap();
+                }
+            }
+            _ => {}
         }
     }
 }

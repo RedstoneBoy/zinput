@@ -13,14 +13,14 @@ use std::{
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind, Key, UInputHandle};
+use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::{
     api::{
         component::controller::{Button, Controller},
-        Plugin, PluginKind, PluginStatus,
+        Event, EventKind, Plugin, PluginKind, PluginStatus,
     },
     zinput::engine::Engine,
 };
@@ -62,6 +62,10 @@ impl Plugin for UInput {
         PluginKind::Frontend
     }
 
+    fn events(&self) -> &[EventKind] {
+        &[EventKind::ComponentUpdate]
+    }
+
     fn update_gui(
         &self,
         ctx: &eframe::egui::CtxRef,
@@ -71,10 +75,15 @@ impl Plugin for UInput {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 
-    fn on_component_update(&self, id: &Uuid) {
-        if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
-            // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-            self.signals.update.0.send(*id).unwrap();
+    fn on_event(&self, event: &Event) {
+        match event {
+            Event::ComponentUpdate(id) => {
+                if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
+                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
+                    self.signals.update.0.send(*id).unwrap();
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -337,7 +346,7 @@ impl Joystick {
 
         let ud = uinput_device;
 
-        ud.set_evbit(EventKind::Key)?;
+        ud.set_evbit(ILEventKind::Key)?;
         keybits!(
             ud,
             Key::ButtonNorth,
@@ -359,7 +368,7 @@ impl Joystick {
             Key::ButtonMode,
         );
 
-        ud.set_evbit(EventKind::Absolute)?;
+        ud.set_evbit(ILEventKind::Absolute)?;
         ud.set_absbit(AbsoluteAxis::X)?;
         ud.set_absbit(AbsoluteAxis::Y)?;
         ud.set_absbit(AbsoluteAxis::RX)?;

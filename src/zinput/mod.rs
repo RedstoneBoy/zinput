@@ -1,12 +1,8 @@
 use std::{sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::Receiver;
-use uuid::Uuid;
 
-use crate::{
-    api::{Plugin, PluginKind},
-    gui::Gui,
-};
+use crate::{api::{Event, Plugin}, gui::Gui};
 
 pub mod engine;
 mod events;
@@ -17,19 +13,19 @@ pub struct ZInput {
     plugins: Vec<Arc<dyn Plugin + Send + Sync>>,
     engine: Arc<Engine>,
 
-    update_receiver: Receiver<Uuid>,
+    event_channel: Receiver<Event>,
     event_thread_handler: Option<JoinHandle<()>>,
 }
 
 impl ZInput {
     pub fn new() -> Self {
-        let (update_sender, update_receiver) = crossbeam_channel::bounded(32);
+        let (event_sender, event_channel) = crossbeam_channel::bounded(32);
 
         ZInput {
             plugins: Vec::new(),
-            engine: Arc::new(Engine::new(update_sender)),
+            engine: Arc::new(Engine::new(event_sender)),
 
-            update_receiver,
+            event_channel,
             event_thread_handler: None,
         }
     }
@@ -44,7 +40,7 @@ impl ZInput {
         }
 
         let event_thread_handler = std::thread::spawn(events::new_event_thread(events::Thread {
-            update_channel: self.update_receiver.clone(),
+            event_channel: self.event_channel.clone(),
             plugins: self.plugins.clone(),
         }));
         self.event_thread_handler = Some(event_thread_handler);

@@ -1,5 +1,6 @@
 use uuid::Uuid;
 
+#[derive(Clone, Debug)]
 pub struct DeviceInfo {
     pub name: String,
     pub controller: Option<Uuid>,
