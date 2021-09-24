@@ -13,7 +13,7 @@ use std::{
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, ILEventKind, Key, UInputHandle};
+use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
