@@ -33,6 +33,8 @@ macro_rules! vctrl {
             pub input: VInput,
             pub output: VOutput,
             device_id: Uuid,
+
+            name: String,
         }
 
         impl VController {
@@ -62,7 +64,7 @@ macro_rules! vctrl {
                     };
 
                     let device_info = DeviceInfo {
-                        name,
+                        name: name.clone(),
                         components: Components {
                             $($sfname,)*
                             $($mfname,)*
@@ -75,6 +77,8 @@ macro_rules! vctrl {
                         input,
                         output,
                         device_id,
+                        
+                        name,
                     }
                 }
                 
@@ -82,6 +86,10 @@ macro_rules! vctrl {
 
             pub fn device_id(&self) -> &Uuid {
                 &self.device_id
+            }
+
+            pub fn name(&self) -> &str {
+                &self.name
             }
         }
     };
