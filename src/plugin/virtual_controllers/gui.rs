@@ -69,7 +69,7 @@ impl Gui {
         // Profile
 
         // Inputs
-        ui.separator();
+        ui.heading("Input Components");
         
         // Save / Close buttons
         ui.separator();
