@@ -1,4 +1,4 @@
-use super::ComponentData;
+use super::{ComponentData, ComponentKind};
 
 pub struct ControllerInfo {
     pub buttons: u64,
@@ -76,6 +76,8 @@ impl Default for Controller {
 }
 
 impl ComponentData for Controller {
+    const KIND: ComponentKind = ComponentKind::Controller;
+    
     type Info = ControllerInfo;
 
     fn update(&mut self, from: &Self) {

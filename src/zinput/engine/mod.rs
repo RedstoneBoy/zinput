@@ -88,19 +88,7 @@ impl Engine {
     pub fn devices(&self) -> impl Iterator<Item = RefMulti<Uuid, DeviceInfo>> {
         self.devices.iter()
     }
-    /*
-        pub fn controllers(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Controller>>> {
-            self.controllers.iter()
-        }
-
-        pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
-            self.motions.iter()
-        }
-
-        pub fn touch_pads(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<TouchPad>>> {
-            self.touch_pads.iter()
-        }
-    */
+    
     pub fn has_device(&self, id: &Uuid) -> bool {
         self.devices.contains_key(id)
     }

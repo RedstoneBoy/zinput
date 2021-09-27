@@ -1,4 +1,4 @@
-use super::ComponentData;
+use super::{ComponentData, ComponentKind};
 
 pub struct AnalogsInfo {
     pub analogs: u8,
@@ -22,6 +22,7 @@ impl Default for Analogs {
 }
 
 impl ComponentData for Analogs {
+    const KIND: ComponentKind = ComponentKind::Analogs;
     type Info = AnalogsInfo;
 
     fn update(&mut self, from: &Self) {

@@ -1,4 +1,4 @@
-use super::ComponentData;
+use super::{ComponentData, ComponentKind};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TouchPadShape {
@@ -26,6 +26,8 @@ pub struct TouchPad {
 }
 
 impl ComponentData for TouchPad {
+    const KIND: ComponentKind = ComponentKind::TouchPad;
+    
     type Info = TouchPadInfo;
 
     fn update(&mut self, from: &Self) {

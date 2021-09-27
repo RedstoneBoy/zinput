@@ -1,7 +1,7 @@
 use paste::paste;
 use uuid::Uuid;
 
-use crate::api::component::{ComponentData, analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion, touch_pad::TouchPad};
+use crate::api::component::{ComponentData, ComponentKind, analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion, touch_pad::TouchPad};
 use crate::api::device::{Components, DeviceInfo};
 use crate::zinput::engine::Engine;
 
@@ -10,12 +10,6 @@ macro_rules! vctrl {
         single { $($sfname:ident : $sftype:ty),* $(,)? }
         multiple { $($mfname:ident : $mftype:ty),* $(,)? }
     ) => {
-        #[derive(Default)]
-        pub struct VInput {
-            pub $($sfname: Vec<<$sftype as ComponentData>::Info>,)*
-            pub $($mfname: Vec<<$mftype as ComponentData>::Info>,)*
-        }
-
         #[derive(Default)]
         pub struct VOutput {
             pub $($sfname: Option<ComponentBundle<$sftype>>,)*
@@ -96,6 +90,19 @@ macro_rules! vctrl {
 }
 
 crate::schema_macro!(vctrl);
+
+#[derive(Default)]
+pub struct VInput {
+    pub devices: Vec<Uuid>,
+}
+
+impl VInput {
+    pub fn new() -> Self {
+        VInput {
+            devices: Vec::new(),
+        }
+    }
+}
 
 pub struct ComponentBundle<C: ComponentData> {
     id: Uuid,

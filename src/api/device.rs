@@ -1,7 +1,7 @@
 use paste::paste;
 use uuid::Uuid;
 
-use super::component::ComponentData;
+use super::component::{ComponentData, ComponentKind};
 
 macro_rules! components {
     (
@@ -29,6 +29,24 @@ macro_rules! components {
                         self
                     }
                 )*
+            }
+
+            pub fn contains(&self, kind: ComponentKind) -> bool {
+                self.get_single(kind).is_some() || self.get_multiple(kind).len() > 0
+            }
+
+            pub fn get_single(&self, kind: ComponentKind) -> Option<&Uuid> {
+                match kind {
+                    $(<$sftype>::KIND => self.$sfname.as_ref(),)*
+                    _ => None,
+                }
+            }
+
+            pub fn get_multiple(&self, kind: ComponentKind) -> &[Uuid] {
+                match kind {
+                    $(<$mftype>::KIND => &*self.$mfname,)*
+                    _ => &[],
+                }
             }
         }
     };

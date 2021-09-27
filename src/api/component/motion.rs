@@ -1,4 +1,4 @@
-use super::ComponentData;
+use super::{ComponentData, ComponentKind};
 
 pub struct MotionInfo {
     pub has_gyro: bool,
@@ -36,6 +36,8 @@ pub struct Motion {
 }
 
 impl ComponentData for Motion {
+    const KIND: ComponentKind = ComponentKind::Motion;
+    
     type Info = MotionInfo;
 
     fn update(&mut self, from: &Self) {

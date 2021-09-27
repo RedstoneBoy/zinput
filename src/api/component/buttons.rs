@@ -1,4 +1,4 @@
-use super::ComponentData;
+use super::{ComponentData, ComponentKind};
 
 pub struct ButtonsInfo {
     pub buttons: u64,
@@ -22,6 +22,7 @@ impl Default for Buttons {
 }
 
 impl ComponentData for Buttons {
+    const KIND: ComponentKind = ComponentKind::Buttons;
     type Info = ButtonsInfo;
 
     fn update(&mut self, from: &Self) {

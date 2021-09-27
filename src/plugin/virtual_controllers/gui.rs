@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
+use crate::api::component::COMPONENT_KINDS;
 use crate::zinput::engine::Engine;
 
 use super::MAX_CONTROLLERS;
 use super::state::State;
+use super::vcontroller::VInput;
 
 const ROW_WIDTH: usize = 4;
 
@@ -37,28 +39,32 @@ impl Gui {
         }
 
         egui::Grid::new("vcons_grid")
-            .min_col_width(150.0)
+            .min_col_width(125.0)
+            .min_row_height(50.0)
             .show(ui, |ui| {
             let mut x = 0;
-            for i in 0..=state.vcons.len() {
+            for i in 0..MAX_CONTROLLERS {
                 if x >= ROW_WIDTH {
+                    x = 0;
                     ui.end_row();
                 }
 
                 x += 1;
 
-                ui.vertical(|ui| {
+                ui.vertical_centered(|ui| {
                     ui.label(format!("Virtual Controller {}", i + 1));
 
                     if i < state.vcons.len() {
                         if ui.button(state.vcons[i].name()).clicked() {
                             // todo
                         }
-                    } else if state.vcons.len() < MAX_CONTROLLERS {
+                    } else if i == state.vcons.len() && state.vcons.len() < MAX_CONTROLLERS {
                         if ui.button("Add Controller").clicked() {
                             self.edit = EditContext::add_controller();
                             self.editing = true;
                         }
+                    } else if i > state.vcons.len() {
+                        ui.label("");
                     }
                 });
             }
@@ -69,7 +75,10 @@ impl Gui {
         // Profile
 
         // Inputs
-        ui.heading("Input Components");
+        ui.heading("Input Devices");
+        egui::Grid::new("vcinputgrid").show(ui, |ui| {
+            // for device_id
+        });
         
         // Save / Close buttons
         ui.separator();
@@ -88,6 +97,7 @@ impl Gui {
 struct EditContext {
     mode: EditMode,
     profile: VCProfile,
+    input: VInput,
 }
 
 impl EditContext {
@@ -95,6 +105,7 @@ impl EditContext {
         EditContext {
             mode: EditMode::Empty,
             profile: VCProfile::new(),
+            input: VInput::new(),
         }
     }
 
@@ -102,6 +113,7 @@ impl EditContext {
         EditContext {
             mode: EditMode::Add,
             profile: VCProfile::new(),
+            input: VInput::new(),
         }
     }
 
