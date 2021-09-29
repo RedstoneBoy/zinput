@@ -25,6 +25,7 @@ macro_rules! vctrl {
         #[derive(Default)]
         pub struct VController {
             pub input: VInput,
+            pub mapping: Mapping,
             pub output: VOutput,
             device_id: Uuid,
 
@@ -69,6 +70,7 @@ macro_rules! vctrl {
 
                     VController {
                         input,
+                        mapping: Mapping::Raw(RawMapping::new()),
                         output,
                         device_id,
                         
@@ -113,4 +115,27 @@ impl<C: ComponentData> ComponentBundle<C> {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
+}
+
+pub enum Mapping {
+    Raw(RawMapping),
+    Compiled(CompiledMapping),
+}
+
+impl Default for Mapping {
+    fn default() -> Self {
+        Mapping::Raw(RawMapping::default())
+    }
+}
+
+#[derive(Default)]
+pub struct RawMapping {
+    
+}
+
+impl RawMapping {
+}
+
+pub struct CompiledMapping {
+    
 }

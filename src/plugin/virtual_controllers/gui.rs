@@ -6,7 +6,7 @@ use crate::api::component::COMPONENT_KINDS;
 use crate::zinput::engine::Engine;
 
 use super::state::State;
-use super::vcontroller::VInput;
+use super::vcontroller::{RawMapping, VInput};
 use super::MAX_CONTROLLERS;
 
 const ROW_WIDTH: usize = 4;
@@ -92,7 +92,31 @@ impl Gui {
     ) {
         // Profile
 
-        // Inputs
+        // Input Devices
+        self.update_edit_window_input_devices(state, ctx, frame, ui);
+
+        // Components
+
+        // Save / Close buttons
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                if ui.button("Close").clicked() {
+                    self.editing = false;
+                }
+
+                ui.add(egui::Button::new("Save").enabled(self.edit.can_save()));
+            });
+        });
+    }
+
+    fn update_edit_window_input_devices(
+        &mut self,
+        state: &mut State,
+        ctx: &egui::CtxRef,
+        frame: &mut epi::Frame,
+        ui: &mut egui::Ui,
+    ) {
         ui.heading("Input Devices");
         egui::Grid::new("vcinputgrid").show(ui, |ui| {
             let mut x = 0;
@@ -101,17 +125,17 @@ impl Gui {
                 let cur_device = self.edit.input.devices[i];
                 egui::ComboBox::from_label(format!("Device {}", i + 1))
                     .selected_text(
-                        state
+                        self
                             .engine
                             .get_device(&cur_device)
                             .map_or("".to_owned(), |dev| dev.name.clone()),
                     )
                     .show_ui(ui, |ui| {
-                        for device in state.engine.devices() {
+                        for device in self.engine.devices() {
                             ui.selectable_value(
                                 &mut self.edit.input.devices[0],
                                 *device.key(),
-                                state
+                                self
                                     .engine
                                     .get_device(device.key())
                                     .map_or("".to_owned(), |dev| dev.name.clone()),
@@ -143,11 +167,11 @@ impl Gui {
 
             egui::ComboBox::from_label("New Device")
                 .show_ui(ui, |ui| {
-                    for device in state.engine.devices() {
+                    for device in self.engine.devices() {
                         ui.selectable_value(
                             &mut selected,
                             Some(*device.key()),
-                            state
+                            self
                                 .engine
                                 .get_device(device.key())
                                 .map_or("".to_owned(), |dev| dev.name.clone()),
@@ -159,25 +183,15 @@ impl Gui {
                 self.edit.input.devices.push(new_device);
             }
         });
-
-        // Save / Close buttons
-        ui.separator();
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                if ui.button("Close").clicked() {
-                    self.editing = false;
-                }
-
-                ui.add(egui::Button::new("Save").enabled(self.edit.can_save()));
-            });
-        });
     }
 }
 
 struct EditContext {
     mode: EditMode,
     profile: VCProfile,
+
     input: VInput,
+    mapping: RawMapping,
 }
 
 impl EditContext {
@@ -185,7 +199,9 @@ impl EditContext {
         EditContext {
             mode: EditMode::Empty,
             profile: VCProfile::new(),
+
             input: VInput::new(),
+            mapping: RawMapping::default(),
         }
     }
 
@@ -193,7 +209,9 @@ impl EditContext {
         EditContext {
             mode: EditMode::Add,
             profile: VCProfile::new(),
+
             input: VInput::new(),
+            mapping: RawMapping::default(),
         }
     }
 
