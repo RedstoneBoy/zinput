@@ -5,6 +5,10 @@ use crate::api::component::{ComponentData, ComponentKind, analogs::Analogs, butt
 use crate::api::device::{Components, DeviceInfo};
 use crate::zinput::engine::Engine;
 
+pub mod mapping;
+
+use self::mapping::RawMapping;
+
 macro_rules! vctrl {
     (
         single { $($sfname:ident : $sftype:ty),* $(,)? }
@@ -25,7 +29,7 @@ macro_rules! vctrl {
         #[derive(Default)]
         pub struct VController {
             pub input: VInput,
-            pub mapping: Mapping,
+            pub mapping: RawMapping,
             pub output: VOutput,
             device_id: Uuid,
 
@@ -70,7 +74,7 @@ macro_rules! vctrl {
 
                     VController {
                         input,
-                        mapping: Mapping::Raw(RawMapping::new()),
+                        mapping: RawMapping::default(),
                         output,
                         device_id,
                         
@@ -115,27 +119,4 @@ impl<C: ComponentData> ComponentBundle<C> {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
-}
-
-pub enum Mapping {
-    Raw(RawMapping),
-    Compiled(CompiledMapping),
-}
-
-impl Default for Mapping {
-    fn default() -> Self {
-        Mapping::Raw(RawMapping::default())
-    }
-}
-
-#[derive(Default)]
-pub struct RawMapping {
-    
-}
-
-impl RawMapping {
-}
-
-pub struct CompiledMapping {
-    
 }

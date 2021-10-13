@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 
-use crate::api::component::COMPONENT_KINDS;
 use crate::zinput::engine::Engine;
 
 use super::state::State;
-use super::vcontroller::{RawMapping, VInput};
+use super::vcontroller::{mapping::RawMapping, VInput};
 use super::MAX_CONTROLLERS;
 
 const ROW_WIDTH: usize = 4;
