@@ -1,23 +1,22 @@
 use std::{
-    convert::TryInto,
     net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread::JoinHandle,
     time::Duration,
 };
 
 use anyhow::{Context, Result};
 use eframe::{egui, epi};
 use parking_lot::Mutex;
-use swi_protocol::{SwiButton, SwiPacket};
+use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
 
-use crate::api::device::DeviceInfo;
 use crate::api::{
     component::{
-        controller::{Button, Controller, ControllerInfo},
-        motion::{Motion, MotionInfo},
+        controller::{Button, ControllerInfo},
+        motion::MotionInfo,
     },
     PluginKind,
 };
@@ -25,6 +24,20 @@ use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:swi";
+
+// Rotations Per Second -> Degrees Per Second
+const GYRO_SCALE: f32 = 360.0;
+
+const TIMEOUT_KIND: std::io::ErrorKind = {
+    #[cfg(target_os = "windows")]
+    {
+        std::io::ErrorKind::TimedOut
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::io::ErrorKind::WouldBlock
+    }
+};
 
 pub struct Swi {
     inner: Mutex<Inner>,
@@ -61,55 +74,101 @@ impl Plugin for Swi {
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         let mut inner = self.inner.lock();
-        ui.label(format!("Current Address: {}", inner.old_address));
-        ui.text_edit_singleline(&mut inner.address);
+        ui.label(format!("Switch Address: {}", inner.gui().old_address));
+        ui.text_edit_singleline(&mut inner.gui().address);
     }
 }
 
-struct Inner {
-    handle: Option<std::thread::JoinHandle<()>>,
-    stop: Arc<AtomicBool>,
-    status: Arc<Mutex<PluginStatus>>,
-    address: String,
+#[derive(Clone)]
+struct Gui {
     old_address: String,
+    address: String,
+}
+
+impl Gui {
+    fn new() -> Self {
+        Gui {
+            old_address: "10.0.0.177:26780".to_owned(),
+            address: "10.0.0.177:26780".to_owned(),
+        }
+    }
+}
+
+enum Inner {
+    Uninit {
+        gui: Gui,
+    },
+    Init {
+        handle: JoinHandle<()>,
+        stop: Arc<AtomicBool>,
+        status: Arc<Mutex<PluginStatus>>,
+        gui: Gui,
+    },
 }
 
 impl Inner {
     fn new() -> Self {
-        Inner {
-            handle: None,
-            stop: Arc::new(AtomicBool::new(false)),
-            status: Arc::new(Mutex::new(PluginStatus::Running)),
-            address: "0.0.0.0:26780".to_owned(),
-            old_address: "0.0.0.0:26780".to_owned(),
+        Inner::Uninit { gui: Gui::new() }
+    }
+
+    fn gui(&mut self) -> &mut Gui {
+        match self {
+            Inner::Uninit { gui } => gui,
+            Inner::Init { gui, .. } => gui,
         }
     }
 
     fn init(&mut self, api: Arc<Engine>) {
-        *self.status.lock() = PluginStatus::Running;
-        self.stop = Arc::new(AtomicBool::new(false));
-        self.handle = Some(std::thread::spawn(swi_thread(
-            self.address.clone(),
-            self.status.clone(),
-            self.stop.clone(),
+        if matches!(self, Inner::Init { .. }) {
+            self.stop();
+        }
+        let gui = self.gui().clone();
+
+        let status = Arc::new(Mutex::new(PluginStatus::Running));
+        let stop = Arc::new(AtomicBool::new(false));
+        let handle = std::thread::spawn(swi_thread(
+            gui.address.clone(),
+            status.clone(),
+            stop.clone(),
             api,
-        )));
-        self.old_address = self.address.clone();
+        ));
+
+        *self = Inner::Init {
+            handle,
+            stop,
+            status,
+            gui,
+        };
     }
 
     fn stop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        if let Some(handle) = std::mem::replace(&mut self.handle, None) {
-            match handle.join() {
-                Ok(()) => (),
-                Err(_) => log::info!(target: T, "driver panicked"),
+        let gui = self.gui().clone();
+
+        match std::mem::replace(self, Inner::Uninit { gui }) {
+            Inner::Uninit { .. } => {}
+            Inner::Init {
+                handle,
+                stop,
+                status,
+                ..
+            } => {
+                stop.store(true, Ordering::SeqCst);
+
+                match handle.join() {
+                    Ok(()) => (),
+                    Err(_) => log::info!(target: T, "driver panicked"),
+                }
+
+                *status.lock() = PluginStatus::Stopped;
             }
         }
-        *self.status.lock() = PluginStatus::Stopped;
     }
 
     fn status(&self) -> PluginStatus {
-        self.status.lock().clone()
+        match self {
+            Inner::Uninit { .. } => PluginStatus::Stopped,
+            Inner::Init { status, .. } => status.lock().clone(),
+        }
     }
 }
 
@@ -142,87 +201,122 @@ fn swi_thread(
 }
 
 fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
-    const TIMEOUT_KIND: std::io::ErrorKind = {
-        #[cfg(target_os = "windows")]
-        {
-            std::io::ErrorKind::TimedOut
-        }
-        #[cfg(target_os = "linux")]
-        {
-            std::io::ErrorKind::WouldBlock
-        }
-    };
-    let mut switch_conn =
-        SwitchConnection::new(address.parse()?).context("failed to connect to switch")?;
+    let address = address.parse().context("invalid address")?;
 
-    switch_conn
+    let mut swi_conn = SwiConnection::new(&*api).context("failed to create swi connection")?;
+
+    swi_conn
         .conn
         .set_read_timeout(Some(Duration::from_secs(1)))?;
 
-    let controller_id = api.new_controller(ControllerInfo::default());
-    let motion_id = api.new_motion(MotionInfo::new(true, true));
-    let device_id = api.new_device(
-        DeviceInfo::new(format!("Swi Controller"))
-            .with_controller(controller_id)
-            .with_motion(motion_id),
-    );
-
-    let mut controller = Controller::default();
-    let mut motion = Motion::default();
+    let mut connected = false;
 
     while !stop.load(Ordering::Acquire) {
-        match switch_conn.receive_data() {
+        if !connected {
+            match swi_conn.connect(address) {
+                Ok(()) => connected = true,
+                Err(err) if err.kind() == TIMEOUT_KIND => {
+                    continue;
+                }
+                Err(err) => {
+                    return Err(err).context("failed to connect to swi server");
+                }
+            }
+            continue;
+        }
+
+        match swi_conn.receive_data() {
             Ok(()) => (),
             Err(err) if err.kind() == TIMEOUT_KIND => {
                 continue;
             }
             Err(err) => {
-                return Err(err).context("failed to receive switch data");
+                return Err(err).context("failed to receive swi data");
             }
         }
 
-        switch_conn.write_controller(&mut controller);
-        switch_conn.write_motion(&mut motion);
-
-        api.update_controller(&controller_id, &controller)?;
-        api.update_motion(&motion_id, &motion)?;
+        swi_conn.update()?;
     }
-
-    api.remove_controller(&controller_id);
-    api.remove_motion(&motion_id);
-    api.remove_device(&device_id);
 
     Ok(())
 }
 
-struct SwitchConnection {
+struct SwiConnection<'a> {
+    api: &'a Engine,
     conn: UdpSocket,
-    data: SwiPacket,
+    packet: SwiPacketBuffer,
+    devices: [Option<DeviceBundle<'a>>; 8],
 }
 
-impl SwitchConnection {
-    fn new(addr: SocketAddr) -> Result<SwitchConnection> {
-        let conn = UdpSocket::bind(addr).context("failed to bind address")?;
+impl<'a> SwiConnection<'a> {
+    fn new(api: &'a Engine) -> Result<SwiConnection<'a>> {
+        let conn = UdpSocket::bind("0.0.0.0:26780").context("failed to bind address")?;
 
-        Ok(SwitchConnection {
+        Ok(SwiConnection {
+            api,
             conn,
-            data: SwiPacket::new(),
+            packet: SwiPacketBuffer::new(),
+            devices: [None, None, None, None, None, None, None, None],
         })
     }
 
-    pub fn receive_data(&mut self) -> std::io::Result<()> {
-        let (amt, _) = self.conn.recv_from(&mut *self.data)?;
+    fn connect(&mut self, addr: SocketAddr) -> std::io::Result<()> {
+        self.conn.connect(addr)?;
+        self.conn.send(&[0])?;
+        Ok(())
+    }
 
-        if amt != 34 {
-            log::info!(target: T, "received incomplete switch data");
+    fn receive_data(&mut self) -> std::io::Result<()> {
+        let (amt, _) = self.conn.recv_from(&mut *self.packet)?;
+
+        if amt < 1 {
+            log::info!(target: T, "received incomplete swi packet data");
             return Ok(());
         }
 
         Ok(())
     }
 
-    fn write_controller(&self, ctrl: &mut Controller) {
-        let swi_buttons = self.data.buttons();
+    fn update(&mut self) -> Result<()> {
+        let mut connected = [false; 8];
+
+        for i in 0..self.packet.num_controllers() {
+            if let Some(data) = self.packet.controller(i) {
+                let ctrl_num = data.number as usize & 0b111;
+                connected[ctrl_num] = true;
+
+                let api = self.api;
+
+                let bundle = self.devices[ctrl_num].get_or_insert_with(|| {
+                    DeviceBundle::new(
+                        api,
+                        format!("Swi Controller {}", ctrl_num),
+                        controller_info(),
+                        MotionInfo::new(true, true),
+                    )
+                });
+                bundle.update_data(&data)?;
+            }
+        }
+
+        for i in 0..8 {
+            if !connected[i] {
+                self.devices[i] = None;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+crate::device_bundle! {
+    DeviceBundle,
+    controller: crate::api::component::controller::Controller,
+    motion: crate::api::component::motion::Motion,
+}
+
+impl<'a> DeviceBundle<'a> {
+    fn update_data(&mut self, from: &SwiController) -> Result<()> {
         let mut buttons = 0;
 
         macro_rules! translate {
@@ -231,7 +325,7 @@ impl SwitchConnection {
             };
         }
 
-        translate!(swi_buttons,
+        translate!(from,
             SwiButton::Minus  => Button::Select,
             SwiButton::LStick => Button::LStick,
             SwiButton::RStick => Button::RStick,
@@ -250,26 +344,63 @@ impl SwitchConnection {
             SwiButton::X      => Button::X,
         );
 
+        let ctrl = &mut self.controller.1;
+
         ctrl.buttons = buttons;
 
-        ctrl.left_stick_x = self.data[2];
-        ctrl.left_stick_y = self.data[3];
-        ctrl.right_stick_x = self.data[4];
-        ctrl.right_stick_y = self.data[5];
-    }
+        ctrl.left_stick_x = from.left_stick[0];
+        ctrl.left_stick_y = from.left_stick[1];
+        ctrl.right_stick_x = from.right_stick[0];
+        ctrl.right_stick_y = from.right_stick[1];
 
-    fn write_motion(&self, motion: &mut Motion) {
-        // Rotations Per Second -> Degrees Per Second
-        const GYRO_SCALE: f32 = 360.0;
+        let motion = &mut self.motion.1;
 
-        let accel_x = f32::from_le_bytes(self.data[6..10].try_into().unwrap());
-        let accel_y = f32::from_le_bytes(self.data[10..14].try_into().unwrap());
-        let accel_z = f32::from_le_bytes(self.data[14..18].try_into().unwrap());
-        motion.accel_x = accel_x;
-        motion.accel_y = accel_z;
-        motion.accel_z = -accel_y;
-        motion.gyro_pitch = f32::from_le_bytes(self.data[18..22].try_into().unwrap()) * GYRO_SCALE;
-        motion.gyro_roll = f32::from_le_bytes(self.data[22..26].try_into().unwrap()) * -GYRO_SCALE;
-        motion.gyro_yaw = f32::from_le_bytes(self.data[26..30].try_into().unwrap()) * GYRO_SCALE;
+        motion.accel_x = from.accelerometer[0];
+        motion.accel_y = from.accelerometer[2];
+        motion.accel_z = -from.accelerometer[1];
+
+        motion.gyro_pitch = from.gyroscope[0] * GYRO_SCALE;
+        motion.gyro_roll = from.gyroscope[1] * -GYRO_SCALE;
+        motion.gyro_yaw = from.gyroscope[2] * GYRO_SCALE;
+
+        self.update()?;
+
+        Ok(())
     }
+}
+
+fn controller_info() -> ControllerInfo {
+    let mut info = ControllerInfo {
+        buttons: 0,
+        analogs: 0,
+    }
+    .with_lstick()
+    .with_rstick();
+
+    macro_rules! for_buttons {
+        ($($button:expr),* $(,)?) => {
+            $($button.set_pressed(&mut info.buttons);)*
+        }
+    }
+    for_buttons!(
+        Button::A,
+        Button::B,
+        Button::X,
+        Button::Y,
+        Button::Up,
+        Button::Down,
+        Button::Left,
+        Button::Right,
+        Button::Start,
+        Button::Select,
+        Button::L1,
+        Button::R1,
+        Button::L2,
+        Button::R2,
+        Button::LStick,
+        Button::RStick,
+        Button::Home,
+    );
+
+    info
 }

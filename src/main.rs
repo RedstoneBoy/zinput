@@ -1,3 +1,5 @@
+#![feature(maybe_uninit_uninit_array)]
+
 use std::sync::Arc;
 
 mod api;
