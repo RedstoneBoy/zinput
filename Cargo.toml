@@ -18,7 +18,7 @@ parking_lot = "0.11"
 paste = "1.0"
 rusb = "0.8"
 simple_logger = "1.11"
-swi_protocol = { git = "https://github.com/RedstoneBoy/swi_protocol" }
+swi_packet = { path = "./swi_packet" }
 uuid = { version = "0.8", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
