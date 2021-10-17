@@ -25,6 +25,8 @@ use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:swi_recv";
 
+const DEFAULT_PORT: &'static str = "26780";
+
 // Rotations Per Second -> Degrees Per Second
 const GYRO_SCALE: f32 = 360.0;
 
@@ -88,8 +90,8 @@ struct Gui {
 impl Gui {
     fn new() -> Self {
         Gui {
-            old_port: "10.0.0.177:26781".to_owned(),
-            port: "10.0.0.177:26781".to_owned(),
+            old_port: DEFAULT_PORT.to_owned(),
+            port: DEFAULT_PORT.to_owned(),
         }
     }
 }
