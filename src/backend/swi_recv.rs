@@ -1,5 +1,5 @@
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::UdpSocket,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -23,7 +23,7 @@ use crate::api::{
 use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
-const T: &'static str = "backend:swi";
+const T: &'static str = "backend:swi_recv";
 
 // Rotations Per Second -> Degrees Per Second
 const GYRO_SCALE: f32 = 360.0;
@@ -65,7 +65,7 @@ impl Plugin for Swi {
     }
 
     fn name(&self) -> &str {
-        "swi"
+        "swi_recv"
     }
 
     fn kind(&self) -> PluginKind {
@@ -74,22 +74,22 @@ impl Plugin for Swi {
 
     fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         let mut inner = self.inner.lock();
-        ui.label(format!("Switch Address: {}", inner.gui().old_address));
-        ui.text_edit_singleline(&mut inner.gui().address);
+        ui.label(format!("Port: {}", inner.gui().old_port));
+        ui.text_edit_singleline(&mut inner.gui().port);
     }
 }
 
 #[derive(Clone)]
 struct Gui {
-    old_address: String,
-    address: String,
+    old_port: String,
+    port: String,
 }
 
 impl Gui {
     fn new() -> Self {
         Gui {
-            old_address: "10.0.0.177:26780".to_owned(),
-            address: "10.0.0.177:26780".to_owned(),
+            old_port: "10.0.0.177:26781".to_owned(),
+            port: "10.0.0.177:26781".to_owned(),
         }
     }
 }
@@ -127,7 +127,7 @@ impl Inner {
         let status = Arc::new(Mutex::new(PluginStatus::Running));
         let stop = Arc::new(AtomicBool::new(false));
         let handle = std::thread::spawn(swi_thread(
-            gui.address.clone(),
+            gui.port.clone(),
             status.clone(),
             stop.clone(),
             api,
@@ -179,7 +179,7 @@ impl Drop for Swi {
 }
 
 fn swi_thread(
-    address: String,
+    port: String,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
     api: Arc<Engine>,
@@ -187,7 +187,7 @@ fn swi_thread(
     move || {
         log::info!(target: T, "driver initialized");
 
-        match swi(address, stop, api) {
+        match swi(port, stop, api) {
             Ok(()) => {
                 log::info!(target: T, "driver stopped");
                 *status.lock() = PluginStatus::Stopped;
@@ -200,31 +200,14 @@ fn swi_thread(
     }
 }
 
-fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
-    let address = address.parse().context("invalid address")?;
-
-    let mut swi_conn = SwiConnection::new(&*api).context("failed to create swi connection")?;
+fn swi(port: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
+    let mut swi_conn = SwiConn::new(&*api, port).context("failed to create swi connection")?;
 
     swi_conn
         .conn
         .set_read_timeout(Some(Duration::from_secs(1)))?;
 
-    let mut connected = false;
-
     while !stop.load(Ordering::Acquire) {
-        if !connected {
-            match swi_conn.connect(address) {
-                Ok(()) => connected = true,
-                Err(err) if err.kind() == TIMEOUT_KIND => {
-                    continue;
-                }
-                Err(err) => {
-                    return Err(err).context("failed to connect to swi server");
-                }
-            }
-            continue;
-        }
-
         match swi_conn.receive_data() {
             Ok(()) => (),
             Err(err) if err.kind() == TIMEOUT_KIND => {
@@ -241,18 +224,20 @@ fn swi(address: String, stop: Arc<AtomicBool>, api: Arc<Engine>) -> Result<()> {
     Ok(())
 }
 
-struct SwiConnection<'a> {
+struct SwiConn<'a> {
     api: &'a Engine,
     conn: UdpSocket,
     packet: SwiPacketBuffer,
     devices: [Option<DeviceBundle<'a>>; 8],
 }
 
-impl<'a> SwiConnection<'a> {
-    fn new(api: &'a Engine) -> Result<SwiConnection<'a>> {
-        let conn = UdpSocket::bind("0.0.0.0:26780").context("failed to bind address")?;
+impl<'a> SwiConn<'a> {
+    fn new(api: &'a Engine, port: String) -> Result<SwiConn<'a>> {
+        let port: u16 = port.parse().context("port is not a valid number")?;
+        let conn =
+            UdpSocket::bind(format!("0.0.0.0:{}", port)).context("failed to bind address")?;
 
-        Ok(SwiConnection {
+        Ok(SwiConn {
             api,
             conn,
             packet: SwiPacketBuffer::new(),
@@ -260,14 +245,8 @@ impl<'a> SwiConnection<'a> {
         })
     }
 
-    fn connect(&mut self, addr: SocketAddr) -> std::io::Result<()> {
-        self.conn.connect(addr)?;
-        self.conn.send(&[0])?;
-        Ok(())
-    }
-
     fn receive_data(&mut self) -> std::io::Result<()> {
-        let (amt, _) = self.conn.recv_from(&mut *self.packet)?;
+        let (amt, _) = self.conn.recv_from(self.packet.full_buffer())?;
 
         if amt < 1 {
             log::info!(target: T, "received incomplete swi packet data");
