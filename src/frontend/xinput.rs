@@ -55,7 +55,7 @@ impl Plugin for XInput {
     }
 
     fn events(&self) -> &[EventKind] {
-        &[EventKind::ComponentUpdate]
+        &[EventKind::DeviceUpdate]
     }
 
     fn update_gui(
@@ -69,7 +69,7 @@ impl Plugin for XInput {
 
     fn on_event(&self, event: &Event) {
         match event {
-            Event::ComponentUpdate(id) => {
+            Event::DeviceUpdate(id) => {
                 if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
                     // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
                     self.signals.update.0.send(*id).unwrap();
@@ -151,7 +151,7 @@ impl Inner {
                 egui::ComboBox::from_label(format!("XInput Controller {}", i + 1))
                     .selected_text(
                         self.selected_devices[i]
-                            .and_then(|id| engine.get_device(&id))
+                            .and_then(|id| engine.get_device_info(&id))
                             .map_or("[None]".to_owned(), |dev| dev.name.clone()),
                     )
                     .show_ui(ui, |ui| {
@@ -165,12 +165,12 @@ impl Inner {
                             if ui
                                 .selectable_value(
                                     &mut self.selected_devices[i],
-                                    Some(*device_ref.key()),
+                                    Some(*device_ref.id()),
                                     &device_ref.name,
                                 )
                                 .clicked()
                             {
-                                self.device.send((i, Some(*device_ref.key()))).unwrap();
+                                self.device.send((i, Some(*device_ref.id()))).unwrap();
                             }
                         }
                     });
@@ -229,31 +229,27 @@ fn xinput_thread(thread: Thread) -> Result<()> {
     let mut vigem = Vigem::new();
     vigem.connect()?;
 
-    let mut ids: [Option<(Uuid, Uuid, Target)>; 4] = [None, None, None, None];
+    let mut ids: [Option<(Uuid, Target)>; 4] = [None, None, None, None];
 
     loop {
         crossbeam_channel::select! {
             recv(device_change) -> device_change => {
                 match device_change {
                     Ok((idx, Some(device_id))) => {
-                        if let Some((_, cid, target)) = &mut ids[idx] {
+                        if let Some((did, target)) = &mut ids[idx] {
                             vigem.target_remove(target)?;
-                            signals.listen_update.lock().remove(cid);
+                            signals.listen_update.lock().remove(did);
                         }
 
-                        if let Some(controller_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
-                        {
-                            let mut target = Target::new(vigem::TargetType::Xbox360);
-                            vigem.target_add(&mut target)?;
-                            ids[idx] = Some((device_id, controller_id, target));
-                            signals.listen_update.lock().insert(controller_id);
-                        }
+                        let mut target = Target::new(vigem::TargetType::Xbox360);
+                        vigem.target_add(&mut target)?;
+                        ids[idx] = Some((device_id, target));
+                        signals.listen_update.lock().insert(device_id);
                     }
                     Ok((idx, None)) => {
-                        if let Some((_, cid, target)) = ids[idx].as_mut() {
+                        if let Some((did, target)) = ids[idx].as_mut() {
                             vigem.target_remove(target)?;
-                            signals.listen_update.lock().remove(cid);
+                            signals.listen_update.lock().remove(did);
                         }
                         ids[idx] = None;
                     }
@@ -264,13 +260,17 @@ fn xinput_thread(thread: Thread) -> Result<()> {
             },
             recv(signals.update.1) -> _ => {
                 for bundle in &ids {
-                    if let Some((_, cid, target)) = bundle.as_ref() {
-                        let controller = match engine.get_controller(cid) {
+                    if let Some((did, target)) = bundle.as_ref() {
+                        let device = match engine.get_device(did) {
+                            Some(device) => device,
+                            None => continue,
+                        };
+                        let controller = match device.controllers.get(0) {
                             Some(controller) => controller,
                             None => continue,
                         };
 
-                        update_target(&mut vigem, &target, &controller.data)?;
+                        update_target(&mut vigem, &target, controller)?;
                     }
                 }
             }

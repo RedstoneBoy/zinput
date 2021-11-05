@@ -1,5 +1,6 @@
 use super::ComponentData;
 
+#[derive(Clone)]
 pub struct ControllerInfo {
     pub buttons: u64,
     pub analogs: u8,

@@ -1,5 +1,6 @@
 use super::ComponentData;
 
+#[derive(Clone)]
 pub struct AnalogsInfo {
     pub analogs: u8,
 }

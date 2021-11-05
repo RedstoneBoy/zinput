@@ -1,6 +1,4 @@
 use std::{
-    convert::TryInto,
-    net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -8,17 +6,13 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
-use eframe::{egui, epi};
+use anyhow::Result;
 use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
-use uuid::Uuid;
 
-use crate::api::device::DeviceInfo;
 use crate::api::{
     component::{
         controller::{Button, Controller, ControllerInfo},
-        motion::{Motion, MotionInfo},
     },
     PluginKind,
 };
@@ -134,12 +128,12 @@ fn new_xinput_thread(thread: Thread) -> impl FnOnce() {
 }
 
 fn xinput_thread(thread: Thread) -> Result<()> {
-    let Thread { status, stop, api } = thread;
+    let Thread { stop, api, .. } = thread;
 
     let xinput = XInputHandle::load_default()
         .map_err(|err| anyhow::anyhow!("failed to load xinput: {:?}", err))?;
 
-    let mut controllers = Controllers::new(api, xinput);
+    let mut controllers = Controllers::new(&*api, xinput);
 
     let frame_timer = crossbeam_channel::tick(Duration::from_millis(15));
     let mut new_controller_timer = 0.0f32;
@@ -162,14 +156,14 @@ fn xinput_thread(thread: Thread) -> Result<()> {
     Ok(())
 }
 
-struct Controllers {
-    api: Arc<Engine>,
-    controllers: [Option<XController>; 4],
+struct Controllers<'a> {
+    api: &'a Engine,
+    controllers: [Option<XController<'a>>; 4],
     xinput: XInputHandle,
 }
 
-impl Controllers {
-    fn new(api: Arc<Engine>, xinput: XInputHandle) -> Self {
+impl<'a> Controllers<'a> {
+    fn new(api: &'a Engine, xinput: XInputHandle) -> Self {
         Controllers {
             api,
             controllers: [None, None, None, None],
@@ -181,7 +175,7 @@ impl Controllers {
         for i in 0..self.controllers.len() {
             if let Some(ctrl) = &mut self.controllers[i] {
                 match self.xinput.get_state(i as u32) {
-                    Ok(state) => ctrl.update(&*self.api, &state)?,
+                    Ok(state) => ctrl.write(&state)?,
                     Err(XInputUsageError::DeviceNotConnected) => self.disconnect(i),
                     Err(err) => {
                         log::error!(target: T, "controller polling error: {:?}", err);
@@ -212,20 +206,20 @@ impl Controllers {
 
     fn connect(&mut self, index: usize) {
         if self.controllers[index].is_none() {
-            self.controllers[index] = Some(XController::new(&*self.api, index));
+            self.controllers[index] = Some(XController::new(
+                self.api,
+                format!("XInput Controller {}", index + 1),
+                [xinput_controller_info()],
+            ));
         }
     }
 
     fn disconnect(&mut self, index: usize) {
-        if let Some(ctrl) = &self.controllers[index] {
-            self.api.remove_controller(&ctrl.controller_id);
-            self.api.remove_device(&ctrl.device_id);
-        }
         self.controllers[index] = None;
     }
 }
 
-impl Drop for Controllers {
+impl<'a> Drop for Controllers<'a> {
     fn drop(&mut self) {
         for i in 0..self.controllers.len() {
             self.disconnect(i);
@@ -233,28 +227,12 @@ impl Drop for Controllers {
     }
 }
 
-#[derive(Clone)]
-struct XController {
-    device_id: Uuid,
-    controller_id: Uuid,
+crate::device_bundle!(XController,
     controller: Controller,
-}
+);
 
-impl XController {
-    fn new(api: &(Engine), id: usize) -> Self {
-        let controller_id = api.new_controller(xinput_controller_info());
-        let device_id = api.new_device(
-            DeviceInfo::new(format!("XInput Controller {}", id + 1)).with_controller(controller_id),
-        );
-
-        XController {
-            device_id,
-            controller_id,
-            controller: Controller::default(),
-        }
-    }
-
-    fn update(&mut self, api: &(Engine), state: &XInputState) -> Result<()> {
+impl<'a> XController<'a> {
+    fn write(&mut self, state: &XInputState) -> Result<()> {
         macro_rules! translate {
             ($state:expr, $($from:ident => $to:expr),* $(,)?) => {{
                 let mut buttons = 0;
@@ -263,7 +241,7 @@ impl XController {
             }};
         }
 
-        self.controller.buttons = translate!(state,
+        self.controller[0].buttons = translate!(state,
             north_button       => Button::Y,
             south_button       => Button::A,
             east_button        => Button::B,
@@ -282,18 +260,18 @@ impl XController {
             right_thumb_button => Button::RStick,
         );
 
-        self.controller.l2_analog = state.left_trigger();
-        self.controller.r2_analog = state.right_trigger();
+        self.controller[0].l2_analog = state.left_trigger();
+        self.controller[0].r2_analog = state.right_trigger();
 
         let (lpad_x, lpad_y) = state.left_stick_raw();
         let (rpad_x, rpad_y) = state.right_stick_raw();
 
-        self.controller.left_stick_x = ((lpad_x / 256) + 128) as u8;
-        self.controller.left_stick_y = ((lpad_y / 256) + 128) as u8;
-        self.controller.right_stick_x = ((rpad_x / 256) + 128) as u8;
-        self.controller.right_stick_y = ((rpad_y / 256) + 128) as u8;
+        self.controller[0].left_stick_x = ((lpad_x / 256) + 128) as u8;
+        self.controller[0].left_stick_y = ((lpad_y / 256) + 128) as u8;
+        self.controller[0].right_stick_x = ((rpad_x / 256) + 128) as u8;
+        self.controller[0].right_stick_y = ((rpad_y / 256) + 128) as u8;
 
-        api.update_controller(&self.controller_id, &self.controller)?;
+        self.update()?;
 
         Ok(())
     }

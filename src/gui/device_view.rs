@@ -28,24 +28,30 @@ impl DeviceView {
             egui::ComboBox::from_label("Devices")
                 .selected_text(
                     self.selected_controller
-                        .and_then(|id| self.engine.get_device(&id))
+                        .and_then(|id| self.engine.get_device_info(&id))
                         .map_or("".to_owned(), |dev| dev.name.clone()),
                 )
                 .show_ui(ui, |ui| {
                     for device_ref in self.engine.devices() {
                         ui.selectable_value(
                             &mut self.selected_controller,
-                            Some(*device_ref.key()),
+                            Some(*device_ref.id()),
                             &device_ref.name,
                         );
                     }
                 });
-            if let Some(controller_data) = self
-                .selected_controller
-                .and_then(|id| self.engine.get_device(&id))
-                .and_then(|dev| dev.controller)
-                .and_then(|id| self.engine.get_controller(&id))
-                .map(|ctrl| ctrl.data.clone())
+            
+            let device = match self.selected_controller.and_then(|id| self.engine.get_device(&id)) {
+                Some(device) => device,
+                None => return,
+            };
+
+            let device_info = match self.selected_controller.and_then(|id| self.engine.get_device_info(&id)) {
+                Some(device_info) => device_info,
+                None => return,
+            };
+
+            if let Some(controller_data) = device.controllers.get(0)
             {
                 ui.heading("Controller");
                 egui::Grid::new("controller_buttons").show(ui, |ui| {
@@ -134,12 +140,7 @@ impl DeviceView {
                 }
             }
 
-            if let Some(motion_data) = self
-                .selected_controller
-                .and_then(|id| self.engine.get_device(&id))
-                .and_then(|dev| dev.motion)
-                .and_then(|id| self.engine.get_motion(&id))
-                .map(|motion| motion.data.clone())
+            if let Some(motion_data) = device.motions.get(0)
             {
                 ui.separator();
 
@@ -173,126 +174,118 @@ impl DeviceView {
             }
 
             let mut need_separator = true;
-
-            if let Some(device) = &self
-                .selected_controller
-                .and_then(|id| self.engine.get_device(&id))
+            
+            for (i, touch_pad) in device
+                .touch_pads
+                .iter()
+                .enumerate()
             {
-                for (i, touch_pad) in device
-                    .touch_pads
-                    .iter()
-                    .filter_map(|tid| self.engine.get_touch_pad(tid))
-                    .enumerate()
-                {
-                    if need_separator {
-                        ui.separator();
-                        need_separator = false;
-                    }
+                if need_separator {
+                    ui.separator();
+                    need_separator = false;
+                }
 
-                    ui.heading(format!("Touch Pad #{}", i + 1));
+                ui.heading(format!("Touch Pad #{}", i + 1));
+                ui.horizontal(|ui| {
+                    let mut label = egui::Label::new("Pressed");
+                    if touch_pad.pressed {
+                        label = label.underline();
+                    }
+                    ui.add(label);
+                    let mut label = egui::Label::new("Touched");
+                    if touch_pad.touched {
+                        label = label.underline();
+                    }
+                    ui.add(label);
+
+                    let painter = egui::Painter::new(
+                        ui.ctx().clone(),
+                        ui.layer_id(),
+                        egui::Rect {
+                            min: ui.available_rect_before_wrap().min,
+                            max: ui.available_rect_before_wrap().min + egui::vec2(60.0, 60.0),
+                        },
+                    );
+                    Self::paint_joystick(
+                        &painter,
+                        (touch_pad.touch_x / 256) as u8,
+                        (touch_pad.touch_y / 256) as u8,
+                        device_info.touch_pads[i].shape == TouchPadShape::Circle,
+                    );
+                    ui.expand_to_include_rect(painter.clip_rect());
+                });
+            }
+
+            need_separator = true;
+
+            for (analog_comp_index, analog) in device
+                .analogs
+                .iter()
+                .enumerate()
+            {
+                if need_separator {
+                    ui.separator();
+                    need_separator = false;
+                }
+
+                ui.heading(format!("Analogs #{}", analog_comp_index));
+
+                for i in 0..analog.analogs.len() {
+                    let value = analog.analogs[i];
                     ui.horizontal(|ui| {
-                        let mut label = egui::Label::new("Pressed");
-                        if touch_pad.data.pressed {
-                            label = label.underline();
-                        }
-                        ui.add(label);
-                        let mut label = egui::Label::new("Touched");
-                        if touch_pad.data.touched {
-                            label = label.underline();
-                        }
-                        ui.add(label);
+                        ui.add(
+                            egui::Label::new(format!(
+                                "Analog {}: {:+0.2}",
+                                i,
+                                (value as f32) / 255.0
+                            ))
+                            .monospace(),
+                        );
 
                         let painter = egui::Painter::new(
                             ui.ctx().clone(),
                             ui.layer_id(),
                             egui::Rect {
                                 min: ui.available_rect_before_wrap().min,
-                                max: ui.available_rect_before_wrap().min + egui::vec2(60.0, 60.0),
+                                max: ui.available_rect_before_wrap().min
+                                    + egui::vec2(50.0, 20.0),
                             },
                         );
-                        Self::paint_joystick(
-                            &painter,
-                            (touch_pad.data.touch_x / 256) as u8,
-                            (touch_pad.data.touch_y / 256) as u8,
-                            touch_pad.info.shape == TouchPadShape::Circle,
-                        );
+                        Self::paint_trigger(&painter, value);
                         ui.expand_to_include_rect(painter.clip_rect());
                     });
                 }
+            }
 
-                need_separator = true;
+            need_separator = true;
 
-                for (analog_comp_index, analog) in device
-                    .analogs
-                    .iter()
-                    .filter_map(|tid| self.engine.get_analog(tid))
-                    .enumerate()
-                {
-                    if need_separator {
-                        ui.separator();
-                        need_separator = false;
-                    }
-
-                    ui.heading(format!("Analogs #{}", analog_comp_index));
-
-                    for i in 0..analog.data.analogs.len() {
-                        let value = analog.data.analogs[i];
-                        ui.horizontal(|ui| {
-                            ui.add(
-                                egui::Label::new(format!(
-                                    "Analog {}: {:+0.2}",
-                                    i,
-                                    (value as f32) / 255.0
-                                ))
-                                .monospace(),
-                            );
-
-                            let painter = egui::Painter::new(
-                                ui.ctx().clone(),
-                                ui.layer_id(),
-                                egui::Rect {
-                                    min: ui.available_rect_before_wrap().min,
-                                    max: ui.available_rect_before_wrap().min
-                                        + egui::vec2(50.0, 20.0),
-                                },
-                            );
-                            Self::paint_trigger(&painter, value);
-                            ui.expand_to_include_rect(painter.clip_rect());
-                        });
-                    }
+            for (button_comp_index, buttons) in device
+                .buttons
+                .iter()
+                .enumerate()
+            {
+                if need_separator {
+                    ui.separator();
+                    need_separator = false;
                 }
 
-                need_separator = true;
+                ui.heading(format!("Buttons #{}", button_comp_index));
 
-                for (button_comp_index, buttons) in device
-                    .buttons
-                    .iter()
-                    .filter_map(|tid| self.engine.get_button(tid))
-                    .enumerate()
-                {
-                    if need_separator {
-                        ui.separator();
-                        need_separator = false;
-                    }
-
-                    ui.heading(format!("Buttons #{}", button_comp_index));
-
-                    egui::Grid::new(format!("buttons{}", button_comp_index)).show(ui, |ui| {
-                        let mut col = 0;
-                        for i in 0..64 {
-                            let mut label = egui::Label::new(format!("{}", i));
-                            if (buttons.data.buttons >> i) & 1 == 1 {
-                                label = label.underline();
-                            }
-                            ui.add(label);
-                            col += 1;
-                            if col >= 8 {
-                                ui.end_row();
-                                col = 0;
-                            }
+                egui::Grid::new(format!("buttons{}", button_comp_index)).show(ui, |ui| {
+                    let mut col = 0;
+                    for i in 0..64 {
+                        let mut label = egui::Label::new(format!("{}", i));
+                        if (buttons.buttons >> i) & 1 == 1 {
+                            label = label.underline();
                         }
-                    });
-                }
+                        ui.add(label);
+                        col += 1;
+                        if col >= 8 {
+                            ui.end_row();
+                            col = 0;
+                        }
+                    }
+                });
             }
         });
     }

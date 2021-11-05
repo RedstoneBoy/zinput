@@ -72,7 +72,7 @@ impl EventIndex for EventKind {
 
     fn to_index(&self) -> usize {
         match self {
-            EventKind::ComponentUpdate => 0,
+            EventKind::DeviceUpdate => 0,
             EventKind::DeviceAdded => 1,
             EventKind::DeviceRemoved => 2,
         }

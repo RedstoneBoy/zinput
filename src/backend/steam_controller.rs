@@ -7,12 +7,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
-use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::component::motion::{Motion, MotionInfo};
 use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
-use crate::api::device::DeviceInfo;
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
@@ -224,7 +222,7 @@ fn controller_thread(
         Duration::from_secs(3),
     )?;
 
-    let mut bundle = SCBundle::new(id, api);
+    let mut bundle = SCBundle::new(id, &*api);
 
     let mut buf = [0u8; 64];
 
@@ -245,47 +243,31 @@ fn controller_thread(
     Ok(())
 }
 
-struct SCBundle {
-    api: Arc<Engine>,
-    adaptor_id: u64,
-    device_id: Uuid,
-    controller_id: Uuid,
-    motion_id: Uuid,
-    touch_left_id: Uuid,
-    touch_right_id: Uuid,
+crate::device_bundle!(DeviceBundle,
     controller: Controller,
     motion: Motion,
-    touch_left: TouchPad,
-    touch_right: TouchPad,
+    touch_pad: TouchPad[2],
+);
+
+struct SCBundle<'a> {
+    bundle: DeviceBundle<'a>,
 }
 
-impl SCBundle {
-    fn new(adaptor_id: u64, api: Arc<Engine>) -> Self {
-        let controller_id = api.new_controller(sc_controller_info());
-        let motion_id = api.new_motion(MotionInfo::new(true, true));
-        let touch_left_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
-        let touch_right_id = api.new_touch_pad(TouchPadInfo::new(TouchPadShape::Circle, true));
-
-        let device_id = api.new_device(
-            DeviceInfo::new(format!("Steam Controller (Adaptor {})", adaptor_id))
-                .with_controller(controller_id)
-                .with_motion(motion_id)
-                .with_touch_pad(touch_left_id)
-                .with_touch_pad(touch_right_id),
+impl<'a> SCBundle<'a> {
+    fn new(adaptor_id: u64, api: &'a Engine) -> Self {
+        let bundle = DeviceBundle::new(
+            api,
+            format!("Steam Controller (Adaptor {})", adaptor_id),
+            [sc_controller_info()],
+            [MotionInfo::new(true, true)],
+            [
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+            ],
         );
 
         SCBundle {
-            api,
-            adaptor_id,
-            device_id,
-            controller_id,
-            motion_id,
-            touch_left_id,
-            touch_right_id,
-            controller: Default::default(),
-            motion: Default::default(),
-            touch_left: Default::default(),
-            touch_right: Default::default(),
+            bundle,
         }
     }
 
@@ -311,19 +293,8 @@ impl SCBundle {
 
         self.update_motion(accelx, accely, accelz, gpitch, groll, gyaw);
 
-        // let q1 = i16::from_le_bytes(data[40..42].try_into().unwrap());
-        // let q2 = i16::from_le_bytes(data[42..44].try_into().unwrap());
-        // let q3 = i16::from_le_bytes(data[44..46].try_into().unwrap());
-        // let q4 = i16::from_le_bytes(data[46..48].try_into().unwrap());
-
-        self.api
-            .update_controller(&self.controller_id, &self.controller)?;
-        self.api.update_motion(&self.motion_id, &self.motion)?;
-
-        self.api
-            .update_touch_pad(&self.touch_left_id, &self.touch_left)?;
-        self.api
-            .update_touch_pad(&self.touch_right_id, &self.touch_right)?;
+        self.bundle.update()?;
+        
         Ok(())
     }
 
@@ -348,9 +319,9 @@ impl SCBundle {
         let lpad_touch = SCButton::LPadTouch.is_pressed(buttons);
 
         let mut new_buttons = if lpad_touch {
-            self.controller.buttons & (1 << Button::LStick.bit())
+            self.bundle.controller[0].buttons & (1 << Button::LStick.bit())
         } else {
-            self.controller.buttons
+            self.bundle.controller[0].buttons
                 & ((1 << Button::Up.bit())
                     | (1 << Button::Down.bit())
                     | (1 << Button::Left.bit())
@@ -369,25 +340,25 @@ impl SCBundle {
             SCButton::Start,  Button::Start;
             SCButton::Steam,  Button::Home;
             SCButton::Back,   Button::Select;
-            SCButton::A,      Button::A;
-            SCButton::X,      Button::X;
-            SCButton::B,      Button::B;
-            SCButton::Y,      Button::Y;
+            SCButton::A,      Button::B;
+            SCButton::X,      Button::Y;
+            SCButton::B,      Button::A;
+            SCButton::Y,      Button::X;
             SCButton::Lb,     Button::L1;
             SCButton::Rb,     Button::R1;
             SCButton::Lt,     Button::L2;
             SCButton::Rt,     Button::R2;
         );
 
-        self.controller.buttons = new_buttons;
+        self.bundle.controller[0].buttons = new_buttons;
 
-        self.controller.l2_analog = ltrig;
-        self.controller.r2_analog = rtrig;
-        self.controller.right_stick_x = ((rpad_x / 256) + 128) as u8;
-        self.controller.right_stick_y = ((rpad_y / 256) + 128) as u8;
+        self.bundle.controller[0].l2_analog = ltrig;
+        self.bundle.controller[0].r2_analog = rtrig;
+        self.bundle.controller[0].right_stick_x = ((rpad_x / 256) + 128) as u8;
+        self.bundle.controller[0].right_stick_y = ((rpad_y / 256) + 128) as u8;
         if !lpad_touch {
-            self.controller.left_stick_x = ((lpad_x / 256) + 128) as u8;
-            self.controller.left_stick_y = ((lpad_y / 256) + 128) as u8;
+            self.bundle.controller[0].left_stick_x = ((lpad_x / 256) + 128) as u8;
+            self.bundle.controller[0].left_stick_y = ((lpad_y / 256) + 128) as u8;
         }
     }
 
@@ -399,21 +370,21 @@ impl SCBundle {
         rpad_x: i16,
         rpad_y: i16,
     ) {
-        self.touch_right.touch_x = (rpad_x as i32 - i16::MIN as i32) as u32 as u16;
-        self.touch_right.touch_y = (rpad_y as i32 - i16::MIN as i32) as u32 as u16;
-        self.touch_right.pressed = SCButton::RClick.is_pressed(buttons);
-        self.touch_right.touched = SCButton::RPadTouch.is_pressed(buttons);
+        self.bundle.touch_pad[1].touch_x = (rpad_x as i32 - i16::MIN as i32) as u32 as u16;
+        self.bundle.touch_pad[1].touch_y = (rpad_y as i32 - i16::MIN as i32) as u32 as u16;
+        self.bundle.touch_pad[1].pressed = SCButton::RClick.is_pressed(buttons);
+        self.bundle.touch_pad[1].touched = SCButton::RPadTouch.is_pressed(buttons);
 
         if SCButton::LPadTouch.is_pressed(buttons) {
-            self.touch_left.touched = true;
-            self.touch_left.pressed = SCButton::LClick.is_pressed(buttons);
-            self.touch_left.touch_x = (lpad_x as i32 - i16::MIN as i32) as u32 as u16;
-            self.touch_left.touch_y = (lpad_y as i32 - i16::MIN as i32) as u32 as u16;
+            self.bundle.touch_pad[0].touched = true;
+            self.bundle.touch_pad[0].pressed = SCButton::LClick.is_pressed(buttons);
+            self.bundle.touch_pad[0].touch_x = (lpad_x as i32 - i16::MIN as i32) as u32 as u16;
+            self.bundle.touch_pad[0].touch_y = (lpad_y as i32 - i16::MIN as i32) as u32 as u16;
         } else {
-            self.touch_left.pressed = false;
-            self.touch_left.touched = false;
-            self.touch_left.touch_x = u16::MAX / 2;
-            self.touch_left.touch_y = u16::MAX / 2;
+            self.bundle.touch_pad[0].pressed = false;
+            self.bundle.touch_pad[0].touched = false;
+            self.bundle.touch_pad[0].touch_x = u16::MAX / 2;
+            self.bundle.touch_pad[0].touch_y = u16::MAX / 2;
         }
     }
 
@@ -429,22 +400,12 @@ impl SCBundle {
         const ACCEL_SCALE: f32 = 2.0 / 32768.0;
         const GYRO_SCALE: f32 = 2000.0 / 32768.0;
 
-        self.motion.accel_x = accelx as f32 * -ACCEL_SCALE;
-        self.motion.accel_y = accelz as f32 * -ACCEL_SCALE;
-        self.motion.accel_z = accely as f32 * ACCEL_SCALE;
-        self.motion.gyro_pitch = gpitch as f32 * GYRO_SCALE;
-        self.motion.gyro_roll = groll as f32 * GYRO_SCALE;
-        self.motion.gyro_yaw = gyaw as f32 * GYRO_SCALE;
-    }
-}
-
-impl Drop for SCBundle {
-    fn drop(&mut self) {
-        self.api.remove_device(&self.device_id);
-        self.api.remove_controller(&self.controller_id);
-        self.api.remove_motion(&self.motion_id);
-        self.api.remove_touch_pad(&self.touch_left_id);
-        self.api.remove_touch_pad(&self.touch_right_id);
+        self.bundle.motion[0].accel_x = accelx as f32 * -ACCEL_SCALE;
+        self.bundle.motion[0].accel_y = accelz as f32 * -ACCEL_SCALE;
+        self.bundle.motion[0].accel_z = accely as f32 * ACCEL_SCALE;
+        self.bundle.motion[0].gyro_pitch = gpitch as f32 * GYRO_SCALE;
+        self.bundle.motion[0].gyro_roll = groll as f32 * GYRO_SCALE;
+        self.bundle.motion[0].gyro_yaw = gyaw as f32 * GYRO_SCALE;
     }
 }
 

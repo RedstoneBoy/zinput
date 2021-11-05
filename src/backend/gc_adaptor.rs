@@ -6,10 +6,8 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
-use uuid::Uuid;
 
 use crate::api::component::controller::{Button, Controller, ControllerInfo};
-use crate::api::device::DeviceInfo;
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
@@ -223,7 +221,7 @@ fn adaptor_thread(
         return Err(anyhow!("invalid size sent"));
     }
 
-    let mut ctrls = Controllers::new(id, api);
+    let mut ctrls = Controllers::new(id, &*api);
 
     let mut payload = [0u8; 37];
 
@@ -243,20 +241,18 @@ fn adaptor_thread(
     Ok(())
 }
 
-struct Controllers {
-    api: Arc<Engine>,
+struct Controllers<'a> {
+    api: &'a Engine,
     adaptor_id: u64,
-    bundles: [Option<(Uuid, Uuid)>; 4],
-    data: [Controller; 4],
+    bundles: [Option<DeviceBundle<'a>>; 4],
 }
 
-impl Controllers {
-    fn new(adaptor_id: u64, api: Arc<Engine>) -> Self {
+impl<'a> Controllers<'a> {
+    fn new(adaptor_id: u64, api: &'a Engine) -> Self {
         Controllers {
             api,
             adaptor_id,
-            bundles: [None; 4],
-            data: [Default::default(); 4],
+            bundles: [None, None, None, None],
         }
     }
 
@@ -267,8 +263,8 @@ impl Controllers {
             let is_active = data[0] & (STATE_NORMAL | STATE_WAVEBIRD);
             let is_active = is_active == STATE_NORMAL || is_active == STATE_WAVEBIRD;
 
-            let ctrl = match self.bundles[i] {
-                Some((dev, ctrl)) if !is_active => {
+            let bundle = match &mut self.bundles[i] {
+                Some(_) if !is_active => {
                     // remove device
                     log::info!(
                         target: T,
@@ -277,12 +273,10 @@ impl Controllers {
                         self.adaptor_id
                     );
 
-                    self.api.remove_controller(&ctrl);
-                    self.api.remove_device(&dev);
                     self.bundles[i] = None;
                     continue;
                 }
-                Some((_, ctrl)) => ctrl,
+                Some(bundle) => bundle,
                 None if is_active => {
                     // add device
                     log::info!(
@@ -292,49 +286,38 @@ impl Controllers {
                         self.adaptor_id
                     );
 
-                    let ctrl = self.api.new_controller(gc_controller_info());
-                    let dev = self.api.new_device(
-                        DeviceInfo::new(format!(
+                    let bundle = DeviceBundle::new(
+                        self.api,
+                        format!(
                             "Gamecube Adaptor Slot {} (Adaptor {})",
                             i + 1,
                             self.adaptor_id
-                        ))
-                        .with_controller(ctrl),
+                        ),
+                        [gc_controller_info()],
                     );
-                    self.bundles[i] = Some((dev, ctrl));
-                    ctrl
+
+                    self.bundles[i] = Some(bundle);
+                    self.bundles[i].as_mut().unwrap()
                 }
                 None => continue,
             };
 
-            self.data[i].buttons = convert_buttons(data[1], data[2]);
-            self.data[i].left_stick_x = data[3];
-            self.data[i].left_stick_y = data[4];
-            self.data[i].right_stick_x = data[5];
-            self.data[i].right_stick_y = data[6];
-            self.data[i].l2_analog = data[7];
-            self.data[i].r2_analog = data[8];
+            bundle.controller[0].buttons = convert_buttons(data[1], data[2]);
+            bundle.controller[0].left_stick_x = data[3];
+            bundle.controller[0].left_stick_y = data[4];
+            bundle.controller[0].right_stick_x = data[5];
+            bundle.controller[0].right_stick_y = data[6];
+            bundle.controller[0].l2_analog = data[7];
+            bundle.controller[0].r2_analog = data[8];
 
-            self.api.update_controller(&ctrl, &self.data[i])?;
+            bundle.update()?;
         }
 
         Ok(())
     }
 }
 
-impl Drop for Controllers {
-    fn drop(&mut self) {
-        for i in 0..4 {
-            match self.bundles[i] {
-                Some((dev, ctrl)) => {
-                    self.api.remove_device(&dev);
-                    self.api.remove_controller(&ctrl);
-                }
-                None => {}
-            }
-        }
-    }
-}
+crate::device_bundle!(DeviceBundle, controller: Controller,);
 
 fn convert_buttons(data1: u8, data2: u8) -> u64 {
     enum GcButton {

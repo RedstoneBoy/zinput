@@ -11,7 +11,6 @@ use std::{
 
 use anyhow::Result;
 use parking_lot::Mutex;
-use uuid::Uuid;
 use winapi::{
     shared::{hidpi, hidusage, minwindef, windef},
     um::{libloaderapi::GetModuleHandleW, winuser},
@@ -22,7 +21,6 @@ use crate::api::{
         analogs::{Analogs, AnalogsInfo},
         buttons::{Buttons, ButtonsInfo},
     },
-    device::DeviceInfo,
     Plugin, PluginKind, PluginStatus,
 };
 use crate::zinput::engine::Engine;
@@ -251,15 +249,10 @@ impl State {
     }
 }
 
-impl Drop for State {
-    fn drop(&mut self) {
-        for joystick in self.joysticks.values() {
-            self.api.remove_analog(&joystick.analog_id);
-            self.api.remove_button(&joystick.button_id);
-            self.api.remove_device(&joystick.device_id);
-        }
-    }
-}
+crate::device_bundle!(DeviceBundle(owned),
+    analog: Analogs,
+    button: Buttons,
+);
 
 struct Joystick {
     button_caps: Vec<hidpi::HIDP_BUTTON_CAPS>,
@@ -267,16 +260,7 @@ struct Joystick {
     preparsed: Vec<u8>,
     buttons: Vec<hidusage::USAGE>,
 
-    device_id: Uuid,
-    analog_id: Uuid,
-    button_id: Uuid,
-    data: JoystickData,
-}
-
-#[derive(Default)]
-struct JoystickData {
-    analogs: Analogs,
-    buttons: Buttons,
+    bundle: DeviceBundle<'static>,
 }
 
 fn register_raw_input(hwnd: *mut windef::HWND__) -> Result<()> {
@@ -417,7 +401,7 @@ fn update_device_list(state: &mut State) {
             }
         }
 
-        let joystick = match get_joystick_info(api.as_ref(), handle) {
+        let joystick = match get_joystick_info(api.clone(), handle) {
             Ok(info) => info,
             Err(err) => {
                 log::warn!(target: T, "failed to get joystick info: {}", err);
@@ -426,16 +410,6 @@ fn update_device_list(state: &mut State) {
         };
 
         joysticks.insert(handle as usize, joystick);
-    }
-
-    for (id, joystick) in &*joysticks {
-        if all_devices.contains(id) {
-            continue;
-        }
-
-        api.remove_analog(&joystick.analog_id);
-        api.remove_button(&joystick.button_id);
-        api.remove_device(&joystick.device_id);
     }
 
     joysticks.retain(|k, _| all_devices.contains(k));
@@ -470,7 +444,7 @@ fn is_joystick(handle: *mut c_void) -> Result<bool> {
     Ok(true)
 }
 
-fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
+fn get_joystick_info(api: Arc<Engine>, handle: *mut c_void) -> Result<Joystick> {
     let mut preparsed_len = 0;
     if unsafe {
         winuser::GetRawInputDeviceInfoW(
@@ -564,12 +538,11 @@ fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
     }
 
     // todo: meta info
-    let analog_id = api.new_analog(AnalogsInfo::default());
-    let button_id = api.new_button(ButtonsInfo::default());
-    let device_id = api.new_device(
-        DeviceInfo::new(format!("Raw Input Device {}", handle as u64))
-            .with_analogs(analog_id)
-            .with_buttons(button_id),
+    let bundle = DeviceBundle::new(
+        api.clone(),
+        format!("Raw Input Device {}", handle as u64),
+        [AnalogsInfo::default()],
+        [ButtonsInfo::default()],
     );
 
     Ok(Joystick {
@@ -578,10 +551,7 @@ fn get_joystick_info(api: &(Engine), handle: *mut c_void) -> Result<Joystick> {
         preparsed,
         buttons: Vec::new(),
 
-        device_id,
-        analog_id,
-        button_id,
-        data: JoystickData::default(),
+        bundle,
     })
 }
 
@@ -591,7 +561,7 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
         None => anyhow::bail!("unknown joystick id {}", device_id),
     };
 
-    joystick.data.buttons.buttons = 0;
+    joystick.bundle.button[0].buttons = 0;
 
     let mut bitset_offset = 0;
 
@@ -625,7 +595,7 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
             let bit_index =
                 unsafe { (usage - button_caps.u.Range().UsageMin) as usize + bitset_offset };
             if bit_index < 64 {
-                joystick.data.buttons.buttons |= 1 << bit_index as u64;
+                joystick.bundle.button[0].buttons |= 1 << bit_index as u64;
             }
         }
 
@@ -656,7 +626,7 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
             anyhow::bail!("failed to get usage values");
         }
 
-        if value_index >= joystick.data.analogs.analogs.len() {
+        if value_index >= joystick.bundle.analog[0].analogs.len() {
             break;
         }
 
@@ -669,17 +639,12 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
                 / (value_caps.LogicalMax as f32 - value_caps.LogicalMin as f32)
         };
 
-        joystick.data.analogs.analogs[value_index] = (value * 255.0) as u8;
+        joystick.bundle.analog[0].analogs[value_index] = (value * 255.0) as u8;
 
         value_index += 1;
     }
 
-    state
-        .api
-        .update_analog(&joystick.analog_id, &joystick.data.analogs)?;
-    state
-        .api
-        .update_button(&joystick.button_id, &joystick.data.buttons)?;
+    joystick.bundle.update()?;
 
     Ok(())
 }

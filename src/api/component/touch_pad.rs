@@ -6,6 +6,7 @@ pub enum TouchPadShape {
     Rectangle,
 }
 
+#[derive(Clone)]
 pub struct TouchPadInfo {
     pub shape: TouchPadShape,
     pub is_button: bool,

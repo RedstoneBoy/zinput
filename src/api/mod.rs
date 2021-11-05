@@ -26,17 +26,23 @@ pub trait Plugin {
 }
 
 #[derive(Debug)]
-pub struct InvalidComponentIdError;
+pub enum ComponentUpdateError {
+    InvalidDeviceId,
+    InvalidIndex,
+}
 
-impl std::error::Error for InvalidComponentIdError {
+impl std::error::Error for ComponentUpdateError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
     }
 }
 
-impl std::fmt::Display for InvalidComponentIdError {
+impl std::fmt::Display for ComponentUpdateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid component id")
+        match self {
+            ComponentUpdateError::InvalidDeviceId => write!(f, "invalid device id"),
+            ComponentUpdateError::InvalidIndex => write!(f, "invalid index"),
+        }
     }
 }
 
@@ -74,9 +80,9 @@ impl std::fmt::Display for PluginKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Event {
-    ComponentUpdate(Uuid),
+    DeviceUpdate(Uuid),
     DeviceAdded(Uuid, DeviceInfo),
     DeviceRemoved(Uuid),
 }
@@ -84,7 +90,7 @@ pub enum Event {
 impl Event {
     pub fn kind(&self) -> EventKind {
         match self {
-            Event::ComponentUpdate(_) => EventKind::ComponentUpdate,
+            Event::DeviceUpdate(_) => EventKind::DeviceUpdate,
             Event::DeviceAdded(_, _) => EventKind::DeviceAdded,
             Event::DeviceRemoved(_) => EventKind::DeviceRemoved,
         }
@@ -93,7 +99,7 @@ impl Event {
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EventKind {
-    ComponentUpdate,
+    DeviceUpdate,
     DeviceAdded,
     DeviceRemoved,
 }

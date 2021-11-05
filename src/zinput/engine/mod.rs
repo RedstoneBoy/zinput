@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crossbeam_channel::Sender;
 use dashmap::{
     mapref::{multiple::RefMulti, one::Ref},
@@ -9,119 +11,151 @@ use uuid::Uuid;
 use crate::api::{
     component::{
         analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion,
-        touch_pad::TouchPad, Component, ComponentData,
+        touch_pad::TouchPad, ComponentData,
     },
-    device::DeviceInfo,
-    Event,
-    InvalidComponentIdError,
+    device::{Device, DeviceInfo},
+    ComponentUpdateError, Event,
 };
 
-macro_rules! engine_struct {
-    ($struct_name:ident ; $($field_name:ident : $ctype:ty),* $(,)?) => {
+pub struct Engine {
+    device_info: DashMap<Uuid, DeviceInfo>,
+    devices: DashMap<Uuid, Device>,
+
+    event_channel: Sender<Event>,
+}
+
+impl Engine {
+    pub fn new(event_channel: Sender<Event>) -> Self {
+        Engine {
+            device_info: DashMap::new(),
+            devices: DashMap::new(),
+
+            event_channel,
+        }
+    }
+
+    pub fn remove_device(&self, id: &Uuid) {
+        self.device_info.remove(id);
+        self.devices.remove(id);
+        match self.event_channel.send(Event::DeviceRemoved(*id)) {
+            Ok(()) => {}
+            Err(_) => {}
+        }
+    }
+
+    pub fn devices<'a>(&'a self) -> Devices<'a> {
+        Devices(self.device_info.iter())
+    }
+
+    pub fn get_device_info<'a>(&'a self, id: &Uuid) -> Option<DeviceInfoRef<'a>> {
+        self.device_info
+            .get(id)
+            .map(|r| DeviceInfoRef(DeviceInfoType::One(r)))
+    }
+
+    pub fn get_device<'a>(&'a self, id: &Uuid) -> Option<DeviceRef<'a>> {
+        self.devices.get(id).map(DeviceRef)
+    }
+}
+
+macro_rules! engine_components {
+    ($($field_name:ident : $ctype:ty),* $(,)?) => {
         paste! {
-            pub struct $struct_name {
-                devices: DashMap<Uuid, DeviceInfo>,
-                $([< $field_name s >]: DashMap<Uuid, Component<$ctype>>,)*
-
-                event_channel: Sender<Event>,
-            }
-
-            impl Engine {
-                pub fn new(event_channel: Sender<Event>) -> Self {
-                    Engine {
-                        devices: DashMap::new(),
-                        $([< $field_name s >]: DashMap::new(),)*
-
-                        event_channel,
-                    }
-                }
-
-                $(pub fn [< has_ $field_name >](&self, id: &Uuid) -> bool {
-                    self.[< $field_name s >].contains_key(id)
-                })*
-
-                $(pub fn [< get_ $field_name >](&self, id: &Uuid) -> Option<Ref<Uuid, Component<$ctype>>> {
-                    self.[< $field_name s >].get(id)
-                })*
-            }
-
             impl Engine {
                 pub fn new_device(&self, info: DeviceInfo) -> Uuid {
                     let id = Uuid::new_v4();
-                    self.devices.insert(id, info.clone());
+
+                    // TODO
+                    let device = Device {
+                        $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
+                    };
+
+                    self.device_info.insert(id, info.clone());
+                    self.devices.insert(id, device);
                     match self.event_channel.send(Event::DeviceAdded(id, info)) {
-                        Ok(()) => {},
+                        Ok(()) => {}
                         Err(_) => {}
                     }
                     id
                 }
 
-                pub fn remove_device(&self, id: &Uuid) {
-                    self.devices.remove(id);
-                    match self.event_channel.send(Event::DeviceRemoved(*id)) {
-                        Ok(()) => {},
-                        Err(_) => {}
-                    }
-                }
+                $(pub fn [< update_ $field_name >](&self, device_id: &Uuid, index: usize, data: &$ctype) -> Result<(), ComponentUpdateError> {
+                    let mut device = self.devices.get_mut(device_id)
+                        .ok_or(ComponentUpdateError::InvalidDeviceId)?;
 
-                $(pub fn [< new_ $field_name >](&self, info: <$ctype as ComponentData>::Info) -> Uuid {
-                    let id = Uuid::new_v4();
-                    self.[< $field_name s >].insert(id, Component::new(info));
-                    id
-                })*
+                    let component = device
+                        .value_mut()
+                        .[< $field_name s >]
+                        .get_mut(index)
+                        .ok_or(ComponentUpdateError::InvalidIndex)?;
 
-                $(pub fn [< update_ $field_name >](&self, id: &Uuid, data: &$ctype) -> Result<(), InvalidComponentIdError> {
-                    let mut component = self.[< $field_name s >].get_mut(id).ok_or(InvalidComponentIdError)?;
-
-                    component.data.update(data);
-
-                    match self.event_channel.send(Event::ComponentUpdate(*id)) {
+                    component.update(data);
+                    
+                    match self.event_channel.send(Event::DeviceUpdate(*device_id)) {
                         Ok(()) => {}
                         Err(_) => {}
                     }
 
                     Ok(())
                 })*
-
-                $(pub fn [< remove_ $field_name >](&self, id: &Uuid) {
-                    self.[< $field_name s >].remove(id);
-                })*
             }
         }
     };
 }
 
-engine_struct!(Engine;
+engine_components!(
     controller: Controller,
     motion: Motion,
-
     analog: Analogs,
     button: Buttons,
     touch_pad: TouchPad,
 );
 
-impl Engine {
-    pub fn devices(&self) -> impl Iterator<Item = RefMulti<Uuid, DeviceInfo>> {
-        self.devices.iter()
+pub struct Devices<'a>(dashmap::iter::Iter<'a, Uuid, DeviceInfo>);
+
+impl<'a> Iterator for Devices<'a> {
+    type Item = DeviceInfoRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0
+            .next()
+            .map(|r| DeviceInfoRef(DeviceInfoType::Multi(r)))
     }
-    /*
-        pub fn controllers(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Controller>>> {
-            self.controllers.iter()
-        }
+}
 
-        pub fn motions(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<Motion>>> {
-            self.motions.iter()
-        }
+enum DeviceInfoType<'a> {
+    One(Ref<'a, Uuid, DeviceInfo>),
+    Multi(RefMulti<'a, Uuid, DeviceInfo>),
+}
 
-        pub fn touch_pads(&self) -> impl Iterator<Item = RefMulti<Uuid, Component<TouchPad>>> {
-            self.touch_pads.iter()
+pub struct DeviceInfoRef<'a>(DeviceInfoType<'a>);
+
+impl<'a> DeviceInfoRef<'a> {
+    pub fn id(&self) -> &Uuid {
+        match &self.0 {
+            DeviceInfoType::One(r) => r.key(),
+            DeviceInfoType::Multi(r) => r.key(),
         }
-    */
-    pub fn has_device(&self, id: &Uuid) -> bool {
-        self.devices.contains_key(id)
     }
+}
 
-    pub fn get_device(&self, id: &Uuid) -> Option<Ref<Uuid, DeviceInfo>> {
-        self.devices.get(id)
+impl<'a> Deref for DeviceInfoRef<'a> {
+    type Target = DeviceInfo;
+
+    fn deref(&self) -> &Self::Target {
+        match &self.0 {
+            DeviceInfoType::One(r) => r.deref(),
+            DeviceInfoType::Multi(r) => r.deref(),
+        }
+    }
+}
+
+pub struct DeviceRef<'a>(Ref<'a, Uuid, Device>);
+
+impl<'a> Deref for DeviceRef<'a> {
+    type Target = Device;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
     }
 }

@@ -33,14 +33,14 @@ impl MotionCmp {
             egui::ComboBox::from_label("Device 1")
                 .selected_text(
                     self.dev1
-                        .and_then(|id| self.engine.get_device(&id))
+                        .and_then(|id| self.engine.get_device_info(&id))
                         .map_or("".to_owned(), |dev| dev.name.clone()),
                 )
                 .show_ui(ui, |ui| {
                     for device_ref in self.engine.devices() {
                         ui.selectable_value(
                             &mut self.dev1,
-                            Some(*device_ref.key()),
+                            Some(*device_ref.id()),
                             &device_ref.name,
                         );
                     }
@@ -48,14 +48,14 @@ impl MotionCmp {
             egui::ComboBox::from_label("Device 2")
                 .selected_text(
                     self.dev2
-                        .and_then(|id| self.engine.get_device(&id))
+                        .and_then(|id| self.engine.get_device_info(&id))
                         .map_or("".to_owned(), |dev| dev.name.clone()),
                 )
                 .show_ui(ui, |ui| {
                     for device_ref in self.engine.devices() {
                         ui.selectable_value(
                             &mut self.dev2,
-                            Some(*device_ref.key()),
+                            Some(*device_ref.id()),
                             &device_ref.name,
                         );
                     }
@@ -66,11 +66,11 @@ impl MotionCmp {
                 self.dev2.and_then(|id| self.engine.get_device(&id)),
             ) {
                 if let (Some(motion1), Some(motion2)) = (
-                    dev1.motion.and_then(|id| self.engine.get_motion(&id)),
-                    dev2.motion.and_then(|id| self.engine.get_motion(&id)),
+                    dev1.motions.get(0),
+                    dev2.motions.get(0)
                 ) {
-                    let motion1 = motion1.data.clone();
-                    let motion2 = motion2.data.clone();
+                    let motion1 = motion1.clone();
+                    let motion2 = motion2.clone();
 
                     (motion1, motion2)
                 } else {

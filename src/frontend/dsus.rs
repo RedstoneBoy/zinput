@@ -69,7 +69,7 @@ impl Plugin for Dsus {
     }
 
     fn events(&self) -> &[EventKind] {
-        &[EventKind::ComponentUpdate]
+        &[EventKind::DeviceUpdate]
     }
 
     fn update_gui(
@@ -83,7 +83,7 @@ impl Plugin for Dsus {
 
     fn on_event(&self, event: &Event) {
         match event {
-            Event::ComponentUpdate(id) => {
+            Event::DeviceUpdate(id) => {
                 if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
                     // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
                     self.signals.update.0.send(*id).unwrap();
@@ -207,7 +207,7 @@ impl Inner {
                 egui::ComboBox::from_label(format!("Dsus Controller {}", i + 1))
                     .selected_text(
                         self.selected_devices[i]
-                            .and_then(|id| engine.get_device(&id))
+                            .and_then(|id| engine.get_device_info(&id))
                             .map_or("[None]".to_owned(), |dev| dev.name.clone()),
                     )
                     .show_ui(ui, |ui| {
@@ -222,12 +222,12 @@ impl Inner {
                             if ui
                                 .selectable_value(
                                     &mut self.selected_devices[i],
-                                    Some(*device_ref.key()),
+                                    Some(*device_ref.id()),
                                     &device_ref.name,
                                 )
                                 .clicked()
                             {
-                                self.device.send((i, Some(*device_ref.key()))).unwrap();
+                                self.device.send((i, Some(*device_ref.id()))).unwrap();
                                 self.controllers.lock()[i] = true;
                             }
                         }
@@ -493,47 +493,27 @@ fn dsus_thread(thread: Thread) -> Result<()> {
 
     let mut server = Server::new(conn);
 
-    let mut cids: [Option<Uuid>; 4] = [None; 4];
-    let mut mids: [Option<Uuid>; 4] = [None; 4];
+    let mut dids: [Option<Uuid>; 4] = [None; 4];
 
     loop {
         crossbeam_channel::select! {
             recv(device_change) -> device_change => {
                 match device_change {
                     Ok((idx, Some(device_id))) => {
-                        if let Some(cid) = &cids[idx] {
-                            signals.listen_update.lock().remove(cid);
-                            cids[idx] = None;
-                        }
-                        if let Some(mid) = &mids[idx] {
-                            signals.listen_update.lock().remove(mid);
-                            mids[idx] = None;
+                        if let Some(did) = &dids[idx] {
+                            signals.listen_update.lock().remove(did);
+                            dids[idx] = None;
                         }
 
-                        if let Some(controller_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
-                        {
-                            cids[idx] = Some(controller_id);
-                            signals.listen_update.lock().insert(controller_id);
-                        }
-
-                        if let Some(motion_id) = engine.get_device(&device_id)
-                            .and_then(|device| device.motion)
-                        {
-                            mids[idx] = Some(motion_id);
-                            signals.listen_update.lock().insert(motion_id);
-                        }
+                        dids[idx] = Some(device_id);
+                        signals.listen_update.lock().insert(device_id);
 
                         server.set_connected(idx as u8, true);
                     }
                     Ok((idx, None)) => {
-                        if let Some(cid) = &cids[idx] {
-                            signals.listen_update.lock().remove(cid);
-                            cids[idx] = None;
-                        }
-                        if let Some(mid) = &mids[idx] {
-                            signals.listen_update.lock().remove(mid);
-                            mids[idx] = None;
+                        if let Some(did) = &dids[idx] {
+                            signals.listen_update.lock().remove(did);
+                            dids[idx] = None;
                         }
 
                         server.set_connected(idx as u8, false);
@@ -552,23 +532,20 @@ fn dsus_thread(thread: Thread) -> Result<()> {
                     }
                 };
 
-                for (i, cid) in cids.iter().filter_map(|cid| cid.as_ref()).enumerate() {
-                    if &uid == cid {
-                        let controller = match engine.get_controller(cid) {
-                            Some(controller) => controller,
+                for (i, did) in dids.iter().filter_map(|did| did.as_ref()).enumerate() {
+                    if &uid == did {
+                        let device = match engine.get_device(did) {
+                            Some(device) => device,
                             None => continue,
                         };
-                        server.update_controller(i as u8, &controller.data);
-                    }
-                }
-
-                for (i, mid) in mids.iter().filter_map(|mid| mid.as_ref()).enumerate() {
-                    if &uid == mid {
-                        let motion = match engine.get_motion(mid) {
-                            Some(motion) => motion,
-                            None => continue,
-                        };
-                        server.update_motion(i as u8, &motion.data);
+                        match device.controllers.get(0) {
+                            Some(controller) => server.update_controller(i as u8, controller),
+                            None => {},
+                        }
+                        match device.motions.get(0) {
+                            Some(motion) => server.update_motion(i as u8, motion),
+                            None => {},
+                        }
                     }
                 }
 

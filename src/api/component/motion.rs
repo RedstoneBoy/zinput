@@ -1,5 +1,6 @@
 use super::ComponentData;
 
+#[derive(Clone)]
 pub struct MotionInfo {
     pub has_gyro: bool,
     pub has_accel: bool,

@@ -272,8 +272,8 @@ impl<'a> SwiConn<'a> {
                     DeviceBundle::new(
                         api,
                         format!("Swi Controller {}", ctrl_num),
-                        controller_info(),
-                        MotionInfo::new(true, true),
+                        [controller_info()],
+                        [MotionInfo::new(true, true)],
                     )
                 });
                 bundle.update_data(&data)?;
@@ -312,7 +312,7 @@ impl<'a> DeviceBundle<'a> {
             SwiButton::RStick => Button::RStick,
             SwiButton::Plus   => Button::Start,
             SwiButton::Up     => Button::Up,
-            SwiButton::Right  => Button::Right,
+            SwiButton::Right  => Button::Right, 
             SwiButton::Down   => Button::Down,
             SwiButton::Left   => Button::Left,
             SwiButton::ZL     => Button::L2,
@@ -325,7 +325,7 @@ impl<'a> DeviceBundle<'a> {
             SwiButton::X      => Button::X,
         );
 
-        let ctrl = &mut self.controller.1;
+        let ctrl = &mut self.controller[0];
 
         ctrl.buttons = buttons;
 
@@ -334,7 +334,7 @@ impl<'a> DeviceBundle<'a> {
         ctrl.right_stick_x = from.right_stick[0];
         ctrl.right_stick_y = from.right_stick[1];
 
-        let motion = &mut self.motion.1;
+        let motion = &mut self.motion[0];
 
         motion.accel_x = from.accelerometer[0];
         motion.accel_y = from.accelerometer[2];
