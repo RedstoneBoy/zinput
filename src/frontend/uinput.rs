@@ -63,7 +63,7 @@ impl Plugin for UInput {
     }
 
     fn events(&self) -> &[EventKind] {
-        &[EventKind::ComponentUpdate]
+        &[EventKind::DeviceUpdate]
     }
 
     fn update_gui(
@@ -77,7 +77,7 @@ impl Plugin for UInput {
 
     fn on_event(&self, event: &Event) {
         match event {
-            Event::ComponentUpdate(id) => {
+            Event::DeviceUpdate(id) => {
                 if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
                     // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
                     self.signals.update.0.send(*id).unwrap();
@@ -159,7 +159,7 @@ impl Inner {
                 egui::ComboBox::from_label(format!("UInput Controller {}", i + 1))
                     .selected_text(
                         self.selected_devices[i]
-                            .and_then(|id| engine.get_device(&id))
+                            .and_then(|id| engine.get_device_info(&id))
                             .map_or("[None]".to_owned(), |dev| dev.name.clone()),
                     )
                     .show_ui(ui, |ui| {
@@ -173,12 +173,12 @@ impl Inner {
                             if ui
                                 .selectable_value(
                                     &mut self.selected_devices[i],
-                                    Some(*device_ref.key()),
+                                    Some(*device_ref.id()),
                                     &device_ref.name,
                                 )
                                 .clicked()
                             {
-                                self.device.send((i, Some(*device_ref.key()))).unwrap();
+                                self.device.send((i, Some(*device_ref.id()))).unwrap();
                             }
                         }
                     });
@@ -245,7 +245,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                     Ok((idx, Some(device_id))) => {
                         if let Some(joystick) = joysticks.get(idx) {
                             let mut signals = signals.listen_update.lock();
-                            signals.remove(&joystick.controller_id);
+                            signals.remove(&joystick.device_id);
                         }
 
                         if idx > joysticks.len() {
@@ -253,7 +253,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                             continue;
                         }
 
-                        let name = match engine.get_device(&device_id) {
+                        let name = match engine.get_device_info(&device_id) {
                             Some(device) => device.name.clone(),
                             None => {
                                 log::error!(target: T, "tried to add non-existent controller");
@@ -261,16 +261,7 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                             }
                         };
 
-                        let controller_id = match engine.get_device(&device_id)
-                            .and_then(|device| device.controller)
-                        {
-                            Some(id) => id,
-                            None => {
-                                log::error!(target: T, "tried to add controller without controller component");
-                                continue;
-                            }
-                        };
-                        signals.listen_update.lock().insert(controller_id);
+                        signals.listen_update.lock().insert(device_id);
 
                         let uinput_device = OpenOptions::new()
                             .read(true)
@@ -280,14 +271,14 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 
                         let uinput_device = UInputHandle::new(uinput_device);
 
-                        let joystick = Joystick::new(&name, controller_id, uinput_device)?;
+                        let joystick = Joystick::new(&name, device_id, uinput_device)?;
 
                         joysticks.insert(idx, joystick);
                     }
                     Ok((idx, None)) => {
                         if let Some(joystick) = joysticks.get(idx) {
                             let mut signals = signals.listen_update.lock();
-                            signals.remove(&joystick.controller_id);
+                            signals.remove(&joystick.device_id);
 
                             joysticks.remove(idx);
                         } else {
@@ -309,13 +300,15 @@ fn uinput_thread(thread: Thread) -> Result<()> {
                 };
 
                 for joystick in &joysticks {
-                    if joystick.controller_id == uid {
-                        let controller = match engine.get_controller(&uid) {
-                            Some(controller) => controller,
+                    if joystick.device_id == uid {
+                        let device = match engine.get_device(&uid) {
+                            Some(device) => device,
                             None => continue,
                         };
 
-                        joystick.update_controller(&controller.data)?;
+                        if let Some(controller) = device.controllers.get(0) {
+                            joystick.update_controller(controller)?;
+                        }
                     }
                 }
             }
@@ -331,13 +324,13 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 }
 
 struct Joystick {
-    controller_id: Uuid,
+    device_id: Uuid,
 
     uinput_device: UInputHandle<File>,
 }
 
 impl Joystick {
-    fn new(name: &str, controller_id: Uuid, uinput_device: UInputHandle<File>) -> Result<Self> {
+    fn new(name: &str, device_id: Uuid, uinput_device: UInputHandle<File>) -> Result<Self> {
         macro_rules! keybits {
             ($device:expr, $($key:expr),* $(,)?) => {
                 $($device.set_keybit($key)?;)*
@@ -419,7 +412,7 @@ impl Joystick {
         .context("failed to create uinput device")?;
 
         Ok(Joystick {
-            controller_id,
+            device_id,
 
             uinput_device: ud,
         })
