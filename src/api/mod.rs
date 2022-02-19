@@ -9,6 +9,7 @@ use self::device::DeviceInfo;
 
 pub mod component;
 pub mod device;
+pub mod widget;
 
 pub trait Plugin {
     fn init(&self, zinput_api: Arc<Engine>);
