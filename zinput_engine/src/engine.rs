@@ -7,10 +7,6 @@ use dashmap::{
 };
 use paste::paste;
 use zinput_device::{
-    component::{
-        analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion,
-        touch_pad::TouchPad, ComponentData,
-    },
     Device, DeviceInfo, DeviceMut,
 };
 
@@ -88,7 +84,6 @@ macro_rules! engine_components {
                 fn new_device_internal(&self, info: DeviceInfo) -> Uuid {
                     let id = Uuid::new_v4();
 
-                    // TODO
                     let device = Device {
                         $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
                     };

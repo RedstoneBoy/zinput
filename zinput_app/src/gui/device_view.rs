@@ -57,7 +57,7 @@ impl DeviceView {
                 ui.heading("Controller");
                 egui::Grid::new("controller_buttons").show(ui, |ui| {
                     let mut col = 0;
-                    for button in std::array::IntoIter::new(Button::BUTTONS) {
+                    for button in IntoIterator::into_iter(Button::BUTTONS) {
                         let mut label = egui::Label::new(format!("{}", button));
                         if button.is_pressed(controller_data.buttons) {
                             label = label.underline();

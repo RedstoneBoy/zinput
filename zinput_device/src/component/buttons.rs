@@ -11,6 +11,7 @@ impl Default for ButtonsInfo {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Buttons {
     pub buttons: u64,

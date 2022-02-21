@@ -11,6 +11,7 @@ impl Default for AnalogsInfo {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Analogs {
     pub analogs: [u8; 8],

@@ -1,11 +1,9 @@
-use std::{ops::Deref, sync::Arc};
+use std::sync::Arc;
 
 use eframe::{egui, epi};
-use zinput_device::DeviceInfo;
 
 use crate::{
     event::{Event, EventKind},
-    util::Uuid,
     Engine,
 };
 

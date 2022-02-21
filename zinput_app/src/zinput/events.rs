@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crossbeam_channel::{select, Receiver};
-use zinput_device::DeviceInfo;
 use zinput_engine::{event::{Event, EventKind}, plugin::Plugin};
 
 const T: &'static str = "events";

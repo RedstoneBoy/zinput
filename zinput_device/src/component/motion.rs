@@ -17,6 +17,7 @@ impl MotionInfo {
 
 /// Gyro values are degrees per second
 /// Acceleration is in g (9.8m/s^2)
+#[repr(C)]
 #[derive(Clone, Default)]
 pub struct Motion {
     /// Negative = Pitch forward

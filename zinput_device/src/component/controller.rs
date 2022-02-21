@@ -47,6 +47,7 @@ impl Default for ControllerInfo {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Controller {
     pub buttons: u64,

@@ -18,6 +18,7 @@ impl TouchPadInfo {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone, Default)]
 pub struct TouchPad {
     pub touch_x: u16,
