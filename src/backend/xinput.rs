@@ -9,13 +9,9 @@ use std::{
 use anyhow::Result;
 use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
+use zinput_device::component::controller::{Button, Controller, ControllerInfo};
 
-use crate::api::{
-    component::{
-        controller::{Button, Controller, ControllerInfo},
-    },
-    PluginKind,
-};
+use crate::api::PluginKind;
 use crate::api::{Plugin, PluginStatus};
 use crate::zinput::engine::Engine;
 
@@ -227,9 +223,7 @@ impl<'a> Drop for Controllers<'a> {
     }
 }
 
-crate::device_bundle!(XController,
-    controller: Controller,
-);
+crate::device_bundle!(XController, controller: Controller,);
 
 impl<'a> XController<'a> {
     fn write(&mut self, state: &XInputState) -> Result<()> {

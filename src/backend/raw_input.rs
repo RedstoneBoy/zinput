@@ -15,14 +15,12 @@ use winapi::{
     shared::{hidpi, hidusage, minwindef, windef},
     um::{libloaderapi::GetModuleHandleW, winuser},
 };
-
-use crate::api::{
-    component::{
-        analogs::{Analogs, AnalogsInfo},
-        buttons::{Buttons, ButtonsInfo},
-    },
-    Plugin, PluginKind, PluginStatus,
+use zinput_device::component::{
+    analogs::{Analogs, AnalogsInfo},
+    buttons::{Buttons, ButtonsInfo},
 };
+
+use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
 
 const T: &'static str = "backend:raw_input";
@@ -249,10 +247,7 @@ impl State {
     }
 }
 
-crate::device_bundle!(DeviceBundle(owned),
-    analog: Analogs,
-    button: Buttons,
-);
+crate::device_bundle!(DeviceBundle(owned), analog: Analogs, button: Buttons,);
 
 struct Joystick {
     button_caps: Vec<hidpi::HIDP_BUTTON_CAPS>,

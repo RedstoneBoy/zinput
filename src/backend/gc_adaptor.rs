@@ -7,9 +7,9 @@ use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
 
-use crate::api::component::controller::{Button, Controller, ControllerInfo};
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
+use zinput_device::component::controller::{Button, Controller, ControllerInfo};
 
 const EP_IN: u8 = 0x81;
 const EP_OUT: u8 = 0x02;

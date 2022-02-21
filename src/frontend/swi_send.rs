@@ -15,16 +15,14 @@ use eframe::egui;
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
 use uuid::Uuid;
+use zinput_device::component::{
+    controller::{Button, Controller},
+    motion::Motion,
+};
 
 use crate::{
-    api::{
-        component::{
-            controller::{Button, Controller},
-            motion::Motion,
-        },
-        Event, EventKind, Plugin, PluginKind, PluginStatus,
-    },
-    zinput::engine::Engine,
+    api::{Plugin, PluginKind, PluginStatus},
+    zinput::{engine::Engine, events::{EventKind, Event}},
 };
 
 const T: &'static str = "frontend:swi_send";

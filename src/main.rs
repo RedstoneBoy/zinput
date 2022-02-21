@@ -1,4 +1,5 @@
 #![feature(maybe_uninit_uninit_array)]
+#![feature(generic_associated_types)]
 
 use std::sync::Arc;
 

@@ -1,4 +1,12 @@
-use super::component::{analogs::{Analogs, AnalogsInfo}, buttons::{Buttons, ButtonsInfo}, controller::{Controller, ControllerInfo}, motion::{Motion, MotionInfo}, touch_pad::{TouchPad, TouchPadInfo}};
+pub mod component;
+
+use component::{
+    analogs::{Analogs, AnalogsInfo},
+    buttons::{Buttons, ButtonsInfo},
+    controller::{Controller, ControllerInfo},
+    motion::{Motion, MotionInfo},
+    touch_pad::{TouchPad, TouchPadInfo},
+};
 
 #[derive(Clone)]
 pub struct DeviceInfo {
@@ -56,4 +64,24 @@ pub struct Device {
     pub analogs: Vec<Analogs>,
     pub buttons: Vec<Buttons>,
     pub touch_pads: Vec<TouchPad>,
+}
+
+impl Device {
+    pub fn as_mut(&mut self) -> DeviceMut {
+        DeviceMut {
+            controllers: &mut self.controllers,
+            motions: &mut self.motions,
+            analogs: &mut self.analogs,
+            buttons: &mut self.buttons,
+            touch_pads: &mut self.touch_pads,
+        }
+    }
+}
+
+pub struct DeviceMut<'a> {
+    pub controllers: &'a mut [Controller],
+    pub motions: &'a mut [Motion],
+    pub analogs: &'a mut [Analogs],
+    pub buttons: &'a mut [Buttons],
+    pub touch_pads: &'a mut [TouchPad],
 }

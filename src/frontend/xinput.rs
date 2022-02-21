@@ -14,8 +14,12 @@ use eframe::egui;
 use parking_lot::Mutex;
 use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
+use zinput_device::component::controller::{Button, Controller};
 
-use crate::{api::{Event, EventKind, Plugin, PluginKind, PluginStatus, component::controller::{Button, Controller}}, zinput::engine::Engine};
+use crate::{
+    api::{Plugin, PluginKind, PluginStatus},
+    zinput::{engine::Engine, events::{EventKind, Event}},
+};
 
 const T: &'static str = "frontend:xinput";
 
@@ -70,7 +74,9 @@ impl Plugin for XInput {
     fn on_event(&self, event: &Event) {
         match event {
             Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
+                if self.signals.listen_update.lock().contains(id)
+                    && !self.signals.update.0.is_full()
+                {
                     // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
                     self.signals.update.0.send(*id).unwrap();
                 }

@@ -7,15 +7,15 @@ use dashmap::{
 };
 use paste::paste;
 use uuid::Uuid;
-
-use crate::api::{
+use zinput_device::{
     component::{
         analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion,
         touch_pad::TouchPad, ComponentData,
     },
-    device::{Device, DeviceInfo},
-    ComponentUpdateError, Event,
+    Device, DeviceInfo, DeviceMut,
 };
+
+use super::events::Event;
 
 pub struct Engine {
     device_info: DashMap<Uuid, DeviceInfo>,
@@ -32,6 +32,10 @@ impl Engine {
 
             event_channel,
         }
+    }
+
+    pub fn new_device(&self, info: DeviceInfo) -> Uuid {
+        self.new_device_internal(info)
     }
 
     pub fn remove_device(&self, id: &Uuid) {
@@ -53,8 +57,27 @@ impl Engine {
             .map(|r| DeviceInfoRef(DeviceInfoType::One(r)))
     }
 
-    pub fn get_device<'a>(&'a self, id: &Uuid) -> Option<DeviceRef<'a>> {
-        self.devices.get(id).map(DeviceRef)
+    pub fn get_device<'a>(&'a self, id: &Uuid) -> Option<DeviceHandle<'a>> {
+        self.devices.get(id).map(DeviceHandle)
+    }
+
+    pub fn update<F>(&self, id: &Uuid, updater: F) -> Result<(), ComponentUpdateError>
+    where
+        F: for<'a> FnOnce(DeviceMut<'a>),
+    {
+        let mut device = self
+            .devices
+            .get_mut(id)
+            .ok_or(ComponentUpdateError::InvalidDeviceId)?;
+
+        updater(device.as_mut());
+
+        match self.event_channel.send(Event::DeviceUpdate(*id)) {
+            Ok(()) => {}
+            Err(_) => {}
+        }
+
+        Ok(())
     }
 }
 
@@ -62,7 +85,7 @@ macro_rules! engine_components {
     ($($field_name:ident : $ctype:ty),* $(,)?) => {
         paste! {
             impl Engine {
-                pub fn new_device(&self, info: DeviceInfo) -> Uuid {
+                fn new_device_internal(&self, info: DeviceInfo) -> Uuid {
                     let id = Uuid::new_v4();
 
                     // TODO
@@ -78,26 +101,6 @@ macro_rules! engine_components {
                     }
                     id
                 }
-
-                $(pub fn [< update_ $field_name >](&self, device_id: &Uuid, index: usize, data: &$ctype) -> Result<(), ComponentUpdateError> {
-                    let mut device = self.devices.get_mut(device_id)
-                        .ok_or(ComponentUpdateError::InvalidDeviceId)?;
-
-                    let component = device
-                        .value_mut()
-                        .[< $field_name s >]
-                        .get_mut(index)
-                        .ok_or(ComponentUpdateError::InvalidIndex)?;
-
-                    component.update(data);
-                    
-                    match self.event_channel.send(Event::DeviceUpdate(*device_id)) {
-                        Ok(()) => {}
-                        Err(_) => {}
-                    }
-
-                    Ok(())
-                })*
             }
         }
     };
@@ -150,12 +153,50 @@ impl<'a> Deref for DeviceInfoRef<'a> {
     }
 }
 
-pub struct DeviceRef<'a>(Ref<'a, Uuid, Device>);
+pub struct DeviceHandle<'a>(Ref<'a, Uuid, Device>);
 
-impl<'a> Deref for DeviceRef<'a> {
+impl<'a> Deref for DeviceHandle<'a> {
     type Target = Device;
 
     fn deref(&self) -> &Self::Target {
         self.0.deref()
     }
 }
+
+#[derive(Debug)]
+pub enum ComponentUpdateError {
+    InvalidDeviceId,
+    InvalidIndex,
+}
+
+impl std::error::Error for ComponentUpdateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+impl std::fmt::Display for ComponentUpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComponentUpdateError::InvalidDeviceId => write!(f, "invalid device id"),
+            ComponentUpdateError::InvalidIndex => write!(f, "invalid index"),
+        }
+    }
+}
+
+/*
+pub struct DeviceHandleMut<'a>(RefMut<'a, Uuid, Device>);
+
+impl<'a> Deref for DeviceHandleMut<'a> {
+    type Target = Device;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
+impl<'a> DeviceHandleMut {
+    pub fn as_mut(&mut self) -> DeviceMut {
+        self.0.as_mut()
+    }
+}*/

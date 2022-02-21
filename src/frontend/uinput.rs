@@ -13,7 +13,9 @@ use std::{
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use input_linux::{AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle};
+use input_linux::{
+    AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle,
+};
 use parking_lot::Mutex;
 use uuid::Uuid;
 
@@ -78,7 +80,9 @@ impl Plugin for UInput {
     fn on_event(&self, event: &Event) {
         match event {
             Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id) && !self.signals.update.0.is_full() {
+                if self.signals.listen_update.lock().contains(id)
+                    && !self.signals.update.0.is_full()
+                {
                     // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
                     self.signals.update.0.send(*id).unwrap();
                 }

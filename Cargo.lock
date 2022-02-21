@@ -1874,4 +1874,9 @@ dependencies = [
  "uuid",
  "vigem",
  "winapi",
+ "zinput_device",
 ]
+
+[[package]]
+name = "zinput_device"
+version = "0.1.0"

@@ -2,11 +2,9 @@ use std::sync::Arc;
 
 use eframe::{egui, epi};
 use uuid::Uuid;
+use zinput_device::component::{controller::Button, touch_pad::TouchPadShape};
 
-use crate::{
-    api::component::{controller::Button, touch_pad::TouchPadShape},
-    zinput::engine::Engine,
-};
+use crate::zinput::engine::Engine;
 
 pub struct DeviceView {
     engine: Arc<Engine>,
@@ -40,19 +38,24 @@ impl DeviceView {
                         );
                     }
                 });
-            
-            let device = match self.selected_controller.and_then(|id| self.engine.get_device(&id)) {
+
+            let device = match self
+                .selected_controller
+                .and_then(|id| self.engine.get_device(&id))
+            {
                 Some(device) => device,
                 None => return,
             };
 
-            let device_info = match self.selected_controller.and_then(|id| self.engine.get_device_info(&id)) {
+            let device_info = match self
+                .selected_controller
+                .and_then(|id| self.engine.get_device_info(&id))
+            {
                 Some(device_info) => device_info,
                 None => return,
             };
 
-            if let Some(controller_data) = device.controllers.get(0)
-            {
+            if let Some(controller_data) = device.controllers.get(0) {
                 ui.heading("Controller");
                 egui::Grid::new("controller_buttons").show(ui, |ui| {
                     let mut col = 0;
@@ -140,8 +143,7 @@ impl DeviceView {
                 }
             }
 
-            if let Some(motion_data) = device.motions.get(0)
-            {
+            if let Some(motion_data) = device.motions.get(0) {
                 ui.separator();
 
                 ui.heading("Motion");
@@ -174,12 +176,8 @@ impl DeviceView {
             }
 
             let mut need_separator = true;
-            
-            for (i, touch_pad) in device
-                .touch_pads
-                .iter()
-                .enumerate()
-            {
+
+            for (i, touch_pad) in device.touch_pads.iter().enumerate() {
                 if need_separator {
                     ui.separator();
                     need_separator = false;
@@ -218,11 +216,7 @@ impl DeviceView {
 
             need_separator = true;
 
-            for (analog_comp_index, analog) in device
-                .analogs
-                .iter()
-                .enumerate()
-            {
+            for (analog_comp_index, analog) in device.analogs.iter().enumerate() {
                 if need_separator {
                     ui.separator();
                     need_separator = false;
@@ -247,8 +241,7 @@ impl DeviceView {
                             ui.layer_id(),
                             egui::Rect {
                                 min: ui.available_rect_before_wrap().min,
-                                max: ui.available_rect_before_wrap().min
-                                    + egui::vec2(50.0, 20.0),
+                                max: ui.available_rect_before_wrap().min + egui::vec2(50.0, 20.0),
                             },
                         );
                         Self::paint_trigger(&painter, value);
@@ -259,11 +252,7 @@ impl DeviceView {
 
             need_separator = true;
 
-            for (button_comp_index, buttons) in device
-                .buttons
-                .iter()
-                .enumerate()
-            {
+            for (button_comp_index, buttons) in device.buttons.iter().enumerate() {
                 if need_separator {
                     ui.separator();
                     need_separator = false;

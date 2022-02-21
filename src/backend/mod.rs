@@ -37,7 +37,7 @@ macro_rules! device_bundle {
                     name: String,
                     $($cname: crate::device_bundle!(info $cname : $ctype $( [ $clen ] )? ),)*
                 ) -> Self {
-                    let mut device_info = crate::api::device::DeviceInfo::new(name);
+                    let mut device_info = zinput_device::DeviceInfo::new(name);
 
                     $(let $cname = crate::device_bundle!(init(api, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
 
@@ -51,8 +51,13 @@ macro_rules! device_bundle {
                     }
                 }
 
-                fn update(&self) -> Result<(), crate::api::ComponentUpdateError> {
-                    $(crate::device_bundle!(update(self) $cname : $ctype $( [ $clen ] )?);)*
+                fn update(&self) -> Result<(), crate::zinput::engine::ComponentUpdateError> {
+                    use zinput_device::component::ComponentData;
+
+                    self.api.update(&self.device_id, |dev| {
+                        $(crate::device_bundle!(update(self, dev) $cname : $ctype $( [ $clen ] )?);)*
+                    })?;
+
                     Ok(())
                 }
             }
@@ -78,7 +83,7 @@ macro_rules! device_bundle {
     };
 
     (info $cname:ident : $ctype:ty [ $clen:expr ]) => {
-        [<$ctype as crate::api::component::ComponentData>::Info; $clen]
+        [<$ctype as zinput_device::component::ComponentData>::Info; $clen]
     };
 
     (init ( $api:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {
@@ -96,14 +101,14 @@ macro_rules! device_bundle {
         }
     }};
 
-    (update ( $this:expr ) $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(update($this) $cname : $ctype [ 1 ])
+    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(update($this, $dev) $cname : $ctype [ 1 ])
     };
 
-    (update ( $this:expr ) $cname:ident : $ctype:ty [ $clen:expr ]) => {
+    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {
         paste! {
             for i in 0..$clen {
-                $this.api.[< update_ $cname >](&$this.device_id, i, &$this.$cname[i])?;
+                $dev.[< $cname s >][i].update(&$this.$cname[i]);
             }
         }
     };

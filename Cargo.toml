@@ -20,6 +20,7 @@ rusb = "0.8"
 simple_logger = "1.11"
 swi_packet = { path = "./swi_packet" }
 uuid = { version = "0.8", features = ["v4"] }
+zinput_device = { path = "./zinput_device" }
 
 [target.'cfg(windows)'.dependencies]
 rusty-xinput = "1.2"

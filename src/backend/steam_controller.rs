@@ -8,11 +8,11 @@ use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
 
-use crate::api::component::controller::{Button, Controller, ControllerInfo};
-use crate::api::component::motion::{Motion, MotionInfo};
-use crate::api::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
 use crate::api::{Plugin, PluginKind, PluginStatus};
 use crate::zinput::engine::Engine;
+use zinput_device::component::controller::{Button, Controller, ControllerInfo};
+use zinput_device::component::motion::{Motion, MotionInfo};
+use zinput_device::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
 
 const EP_IN: u8 = 0x82;
 
@@ -266,9 +266,7 @@ impl<'a> SCBundle<'a> {
             ],
         );
 
-        SCBundle {
-            bundle,
-        }
+        SCBundle { bundle }
     }
 
     fn update(&mut self, data: &[u8; 64]) -> Result<()> {
@@ -294,7 +292,7 @@ impl<'a> SCBundle<'a> {
         self.update_motion(accelx, accely, accelz, gpitch, groll, gyaw);
 
         self.bundle.update()?;
-        
+
         Ok(())
     }
 
