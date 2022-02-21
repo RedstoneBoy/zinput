@@ -9,14 +9,14 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use eframe::{egui, epi};
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
-use zinput_device::component::{
+use zinput_engine::device::component::{
     controller::{Button, ControllerInfo},
     motion::MotionInfo,
 };
 use zinput_engine::{
+    eframe::{egui, epi},
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
 };
@@ -290,8 +290,8 @@ impl<'a> SwiConn<'a> {
 
 crate::device_bundle! {
     DeviceBundle,
-    controller: zinput_device::component::controller::Controller,
-    motion: zinput_device::component::motion::Motion,
+    controller: zinput_engine::device::component::controller::Controller,
+    motion: zinput_engine::device::component::motion::Motion,
 }
 
 impl<'a> DeviceBundle<'a> {

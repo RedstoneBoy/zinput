@@ -7,7 +7,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
-use zinput_device::component::{
+use zinput_engine::device::component::{
     controller::{Button, Controller, ControllerInfo},
     motion::{Motion, MotionInfo},
     touch_pad::{TouchPad, TouchPadInfo, TouchPadShape},

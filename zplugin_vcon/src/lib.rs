@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use eframe::{egui, epi};
 use parking_lot::Mutex;
-use zinput_engine::{plugin::{Plugin, PluginStatus, PluginKind}, Engine, event::{EventKind, Event}};
+use zinput_engine::{plugin::{Plugin, PluginStatus, PluginKind}, Engine, eframe::{egui, epi}, event::{EventKind, Event}};
 
 mod device_builder;
 mod vdevice;

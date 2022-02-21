@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use eframe::{egui, epi};
-use zinput_device::component::{controller::Button, touch_pad::TouchPadShape};
-use zinput_engine::{util::Uuid, Engine};
+use zinput_engine::{
+    device::component::{controller::Button, touch_pad::TouchPadShape},
+    eframe::{egui, epi},
+    util::Uuid,
+    Engine,
+};
 
 pub struct DeviceView {
     engine: Arc<Engine>,

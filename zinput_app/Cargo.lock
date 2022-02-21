@@ -1984,7 +1984,6 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "dsu_protocol",
- "eframe",
  "input-linux",
  "log",
  "parking_lot",
@@ -1996,7 +1995,6 @@ dependencies = [
  "udev",
  "vigem",
  "winapi",
- "zinput_device",
  "zinput_engine",
 ]
 

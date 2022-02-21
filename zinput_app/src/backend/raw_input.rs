@@ -15,7 +15,7 @@ use winapi::{
     shared::{hidpi, hidusage, minwindef, windef},
     um::{libloaderapi::GetModuleHandleW, winuser},
 };
-use zinput_device::component::{
+use zinput_engine::device::component::{
     analogs::{Analogs, AnalogsInfo},
     buttons::{Buttons, ButtonsInfo},
 };

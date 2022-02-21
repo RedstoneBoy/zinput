@@ -1,11 +1,9 @@
 use std::{sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::Receiver;
-use zinput_engine::{plugin::Plugin, Engine, event::Event};
+use zinput_engine::{eframe, event::Event, plugin::Plugin, Engine};
 
-use crate::{
-    gui::Gui,
-};
+use crate::gui::Gui;
 
 pub mod events;
 

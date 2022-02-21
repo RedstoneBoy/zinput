@@ -37,7 +37,7 @@ macro_rules! device_bundle {
                     name: String,
                     $($cname: crate::device_bundle!(info $cname : $ctype $( [ $clen ] )? ),)*
                 ) -> Self {
-                    let mut device_info = zinput_device::DeviceInfo::new(name);
+                    let mut device_info = zinput_engine::device::DeviceInfo::new(name);
 
                     $(let $cname = crate::device_bundle!(init(api, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
 
@@ -52,7 +52,7 @@ macro_rules! device_bundle {
                 }
 
                 fn update(&self) -> Result<(), zinput_engine::ComponentUpdateError> {
-                    use zinput_device::component::ComponentData;
+                    use zinput_engine::device::component::ComponentData;
 
                     self.api.update(&self.device_id, |dev| {
                         $(crate::device_bundle!(update(self, dev) $cname : $ctype $( [ $clen ] )?);)*
@@ -83,7 +83,7 @@ macro_rules! device_bundle {
     };
 
     (info $cname:ident : $ctype:ty [ $clen:expr ]) => {
-        [<$ctype as zinput_device::component::ComponentData>::Info; $clen]
+        [<$ctype as zinput_engine::device::component::ComponentData>::Info; $clen]
     };
 
     (init ( $api:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {

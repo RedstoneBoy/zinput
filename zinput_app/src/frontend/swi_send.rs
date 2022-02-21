@@ -11,16 +11,16 @@ use std::{
 
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, Sender};
-use eframe::egui;
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
-use zinput_device::component::{
+use zinput_engine::device::component::{
     controller::{Button, Controller},
     motion::Motion,
 };
 use zinput_engine::{
+    eframe::{egui, epi},
+    event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
-    event::{EventKind, Event},
     util::Uuid,
     Engine,
 };
@@ -73,9 +73,9 @@ impl Plugin for Swi {
 
     fn update_gui(
         &self,
-        ctx: &eframe::egui::CtxRef,
-        frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        ctx: &egui::CtxRef,
+        frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
@@ -210,9 +210,9 @@ impl Inner {
 
     fn update_gui(
         &mut self,
-        _ctx: &eframe::egui::CtxRef,
-        _frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        _ctx: &egui::CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         match self {
             Inner::Uninit { gui } => {

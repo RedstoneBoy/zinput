@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
-use eframe::{egui, epi};
 use zinput_engine::{
+    eframe::{egui, epi},
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
 };

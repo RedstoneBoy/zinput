@@ -9,7 +9,7 @@ use std::{
 use anyhow::Result;
 use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
-use zinput_device::component::controller::{Button, Controller, ControllerInfo};
+use zinput_engine::device::component::controller::{Button, Controller, ControllerInfo};
 use zinput_engine::{
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,

@@ -19,15 +19,15 @@ use dsu_protocol::{
     },
     ControllerData, ControllerInfo as DsuControllerInfo, MessageRef, ProtocolVersionInfo,
 };
-use eframe::egui;
 use parking_lot::Mutex;
-use zinput_device::component::{
+use zinput_engine::device::component::{
     controller::{Button, Controller},
     motion::Motion,
 };
 use zinput_engine::{
+    eframe::{epi, egui},
+    event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
-    event::{EventKind, Event},
     util::Uuid,
     Engine,
 };
@@ -78,9 +78,9 @@ impl Plugin for Dsus {
 
     fn update_gui(
         &self,
-        ctx: &eframe::egui::CtxRef,
-        frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        ctx: &egui::CtxRef,
+        frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
@@ -204,9 +204,9 @@ impl Inner {
 
     fn update_gui(
         &mut self,
-        _ctx: &eframe::egui::CtxRef,
-        _frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        _ctx: &egui::CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
