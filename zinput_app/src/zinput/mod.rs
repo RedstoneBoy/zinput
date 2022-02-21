@@ -1,16 +1,13 @@
 use std::{sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::Receiver;
+use zinput_engine::{plugin::Plugin, Engine, event::Event};
 
 use crate::{
-    api::Plugin,
     gui::Gui,
 };
 
-pub mod engine;
 pub mod events;
-
-use self::{engine::Engine, events::Event};
 
 pub struct ZInput {
     plugins: Vec<Arc<dyn Plugin + Send + Sync>>,

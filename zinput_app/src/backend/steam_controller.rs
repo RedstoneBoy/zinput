@@ -7,12 +7,15 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
-
-use crate::api::{Plugin, PluginKind, PluginStatus};
-use crate::zinput::engine::Engine;
-use zinput_device::component::controller::{Button, Controller, ControllerInfo};
-use zinput_device::component::motion::{Motion, MotionInfo};
-use zinput_device::component::touch_pad::{TouchPad, TouchPadInfo, TouchPadShape};
+use zinput_device::component::{
+    controller::{Button, Controller, ControllerInfo},
+    motion::{Motion, MotionInfo},
+    touch_pad::{TouchPad, TouchPadInfo, TouchPadShape},
+};
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
 
 const EP_IN: u8 = 0x82;
 

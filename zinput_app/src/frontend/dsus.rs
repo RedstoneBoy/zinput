@@ -21,15 +21,15 @@ use dsu_protocol::{
 };
 use eframe::egui;
 use parking_lot::Mutex;
-use uuid::Uuid;
 use zinput_device::component::{
     controller::{Button, Controller},
     motion::Motion,
 };
-
-use crate::{
-    api::{Plugin, PluginKind, PluginStatus},
-    zinput::{engine::Engine, events::{EventKind, Event}},
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    event::{EventKind, Event},
+    util::Uuid,
+    Engine,
 };
 
 const T: &'static str = "frontend:dsus";

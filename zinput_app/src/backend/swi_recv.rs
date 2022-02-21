@@ -16,10 +16,10 @@ use zinput_device::component::{
     controller::{Button, ControllerInfo},
     motion::MotionInfo,
 };
-
-use crate::api::PluginKind;
-use crate::api::{Plugin, PluginStatus};
-use crate::zinput::engine::Engine;
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
 
 const T: &'static str = "backend:swi_recv";
 

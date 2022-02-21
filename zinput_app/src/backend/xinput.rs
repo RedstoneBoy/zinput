@@ -10,10 +10,10 @@ use anyhow::Result;
 use parking_lot::Mutex;
 use rusty_xinput::{XInputHandle, XInputState, XInputUsageError};
 use zinput_device::component::controller::{Button, Controller, ControllerInfo};
-
-use crate::api::PluginKind;
-use crate::api::{Plugin, PluginStatus};
-use crate::zinput::engine::Engine;
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
 
 const T: &'static str = "backend:xinput";
 

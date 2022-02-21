@@ -6,7 +6,6 @@ use dashmap::{
     DashMap,
 };
 use paste::paste;
-use uuid::Uuid;
 use zinput_device::{
     component::{
         analogs::Analogs, buttons::Buttons, controller::Controller, motion::Motion,
@@ -15,7 +14,8 @@ use zinput_device::{
     Device, DeviceInfo, DeviceMut,
 };
 
-use super::events::Event;
+use crate::util::Uuid;
+use crate::event::Event;
 
 pub struct Engine {
     device_info: DashMap<Uuid, DeviceInfo>,

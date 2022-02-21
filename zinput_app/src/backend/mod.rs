@@ -9,13 +9,13 @@ pub mod xinput;
 #[macro_export]
 macro_rules! device_bundle {
     ($name:ident, $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
-        type EngineRef<'a> = &'a crate::zinput::engine::Engine;
+        type EngineRef<'a> = &'a zinput_engine::Engine;
 
         crate::device_bundle!($name(EngineRef), $($cname : $ctype $( [ $clen ] )?),*);
     };
 
     ($name:ident (owned), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
-        type EngineArc<'a> = Arc<crate::zinput::engine::Engine>;
+        type EngineArc<'a> = Arc<zinput_engine::Engine>;
 
         crate::device_bundle!($name(EngineArc), $($cname : $ctype $( [ $clen ] )?),*);
     };
@@ -26,7 +26,7 @@ macro_rules! device_bundle {
         struct $name<'a> {
             _lifetime: std::marker::PhantomData<&'a ()>,
             api: $($api_type<'a>)+,
-            device_id: uuid::Uuid,
+            device_id: zinput_engine::util::Uuid,
             $($cname: crate::device_bundle!(field $cname : $ctype $( [ $clen ] )?),)*
         }
 
@@ -51,7 +51,7 @@ macro_rules! device_bundle {
                     }
                 }
 
-                fn update(&self) -> Result<(), crate::zinput::engine::ComponentUpdateError> {
+                fn update(&self) -> Result<(), zinput_engine::ComponentUpdateError> {
                     use zinput_device::component::ComponentData;
 
                     self.api.update(&self.device_id, |dev| {

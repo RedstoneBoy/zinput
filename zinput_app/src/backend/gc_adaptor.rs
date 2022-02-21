@@ -6,10 +6,12 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use rusb::UsbContext;
-
-use crate::api::{Plugin, PluginKind, PluginStatus};
-use crate::zinput::engine::Engine;
 use zinput_device::component::controller::{Button, Controller, ControllerInfo};
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
+
 
 const EP_IN: u8 = 0x81;
 const EP_OUT: u8 = 0x02;

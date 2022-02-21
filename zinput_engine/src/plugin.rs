@@ -1,12 +1,13 @@
 use std::{ops::Deref, sync::Arc};
 
 use eframe::{egui, epi};
-use uuid::Uuid;
 use zinput_device::DeviceInfo;
 
-use crate::zinput::{engine::Engine, events::{EventKind, Event}};
-
-pub mod widget;
+use crate::{
+    event::{Event, EventKind},
+    util::Uuid,
+    Engine,
+};
 
 pub trait Plugin {
     fn init(&self, zinput_api: Arc<Engine>);

@@ -12,13 +12,13 @@ use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use parking_lot::Mutex;
-use uuid::Uuid;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 use zinput_device::component::controller::{Button, Controller};
-
-use crate::{
-    api::{Plugin, PluginKind, PluginStatus},
-    zinput::{engine::Engine, events::{EventKind, Event}},
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    event::{EventKind, Event},
+    util::Uuid,
+    Engine,
 };
 
 const T: &'static str = "frontend:xinput";

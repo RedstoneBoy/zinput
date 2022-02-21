@@ -6,3 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crossbeam-channel = "0.5"
+dashmap = "4.0"
+eframe = "0.13"
+paste = "1.0"
+uuid = { version = "0.8", features = ["v4"] }
+zinput_device = { path = "../zinput_device" }

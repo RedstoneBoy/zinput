@@ -1,10 +1,9 @@
 use std::{collections::HashSet, sync::Arc};
 
 use eframe::{egui, epi};
-
-use crate::{
-    api::{Plugin, PluginKind, PluginStatus},
-    zinput::engine::Engine,
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
 };
 
 pub struct PluginConfig {

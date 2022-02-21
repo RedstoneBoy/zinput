@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use eframe::{egui, epi};
-use uuid::Uuid;
-
-use crate::zinput::engine::Engine;
+use zinput_engine::{util::Uuid, Engine};
 
 pub struct MotionCmp {
     engine: Arc<Engine>,

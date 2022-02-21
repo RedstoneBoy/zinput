@@ -19,9 +19,10 @@ use zinput_device::component::{
     analogs::{Analogs, AnalogsInfo},
     buttons::{Buttons, ButtonsInfo},
 };
-
-use crate::api::{Plugin, PluginKind, PluginStatus};
-use crate::zinput::engine::Engine;
+use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
 
 const T: &'static str = "backend:raw_input";
 

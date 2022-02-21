@@ -1,4 +1,4 @@
-use std::{convert::TryInto, ops::{Deref, DerefMut}};
+use std::{convert::TryInto};
 
 pub const MAX_CONTROLLERS: usize = 8;
 pub const PACKET_SIZE: usize = 1 + 31 * MAX_CONTROLLERS;

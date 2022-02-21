@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 
-mod api;
 mod backend;
 mod frontend;
 mod gui;
