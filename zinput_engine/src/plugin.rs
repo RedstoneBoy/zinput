@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub trait Plugin {
-    fn init(&self, zinput_api: Arc<Engine>);
+    fn init(&self, engine: Arc<Engine>);
     fn stop(&self);
 
     fn status(&self) -> PluginStatus;
