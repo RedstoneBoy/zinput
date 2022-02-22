@@ -9,3 +9,12 @@ pub trait ComponentData: Default {
 
     fn update(&mut self, from: &Self);
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ComponentKind {
+    Analogs,
+    Buttons,
+    Controller,
+    Motion,
+    TouchPad,
+}
