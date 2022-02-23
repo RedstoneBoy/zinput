@@ -1,0 +1,28 @@
+devices {
+    in: [ljoy, rjoy],
+    out: out,
+}
+
+ljoy:update {
+    let o = out.controller[0];
+    let l = ljoy.controller[0];
+
+    o.buttons |= l.buttons;
+
+    o.left_stick_x  = l.left_stick_x;
+    o.left_stick_y  = l.left_stick_y;
+    o.l1_analog     = l.l1_analog;
+    o.l2_analog     = l.l2_analog;
+}
+
+rjoy:update {
+    let o = out.controller[0];
+    let r = rjoy.controller[0];
+
+    o.buttons |= r.buttons;
+
+    o.right_stick_x = r.right_stick_x;
+    o.right_stick_y = r.right_stick_y;
+    o.r1_analog     = r.r1_analog;
+    o.r2_analog     = r.r2_analog;
+}

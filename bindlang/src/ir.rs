@@ -1,34 +1,29 @@
 use zinput_device::component::ComponentKind;
 
+/// Stack operations are defined to use the top-most value on the stack as source or primary, and the below value as destination or secondary
 pub enum Instruction {
-    /// Push a component onto the component stack
-    PushComponent {
-        kind: ComponentKind,
-        index: u8,
-    },
-    /// Pop a component off the component stack
-    PopComponent,
-
-    /// Read a component field onto the value stack
+    /// Set the current working component to the component (primary) and device (secondary) on the stack
+    SetComponent,
+    /// Copy component between top two components on the stack
+    CopyComponent,
+    /// Read a component field onto the value stack from the current working component
     ReadField {
         offset: u16,
         size: u16,
         align: u8,
     },
-    /// Write a stack value to a component field
+    /// Write a stack value to a component field on the current working component
     WriteField {
         offset: u16,
         size: u16,
         align: u8,
     },
 
-    PushU8(u8),
-    PushU64(u64),
-
-    PushF32(f32),
-    PushF64(f64),
-
+    PushValue(Value),
     Pop {
+        size: u16,
+    },
+    Clone {
         size: u16,
     },
     
@@ -58,9 +53,7 @@ pub enum Instruction {
     // branching
 
     /// Skip `n` instructions if boolean on stack is true
-    If(usize),
-    /// Skip `n` instructions if boolean on stack is false
-    IfNot(usize),
+    If(isize),
     
     // bit manipulation
 
@@ -82,6 +75,22 @@ pub enum Instruction {
         size: u16,
         align: u8,
     },
+}
+
+pub enum Value {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    F32(f32),
+    F64(f64),
+    Bool(bool),
+    Device(usize),
+    Component { kind: ComponentKind, index: u8 },
 }
 
 pub enum BoolBinOp {
