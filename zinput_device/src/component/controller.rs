@@ -108,14 +108,15 @@ pub enum Button {
     LStick,
     RStick,
     Home,
+    Capture,
 }
 
 impl Button {
-    pub const BUTTONS: [Button; 21] = {
+    pub const BUTTONS: [Button; 22] = {
         use Button::*;
         [
             A, B, X, Y, Up, Down, Left, Right, Start, Select, L1, R1, L2, R2, L3, R3, L4, R4,
-            LStick, RStick, Home,
+            LStick, RStick, Home, Capture,
         ]
     };
 
@@ -142,6 +143,7 @@ impl Button {
             Button::LStick => 18,
             Button::RStick => 19,
             Button::Home => 20,
+            Button::Capture => 21,
         }
     }
 
@@ -182,6 +184,7 @@ impl std::fmt::Display for Button {
                 LStick => "LStick",
                 RStick => "RStick",
                 Home => "Home",
+                Capture => "Capture",
             }
         )
     }

@@ -2,7 +2,7 @@ use zinput_device::component::ComponentKind;
 
 /// Stack operations are defined to use the top-most value on the stack as source or primary, and the below value as destination or secondary
 pub enum Instruction {
-    /// Set the current working component to the component (primary) and device (secondary) on the stack
+    /// Set the current working component to the index (primary), component (secondary) and device (tertiary) on the stack
     SetComponent,
     /// Copy component between top two components on the stack
     CopyComponent,
@@ -47,8 +47,6 @@ pub enum Instruction {
 
     /// Flip the current boolean on the stack
     Not,
-    /// Use a boolean operator on the top two booleans on the stack
-    BoolBinary(BoolBinOp),
 
     // branching
 
@@ -88,15 +86,8 @@ pub enum Value {
     I64(i64),
     F32(f32),
     F64(f64),
-    Bool(bool),
     Device(usize),
-    Component { kind: ComponentKind, index: u8 },
-}
-
-pub enum BoolBinOp {
-    And,
-    Or,
-    Equals,
+    Component(ComponentKind),
 }
 
 pub enum MathCmpOp {
@@ -120,6 +111,7 @@ pub enum MathBinOp {
 
     And,
     Or,
+    Xor,
 }
 
 pub enum NumType {
