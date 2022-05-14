@@ -5,6 +5,7 @@ mod lexer;
 mod parser;
 pub mod span;
 mod token;
+mod walker;
 
 pub use error::Errors;
 

@@ -369,9 +369,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // parse index
+    // parse bit
     fn parse_expr_l12(&mut self) -> Option<Expr> {
         let expr = self.parse_expr_l13()?;
+
+        if let Some(_) = self.maybe_eat_token(TokenKind::Hash) {
+            let bit = self.eat_token(TokenKind::Ident)?;
+
+            Some(Expr {
+                span: Span {
+                    start: expr.span.start,
+                    end: bit.span.end,
+                },
+                kind: ExprKind::Bit(Box::new(expr), bit.span)
+            })
+        } else {
+            Some(expr)
+        }
+    }
+
+    // parse index
+    fn parse_expr_l13(&mut self) -> Option<Expr> {
+        let expr = self.parse_expr_l14()?;
 
         if let Some(_) = self.maybe_eat_token(TokenKind::LBrack) {
             let index = self.parse_expr()?;
@@ -383,25 +402,6 @@ impl<'a> Parser<'a> {
                     end,
                 },
                 kind: ExprKind::Index(Box::new(expr), Box::new(index))
-            })
-        } else {
-            Some(expr)
-        }
-    }
-
-    // parse bit
-    fn parse_expr_l13(&mut self) -> Option<Expr> {
-        let expr = self.parse_expr_l14()?;
-
-        if let Some(_) = self.maybe_eat_token(TokenKind::Hash) {
-            let bit = self.eat_token(TokenKind::Ident)?;
-
-            Some(Expr {
-                span: Span {
-                    start: expr.span.start,
-                    end: bit.span.end,
-                },
-                kind: ExprKind::Bit(Box::new(expr), bit.span)
             })
         } else {
             Some(expr)

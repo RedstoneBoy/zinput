@@ -1,4 +1,13 @@
+use std::collections::HashMap;
+
 use zinput_device::component::ComponentKind;
+
+pub struct Module {
+    pub out_devices: usize,
+    pub events: Vec<HashMap<String, Block>>,
+}
+
+pub struct Block(pub Vec<Instruction>);
 
 /// Stack operations are defined to use the top-most value on the stack as source or primary, and the below value as destination or secondary
 pub enum Instruction {
@@ -25,6 +34,14 @@ pub enum Instruction {
     },
     Clone {
         size: u16,
+    },
+    /// size <= 8
+    Store {
+        id: u16,
+        size: u8,
+    },
+    Load {
+        id: u16,
     },
     
     // math ops
@@ -86,7 +103,6 @@ pub enum Value {
     I64(i64),
     F32(f32),
     F64(f64),
-    Device(usize),
     Component(ComponentKind),
 }
 
