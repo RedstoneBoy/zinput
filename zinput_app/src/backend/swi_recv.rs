@@ -306,8 +306,8 @@ impl<'a> DeviceBundle<'a> {
 
         translate!(from,
             SwiButton::Minus  => Button::Select,
-            SwiButton::LStick => Button::LStick,
-            SwiButton::RStick => Button::RStick,
+            SwiButton::LStick => Button::RStick, // TODO: Fix
+            SwiButton::RStick => Button::LStick,
             SwiButton::Plus   => Button::Start,
             SwiButton::Up     => Button::Up,
             SwiButton::Right  => Button::Right,

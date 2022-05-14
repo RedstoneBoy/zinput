@@ -2001,6 +2001,9 @@ dependencies = [
 [[package]]
 name = "zinput_device"
 version = "0.1.0"
+dependencies = [
+ "paste",
+]
 
 [[package]]
 name = "zinput_engine"

@@ -1,3 +1,4 @@
+pub mod pa_switch;
 pub mod gc_adaptor;
 #[cfg(target_os = "windows")]
 pub mod raw_input;
@@ -93,11 +94,7 @@ macro_rules! device_bundle {
     (init ( $api:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {{
         paste! {
             $dinfo.[< $cname s >] = $info.into();
-            let mut out: [std::mem::MaybeUninit<$ctype>; $clen] = std::mem::MaybeUninit::uninit_array::<$clen>();
-            for i in 0..$clen {
-                out[i].write($ctype::default());
-            }
-            out.map(|val| unsafe { val.assume_init() })
+            [(); $clen].map(|_| $ctype::default())
         }
     }};
 
