@@ -7,6 +7,8 @@ pub enum Event {
     DeviceUpdate(Uuid),
     DeviceAdded(Uuid, DeviceInfo),
     DeviceRemoved(Uuid),
+    UsbConnected,
+    UsbDisconnected,
 }
 
 impl Event {
@@ -15,6 +17,8 @@ impl Event {
             Event::DeviceUpdate(_) => EventKind::DeviceUpdate,
             Event::DeviceAdded(_, _) => EventKind::DeviceAdded,
             Event::DeviceRemoved(_) => EventKind::DeviceRemoved,
+            Event::UsbConnected => EventKind::UsbConnected,
+            Event::UsbDisconnected => EventKind::UsbDisconnected,
         }
     }
 }
@@ -24,4 +28,6 @@ pub enum EventKind {
     DeviceUpdate,
     DeviceAdded,
     DeviceRemoved,
+    UsbConnected,
+    UsbDisconnected,
 }

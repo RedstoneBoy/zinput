@@ -77,6 +77,8 @@ impl EventIndex for EventKind {
             EventKind::DeviceUpdate => 0,
             EventKind::DeviceAdded => 1,
             EventKind::DeviceRemoved => 2,
+            EventKind::UsbConnected => 3,
+            EventKind::UsbDisconnected => 4,
         }
     }
 }
