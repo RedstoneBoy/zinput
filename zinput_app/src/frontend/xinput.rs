@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, RecvError};
 use parking_lot::Mutex;
 use vigem::{Target, Vigem, XButton, XUSBReport};
 use zinput_engine::device::component::controller::{Button, Controller};
@@ -259,8 +259,9 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                         }
                         ids[idx] = None;
                     }
-                    Err(_) => {
-                        // todo
+                    Err(RecvError) => {
+                        // Sender dropped which means plugin is uninitialized
+                        return Ok(());
                     }
                 }
             },

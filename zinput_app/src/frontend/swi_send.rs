@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, RecvError};
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
 use zinput_engine::device::component::{
@@ -330,17 +330,18 @@ fn swi_thread(thread: Thread) -> Result<()> {
                             dids[idx] = None;
                         }
                     }
-                    Err(_) => {
-                        // todo
+                    Err(RecvError) => {
+                        // Sender dropped which means plugin is uninitialized
+                        return Ok(());
                     }
                 }
             },
             recv(signals.update.1) -> uid => {
                 let uid = match uid {
                     Ok(uid) => uid,
-                    Err(_) => {
-                        // todo
-                        continue;
+                    Err(RecvError) => {
+                        // Sender can't be dropped since we own it
+                        unreachable!()
                     }
                 };
 

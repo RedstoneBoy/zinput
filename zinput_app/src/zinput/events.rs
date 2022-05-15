@@ -46,8 +46,8 @@ fn event_thread(
                         }
                     }
                     Err(err) => {
-                        log::error!(target: T, "event channel received error: {}", err);
-                        todo!()
+                        // Sender dropped which means engine no longer exists
+                        return Ok(());
                     }
                 }
             }

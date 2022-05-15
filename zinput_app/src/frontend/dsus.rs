@@ -628,8 +628,11 @@ impl Server {
 
         let dsu_data = &mut self.dsu_data[slot as usize];
 
-        // todo: fix l1, r2 analogs
-
+        dsu_data.set_analog_l1(data.l1_analog);
+        dsu_data.set_analog_l2(data.l2_analog);
+        dsu_data.set_analog_r2(data.r2_analog);
+        dsu_data.set_analog_l2(data.l2_analog);
+        
         let buttons = translate!(data.buttons, dsu_data,
             Button::A =>      DButton::A      => set_analog_a,
             Button::B =>      DButton::B      => set_analog_b,
@@ -643,8 +646,8 @@ impl Server {
             Button::Select => DButton::Select,
             Button::L1 =>     DButton::L1     => set_analog_l1,
             Button::R1 =>     DButton::R1     => set_analog_r1,
-            Button::L2 =>     DButton::L2,
-            Button::R2 =>     DButton::R2,
+            Button::L2 =>     DButton::L2     => set_analog_r2,
+            Button::R2 =>     DButton::R2     => set_analog_l2,
             Button::LStick => DButton::LStick,
             Button::RStick => DButton::RStick,
         );
@@ -658,8 +661,7 @@ impl Server {
         dsu_data.set_left_stick_y(data.left_stick_y);
         dsu_data.set_right_stick_x(data.right_stick_x);
         dsu_data.set_right_stick_y(data.right_stick_y);
-        dsu_data.set_analog_l2(data.l2_analog);
-        dsu_data.set_analog_r2(data.r2_analog);
+        
     }
 
     fn update_motion(&mut self, slot: u8, data: &Motion) {
