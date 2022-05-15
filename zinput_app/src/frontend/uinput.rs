@@ -16,14 +16,13 @@ use input_linux::{
     AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle,
 };
 use parking_lot::Mutex;
-use uuid::Uuid;
-
-use crate::{
-    api::{
-        component::controller::{Button, Controller},
-        Event, EventKind, Plugin, PluginKind, PluginStatus,
-    },
-    zinput::engine::Engine,
+use zinput_engine::device::component::controller::{Button, Controller};
+use zinput_engine::{
+    eframe::{egui, epi},
+    event::{Event, EventKind},
+    plugin::{Plugin, PluginKind, PluginStatus},
+    util::Uuid,
+    Engine,
 };
 
 const T: &'static str = "frontend:uinput";
@@ -69,9 +68,9 @@ impl Plugin for UInput {
 
     fn update_gui(
         &self,
-        ctx: &eframe::egui::CtxRef,
-        frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        ctx: &egui::CtxRef,
+        frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
@@ -153,9 +152,9 @@ impl Inner {
 
     fn update_gui(
         &mut self,
-        _ctx: &eframe::egui::CtxRef,
-        _frame: &mut eframe::epi::Frame<'_>,
-        ui: &mut eframe::egui::Ui,
+        _ctx: &egui::CtxRef,
+        _frame: &mut epi::Frame<'_>,
+        ui: &mut egui::Ui,
     ) {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
@@ -475,12 +474,12 @@ impl Joystick {
                 Button::Home   => ils::BTN_MODE,
             }
             analogs {
-                data.left_stick_x  => ils::ABS_X,
-                data.left_stick_y  => ils::ABS_Y,
-                data.right_stick_x => ils::ABS_RX,
-                data.right_stick_y => ils::ABS_RY,
-                data.l2_analog     => ils::ABS_Z,
-                data.r2_analog     => ils::ABS_RZ,
+                data.left_stick_x          => ils::ABS_X,
+                (255 - data.left_stick_y)  => ils::ABS_Y,
+                data.right_stick_x         => ils::ABS_RX,
+                (255 - data.right_stick_y) => ils::ABS_RY,
+                data.l2_analog             => ils::ABS_Z,
+                data.r2_analog             => ils::ABS_RZ,
             }
         };
 

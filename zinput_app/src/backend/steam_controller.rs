@@ -220,6 +220,10 @@ fn controller_thread(
         })
         .context("failed to find available interface")?
         .number();
+
+    // ignore error on windows
+    let _ = sc.set_auto_detach_kernel_driver(true);
+    
     sc.claim_interface(iface)
         .context("failed to claim interface")?;
 

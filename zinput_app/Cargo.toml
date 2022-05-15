@@ -16,7 +16,7 @@ log = "0.4"
 parking_lot = "0.11"
 paste = "1.0"
 rusb = "0.8"
-simple_logger = "1.11"
+simple_logger = "2.1"
 swi_packet = { path = "../swi_packet" }
 zinput_engine = { path = "../zinput_engine" }
 
