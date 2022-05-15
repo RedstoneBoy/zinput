@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam_channel::{select, Receiver};
+use crossbeam_channel::{select, Receiver, RecvError};
 use zinput_engine::{
     event::{Event, EventKind},
     plugin::Plugin,
@@ -45,9 +45,9 @@ fn event_thread(
                             plugins[plugin_id].on_event(&event);
                         }
                     }
-                    Err(err) => {
+                    Err(RecvError) => {
                         // Sender dropped which means engine no longer exists
-                        return Ok(());
+                        return;
                     }
                 }
             }
