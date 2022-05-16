@@ -1,0 +1,30 @@
+[package]
+name = "zinput"
+version = "0.1.0"
+authors = ["Shoaib Syed <shoaibmsyed@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0"
+crc = "1.8"
+crossbeam-channel = "0.5"
+dashmap = "4.0"
+dsu_protocol = { git = "https://github.com/RedstoneBoy/dsu_protocol" }
+log = "0.4"
+parking_lot = "0.11"
+paste = "1.0"
+rusb = "0.8"
+simple_logger = "2.1"
+swi_packet = { path = "../swi_packet" }
+zinput_engine = { path = "../zinput_engine" }
+
+[target.'cfg(windows)'.dependencies]
+rusty-xinput = "1.2"
+vigem = "0.9"
+winapi = { version = "0.3", features = ["hidpi", "hidusage", "windef", "winuser"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+input-linux = "0.5"
+udev = "0.6"
