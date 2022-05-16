@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -9,8 +8,6 @@ use parking_lot::Mutex;
 use rusb::UsbContext;
 use zinput_engine::device::component::{
     controller::{Button, Controller, ControllerInfo},
-    motion::{Motion, MotionInfo},
-    touch_pad::{TouchPad, TouchPadInfo, TouchPadShape},
 };
 use zinput_engine::{
     plugin::{Plugin, PluginKind, PluginStatus},

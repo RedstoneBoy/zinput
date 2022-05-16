@@ -722,6 +722,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hidapi"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38b1717343691998deb81766bfcd1dce6df0d5d6c37070b5a3de2bb6d39f7822"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1984,6 +1995,7 @@ dependencies = [
  "crossbeam-channel",
  "dashmap",
  "dsu_protocol",
+ "hidapi",
  "input-linux",
  "log",
  "parking_lot",

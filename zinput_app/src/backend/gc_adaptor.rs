@@ -318,7 +318,7 @@ impl<'a> Controllers<'a> {
     }
 }
 
-crate::device_bundle!(DeviceBundle, controller: Controller,);
+crate::device_bundle!(DeviceBundle, controller: Controller);
 
 fn convert_buttons(data1: u8, data2: u8) -> u64 {
     enum GcButton {

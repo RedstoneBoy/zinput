@@ -6,7 +6,7 @@ use zinput_engine::{
     plugin::Plugin,
 };
 
-const T: &'static str = "events";
+// const T: &'static str = "events";
 
 pub struct Thread {
     pub event_channel: Receiver<Event>,

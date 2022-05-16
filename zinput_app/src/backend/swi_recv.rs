@@ -11,11 +11,11 @@ use std::{
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
-use zinput_engine::device::component::{
-    controller::{Button, ControllerInfo},
-    motion::MotionInfo,
-};
 use zinput_engine::{
+    device::component::{
+        controller::{Button, ControllerInfo},
+        motion::MotionInfo,
+    },
     eframe::{egui, epi},
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
