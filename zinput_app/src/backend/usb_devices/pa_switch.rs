@@ -42,19 +42,28 @@ fn new_controller_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
 
 fn controller_thread(
     ThreadData {
-        device_id: id,
-        device: usb_dev,
+        device_id,
+        device,
         stop,
         engine,
     }: ThreadData,
 ) -> Result<()> {
-    let mut pa = usb_dev.open().context("failed to open device")?;
-    let iface = usb_dev.find_interface(|_| true)?;
+    let mut pa = device.open().context("failed to open device")?;
+
+    match pa.set_auto_detach_kernel_driver(true) {
+        Ok(()) => {}
+        Err(rusb::Error::NotSupported) => {}
+        Err(err) => {
+            Err(err).context("failed to auto-detach kernel drivers")?;
+        }
+    }
+
+    let iface = device.find_interface(|_| true)?;
 
     pa.claim_interface(iface)
         .context("failed to claim interface")?;
 
-    let mut bundle = PABundle::new(id, &*engine);
+    let mut bundle = PABundle::new(device_id, &*engine);
 
     let mut buf = [0u8; 8];
 
