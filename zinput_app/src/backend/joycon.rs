@@ -70,7 +70,6 @@ impl Plugin for Joycon {
 }
 
 struct Inner {
-    hidapi: Option<Arc<HidApi>>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
     stop: Arc<AtomicBool>,
     status: PluginStatus,
@@ -79,7 +78,6 @@ struct Inner {
 impl Inner {
     fn new() -> Self {
         Inner {
-            hidapi: None,
             handles: Arc::new(Mutex::new(Vec::new())),
             stop: Arc::new(AtomicBool::new(false)),
             status: PluginStatus::Running,
@@ -92,7 +90,7 @@ impl Inner {
         self.status = PluginStatus::Running;
         self.stop = Arc::new(AtomicBool::new(false));
 
-        match || -> Result<Arc<HidApi>> {
+        match || -> Result<()> {
             let hidapi = Arc::new(HidApi::new()?);
 
             let next_id = Arc::new(AtomicU64::new(0));
@@ -108,24 +106,21 @@ impl Inner {
                     _ => continue,
                 };
 
-                let handle = std::thread::spawn(new_controller_thread(
-                    ControllerThread {
-                        api: api.clone(),
-                        hidapi: hidapi.clone(),
-                        stop: self.stop.clone(),
-                        id: next_id.fetch_add(1, Ordering::SeqCst),
-                        hid_info: hid_info.clone(),
-                        joy_type,
-                    }
-                ));
+                let handle = std::thread::spawn(new_controller_thread(ControllerThread {
+                    api: api.clone(),
+                    hidapi: hidapi.clone(),
+                    stop: self.stop.clone(),
+                    id: next_id.fetch_add(1, Ordering::SeqCst),
+                    hid_info: hid_info.clone(),
+                    joy_type,
+                }));
                 self.handles.lock().push(handle);
             }
 
-            Ok(hidapi)
+            Ok(())
         }() {
-            Ok(hidapi) => {
+            Ok(()) => {
                 log::info!(target: T, "driver initalized");
-                self.hidapi = Some(hidapi);
             }
             Err(err) => {
                 log::error!(target: T, "driver failed to initalize: {:#}", err);
@@ -177,14 +172,16 @@ fn controller_thread(
         id,
         hid_info,
         joy_type,
-    }: ControllerThread
+    }: ControllerThread,
 ) -> Result<()> {
-    let joycon = hid_info.open_device(&*hidapi).context("failed to open device")?;
+    let joycon = hid_info
+        .open_device(&*hidapi)
+        .context("failed to open device")?;
 
-    let calibration = read_calibration(&joycon)
-        .context("failed to read calibration data")?;
+    let calibration = read_calibration(&joycon).context("failed to read calibration data")?;
 
-    joycon.write(&STANDARD_FULL_MODE)
+    joycon
+        .write(&STANDARD_FULL_MODE)
         .context("failed to set controller to standard full mode")?;
 
     let mut bundle = JoyconBundle::new(id, joy_type, calibration, &*api);
@@ -209,11 +206,21 @@ fn controller_thread(
 }
 
 fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
-    fn read_memory<'a, 'b>(dev: &'a HidDevice, addr: u32, size: u16, buf: &'b mut [u8]) -> Result<&'b mut [u8]> {
+    fn spi_addr(offset: u32) -> u32 {
+        0xF8000000 + offset
+    }
+    fn read_memory<'a, 'b>(
+        dev: &'a HidDevice,
+        addr: u32,
+        size: u16,
+        buf: &'b mut [u8],
+    ) -> Result<&'b mut [u8]> {
         fn setup_memory_read(addr: u32, size: u16) -> [u8; 8] {
             let addr = addr.to_le_bytes();
             let size = size.to_le_bytes();
-            let mut bytes = [0x71, addr[0], addr[1], addr[2], addr[3], size[0], size[1], 0x00];
+            let mut bytes = [
+                0x71, addr[0], addr[1], addr[2], addr[3], size[0], size[1], 0x00,
+            ];
             let mut sum = 0u8;
             let mut i = 0;
             while i < 7 {
@@ -224,7 +231,7 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
             bytes[7] = sum;
             bytes
         }
-    
+
         const MEMORY_READ: [u8; 3] = [0x72, 0x8E, 0x00];
 
         // CHECK: is this correct?
@@ -233,25 +240,43 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
         }
 
         if buf.len() < size as usize + 9 {
-            bail!("buffer is not large enough: need {} bytes, got {}", size as usize + 9, buf.len());
+            bail!(
+                "buffer is not large enough: need {} bytes, got {}",
+                size as usize + 9,
+                buf.len()
+            );
         }
 
+        for i in 0..buf.len() {
+            buf[i] = 0;
+        }
+        buf[0..3].copy_from_slice(&MEMORY_READ);
+
         let packet_setup = setup_memory_read(addr, size);
-        dev.send_feature_report(&packet_setup).context("failed to send feature report: setup memory read")?;
-        dev.send_feature_report(&MEMORY_READ).context("failed to send feature report: read memory")?;
-        
-        dev.get_feature_report(buf).context("failed to get feature report: read memory")?;
+        dev.send_feature_report(&packet_setup)
+            .context("failed to send feature report \"setup memory read\"")?;
+        dev.get_feature_report(buf)
+            .context("failed to get feature report \"read memory\"")?;
 
         if buf[0] != 0x72 {
-            bail!("feature report (read memory) returned wrong id: {:#X}", buf[0]);
+            bail!(
+                "feature report (read memory) returned wrong id: {:#X}",
+                buf[0]
+            );
         }
         let ret_addr = u32::from_le_bytes([buf[1], buf[2], buf[3], buf[4]]);
         if ret_addr != addr {
-            bail!("feature report (read memory) returned wrong address: {:#X}", ret_addr);
+            bail!(
+                "feature report (read memory) returned wrong address: {:#X}",
+                ret_addr
+            );
         }
         let ret_size = u16::from_le_bytes([buf[5], buf[6]]);
         if ret_size != size {
-            bail!("feature report (read memory) returned wrong size: {:#X}", ret_size);
+            bail!(
+                "feature report (read memory) returned wrong size: {:#X}",
+                ret_size
+            );
         }
 
         Ok(&mut buf[7..][..(size as usize)])
@@ -261,25 +286,38 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
 
     let mut lstick_data = [0; 9];
     let mut rstick_data = [0; 9];
-    let stick_data = read_memory(dev, 0x603D, 0x12, &mut buf)
-        .context("failed to read stick calibration data")?;
-    
-    lstick_data.copy_from_slice(&stick_data[..9]);
-    rstick_data.copy_from_slice(&stick_data[9..]);
+
+    let mut user_stick_data = [0; 0x16];
+    user_stick_data.copy_from_slice(
+        read_memory(dev, spi_addr(0x8010), 0x16, &mut buf)
+            .context("failed to read user stick calibration data")?,
+    );
+
+    let mut stick_data = [0; 0x12];
+    stick_data.copy_from_slice(
+        read_memory(dev, spi_addr(0x603D), 0x12, &mut buf)
+            .context("failed to read stick calibration data")?,
+    );
+
+    if user_stick_data[0] == 0xB2 && user_stick_data[1] == 0xA1 {
+        lstick_data.copy_from_slice(&user_stick_data[2..][..9]);
+    } else {
+        lstick_data.copy_from_slice(&stick_data[..9]);
+    }
+    if user_stick_data[11] == 0xB2 && user_stick_data[12] == 0xA1 {
+        log::info!("joycon has user stick data right");
+        rstick_data.copy_from_slice(&user_stick_data[13..][..9]);
+    } else {
+        rstick_data.copy_from_slice(&stick_data[9..]);
+    }
 
     let lstick = StickCalibration::parse(lstick_data, true);
     let rstick = StickCalibration::parse(rstick_data, false);
 
-    Ok(Calibration {
-        lstick,
-        rstick,
-    })
+    Ok(Calibration { lstick, rstick })
 }
 
-crate::device_bundle!(DeviceBundle,
-    controller: Controller,
-    motion: Motion,
-);
+crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion,);
 
 struct JoyconBundle<'a> {
     bundle: DeviceBundle<'a>,
@@ -365,10 +403,12 @@ impl<'a> JoyconBundle<'a> {
             JButton::Capture, Button::Capture;
         );
 
-        let lstick = lstick.map(|v| v as f32 / (u16::MAX as f32));
-        let rstick = rstick.map(|v| v as f32 / (u16::MAX as f32));
+        let lstick = lstick.map(|v| v as f32);
+        let rstick = rstick.map(|v| v as f32);
+
         let lstick = self.calibration.lstick.apply(lstick);
         let rstick = self.calibration.rstick.apply(rstick);
+
         let lstick = lstick.map(|v| (v * 255.0) as u8);
         let rstick = rstick.map(|v| (v * 255.0) as u8);
 
@@ -379,10 +419,7 @@ impl<'a> JoyconBundle<'a> {
         self.bundle.controller[0].right_stick_y = rstick[1];
     }
 
-    fn update_motion(
-        &mut self,
-        _data: [MotionData; 3],
-    ) {
+    fn update_motion(&mut self, _data: [MotionData; 3]) {
         // todo: motion
     }
 
@@ -419,7 +456,7 @@ fn joycon_l_info() -> ControllerInfo {
         ),
         analogs: 0,
     }
-        .with_lstick()
+    .with_lstick()
 }
 
 fn joycon_r_info() -> ControllerInfo {
@@ -439,7 +476,7 @@ fn joycon_r_info() -> ControllerInfo {
         ),
         analogs: 0,
     }
-        .with_rstick()
+    .with_rstick()
 }
 
 #[derive(Copy, Clone, Default)]
@@ -490,43 +527,43 @@ enum JButton {
 impl JButton {
     fn is_pressed(self, buttons: [u8; 3]) -> bool {
         let (i, bit) = match self {
-            JButton::Y       => (0, 0),
-            JButton::X       => (0, 1),
-            JButton::B       => (0, 2),
-            JButton::A       => (0, 3),
-            JButton::RSR     => (0, 4),
-            JButton::RSL     => (0, 5),
-            JButton::R       => (0, 6),
-            JButton::ZR      => (0, 7),
-            JButton::Minus   => (1, 0),
-            JButton::Plus    => (1, 1),
-            JButton::RStick  => (1, 2),
-            JButton::LStick  => (1, 3),
-            JButton::Home    => (1, 4),
+            JButton::Y => (0, 0),
+            JButton::X => (0, 1),
+            JButton::B => (0, 2),
+            JButton::A => (0, 3),
+            JButton::RSR => (0, 4),
+            JButton::RSL => (0, 5),
+            JButton::R => (0, 6),
+            JButton::ZR => (0, 7),
+            JButton::Minus => (1, 0),
+            JButton::Plus => (1, 1),
+            JButton::RStick => (1, 2),
+            JButton::LStick => (1, 3),
+            JButton::Home => (1, 4),
             JButton::Capture => (1, 5),
-            JButton::Down    => (2, 0),
-            JButton::Up      => (2, 1),
-            JButton::Right   => (2, 2),
-            JButton::Left    => (2, 3),
-            JButton::LSR     => (2, 4),
-            JButton::LSL     => (2, 5),
-            JButton::L       => (2, 6),
-            JButton::ZL      => (2, 7),
+            JButton::Down => (2, 0),
+            JButton::Up => (2, 1),
+            JButton::Right => (2, 2),
+            JButton::Left => (2, 3),
+            JButton::LSR => (2, 4),
+            JButton::LSL => (2, 5),
+            JButton::L => (2, 6),
+            JButton::ZL => (2, 7),
         };
 
         buttons[i] & (1 << bit) != 0
     }
 }
 
+#[derive(Debug)]
 struct Calibration {
     lstick: StickCalibration,
     rstick: StickCalibration,
 }
 
+#[derive(Debug)]
 struct StickCalibration {
-    min: [f32; 2],
     center: [f32; 2],
-    max: [f32; 2],
     omin: [f32; 2],
     omax: [f32; 2],
 }
@@ -542,43 +579,29 @@ impl StickCalibration {
         let v5 = (data[8] << 4) | (data[7] >> 4);
 
         let [omin, center, omax] = if is_left {
-            [[v4, v5],
-             [v2, v3],
-             [v0, v1]]
+            [[v4, v5], [v2, v3], [v0, v1]]
         } else {
-            [[v2, v3],
-             [v0, v1],
-             [v4, v5]]
+            [[v2, v3], [v0, v1], [v4, v5]]
         };
 
-        let min = [center[0] - omin[0], center[1] - omin[1]];
-        let max = [center[0] + omax[0], center[1] + omax[1]];
+        let center = center.map(|v| v as f32);
+        let omin = omin.map(|v| v as f32);
+        let omax = omax.map(|v| v as f32);
 
-        let min = min.map(|v| v as f32 / (u16::MAX as f32));
-        let center = center.map(|v| v as f32 / (u16::MAX as f32));
-        let max = max.map(|v| v as f32 / (u16::MAX as f32));
-        let omin = omin.map(|v| v as f32 / (u16::MAX as f32));
-        let omax = omax.map(|v| v as f32 / (u16::MAX as f32));
-
-        StickCalibration { min, center, max, omin, omax }
+        StickCalibration { center, omin, omax }
     }
 
     fn apply(&self, [x, y]: [f32; 2]) -> [f32; 2] {
-        let x = if x < self.center[0] {
-            if x < self.min[0] { 0.0 }
-            else { ((x - self.min[0]) / self.omin[0]) * 0.5 }
-        } else {
-            if x > self.max[0] { 1.0 }
-            else { 0.5 + ((x - self.center[0]) / self.omax[0]) * 0.5 }
-        };
+        let x = x - self.center[0];
+        let y = y - self.center[1];
 
-        let y = if y < self.center[1] {
-            if y < self.min[1] { 0.0 }
-            else { ((y - self.min[1]) / self.omin[1]) * 0.5 }
-        } else {
-            if y > self.max[1] { 1.0 }
-            else { 0.5 + ((y - self.center[1]) / self.omax[1]) * 0.5 }
-        };
+        // TODO: deadzone
+
+        let x = x / if x > 0.0 { self.omax[0] } else { self.omin[0] };
+        let y = y / if y > 0.0 { self.omax[1] } else { self.omin[1] };
+
+        let x = x + 0.5;
+        let y = y + 0.5;
 
         [x, y]
     }
