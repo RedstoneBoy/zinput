@@ -6,14 +6,15 @@ use std::{
     thread::JoinHandle,
 };
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use zinput_engine::{
+    plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
-    plugin::{Plugin, PluginKind, PluginStatus}
 };
 
 mod pa_switch;
+mod util;
 
 const T: &'static str = "backend:gc_adaptor";
 
@@ -103,12 +104,13 @@ impl Inner {
         let status = Arc::new(Mutex::new(PluginStatus::Running));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let drivers = vec![
-            pa_switch::driver(),
-        ];
+        let drivers = vec![pa_switch::driver()];
         let mut drivers: Vec<DriverData> = drivers
             .into_iter()
-            .map(|driver| DriverData { driver, device_id: 0 })
+            .map(|driver| DriverData {
+                driver,
+                device_id: 0,
+            })
             .collect();
 
         let mut handles = Vec::new();
@@ -121,22 +123,20 @@ impl Inner {
                 if (driver_data.driver.filter)(&usb_device) {
                     let device_id = driver_data.device_id;
                     driver_data.device_id += 1;
-                    let handle = std::thread::spawn((driver_data.driver.thread)(
-                        ThreadData {
-                            device_id,
-                            device: usb_device,
-                            stop: stop.clone(),
-                            engine: engine.clone(),
-                        }
-                    ));
+                    let handle = std::thread::spawn((driver_data.driver.thread)(ThreadData {
+                        device_id,
+                        device: usb_device,
+                        stop: stop.clone(),
+                        engine: engine.clone(),
+                    }));
 
                     handles.push(handle);
-                    
+
                     break;
                 }
             }
         }
-        
+
         let drivers = Arc::new(Mutex::new(drivers));
 
         let handles = Arc::new(Mutex::new(handles));

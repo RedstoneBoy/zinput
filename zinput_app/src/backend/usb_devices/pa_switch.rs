@@ -1,18 +1,12 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::{sync::atomic::Ordering, time::Duration};
 
 use anyhow::{Context, Result};
-use parking_lot::Mutex;
-use rusb::UsbContext;
-use zinput_engine::device::component::controller::{Button, Controller, ControllerInfo};
 use zinput_engine::{
-    plugin::{Plugin, PluginKind, PluginStatus},
+    device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
 
-use super::{ThreadData, UsbDriver};
+use super::{util::UsbExt, ThreadData, UsbDriver};
 
 const EP_IN: u8 = 0x81;
 
@@ -55,13 +49,7 @@ fn controller_thread(
     }: ThreadData,
 ) -> Result<()> {
     let mut pa = usb_dev.open().context("failed to open device")?;
-    let iface = usb_dev
-        .config_descriptor(0)
-        .context("failed to get active config descriptor")?
-        .interfaces()
-        .next()
-        .context("failed to find available interface")?
-        .number();
+    let iface = usb_dev.find_interface(|_| true)?;
 
     pa.claim_interface(iface)
         .context("failed to claim interface")?;
