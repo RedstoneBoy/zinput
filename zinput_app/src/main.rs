@@ -12,7 +12,6 @@ fn main() {
     simple_logger::SimpleLogger::new().init().unwrap();
 
     let mut zinput = zinput::ZInput::new();
-    zinput.add_plugin(Arc::new(backend::gc_adaptor::GcAdaptor::new()));
     zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()));
     zinput.add_plugin(Arc::new(backend::steam_controller::SteamController::new()));
     zinput.add_plugin(Arc::new(backend::swi_recv::Swi::new()));

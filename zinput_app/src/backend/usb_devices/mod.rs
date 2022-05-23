@@ -13,10 +13,11 @@ use zinput_engine::{
     Engine,
 };
 
+mod gc_adaptor;
 mod pa_switch;
 mod util;
 
-const T: &'static str = "backend:gc_adaptor";
+const T: &'static str = "backend:usb_devices";
 
 struct UsbDriver {
     filter: Box<dyn Fn(&rusb::Device<rusb::GlobalContext>) -> bool + Send>,
@@ -104,7 +105,10 @@ impl Inner {
         let status = Arc::new(Mutex::new(PluginStatus::Running));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let drivers = vec![pa_switch::driver()];
+        let drivers = vec![
+            gc_adaptor::driver(),
+            pa_switch::driver(),
+        ];
         let mut drivers: Vec<DriverData> = drivers
             .into_iter()
             .map(|driver| DriverData {

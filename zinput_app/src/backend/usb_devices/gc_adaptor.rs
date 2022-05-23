@@ -1,16 +1,12 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::{sync::atomic::Ordering, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use parking_lot::Mutex;
-use rusb::UsbContext;
-use zinput_engine::device::component::controller::{Button, Controller, ControllerInfo};
 use zinput_engine::{
-    plugin::{Plugin, PluginKind, PluginStatus},
+    device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
+
+use super::{util::UsbExt, ThreadData, UsbDriver};
 
 const EP_IN: u8 = 0x81;
 const EP_OUT: u8 = 0x02;
@@ -21,177 +17,41 @@ const PRODUCT_ID: u16 = 0x0337;
 const STATE_NORMAL: u8 = 0x10;
 const STATE_WAVEBIRD: u8 = 0x20;
 
-const T: &'static str = "backend:gc_adaptor";
+const T: &'static str = "backend:usb_devices:gc_adaptor";
 
-pub struct GcAdaptor {
-    inner: Mutex<GcAdaptorInner>,
-}
-
-impl GcAdaptor {
-    pub fn new() -> Self {
-        GcAdaptor {
-            inner: Mutex::new(GcAdaptorInner::new()),
-        }
+pub(super) fn driver() -> UsbDriver {
+    UsbDriver {
+        filter: Box::new(filter),
+        thread: new_adaptor_thread,
     }
 }
 
-impl Plugin for GcAdaptor {
-    fn init(&self, zinput_api: Arc<Engine>) {
-        self.inner.lock().init(zinput_api)
-    }
-
-    fn stop(&self) {
-        self.inner.lock().stop()
-    }
-
-    fn status(&self) -> PluginStatus {
-        self.inner.lock().status()
-    }
-
-    fn name(&self) -> &str {
-        "gc_adaptor"
-    }
-
-    fn kind(&self) -> PluginKind {
-        PluginKind::Backend
-    }
+fn filter(dev: &rusb::Device<rusb::GlobalContext>) -> bool {
+    dev.device_descriptor()
+        .ok()
+        .map(|desc| desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID)
+        .unwrap_or(false)
 }
 
-struct GcAdaptorInner {
-    callback_registration: Option<rusb::Registration<rusb::GlobalContext>>,
-    handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
-    stop: Arc<AtomicBool>,
-    status: PluginStatus,
-}
+fn new_adaptor_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
+    Box::new(move || {
+        let id = data.device_id;
 
-impl GcAdaptorInner {
-    fn new() -> Self {
-        GcAdaptorInner {
-            callback_registration: None,
-            handles: Arc::new(Mutex::new(Vec::new())),
-            stop: Arc::new(AtomicBool::new(false)),
-            status: PluginStatus::Running,
-        }
-    }
-
-    fn init(&mut self, api: Arc<Engine>) {
-        log::info!(target: T, "driver initializing...");
-
-        self.status = PluginStatus::Running;
-        self.stop = Arc::new(AtomicBool::new(false));
-
-        match || -> Result<()> {
-            let next_id = Arc::new(AtomicU64::new(0));
-
-            for usb_dev in rusb::devices()
-                .context("failed to find devices")?
-                .iter()
-                .filter(|dev| {
-                    dev.device_descriptor()
-                        .ok()
-                        .map(|desc| {
-                            desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID
-                        })
-                        .unwrap_or(false)
-                })
-            {
-                let handle = std::thread::spawn(new_adaptor_thread(
-                    usb_dev,
-                    next_id.fetch_add(1, Ordering::SeqCst),
-                    self.stop.clone(),
-                    api.clone(),
-                ));
-                self.handles.lock().push(handle);
-            }
-
-            if rusb::has_hotplug() {
-                log::info!(
-                    target: T,
-                    "usb driver supports hotplug, registering callback handler"
-                );
-                self.callback_registration = rusb::GlobalContext {}
-                    .register_callback(
-                        Some(VENDOR_ID),
-                        Some(PRODUCT_ID),
-                        None,
-                        Box::new(CallbackHandler {
-                            api,
-                            stop: self.stop.clone(),
-                            next_id,
-                            handles: self.handles.clone(),
-                        }),
-                    )
-                    .map(Some)
-                    .context("failed to register callback handler")?;
-            } else {
-                log::info!(target: T, "usb driver does not support hotplug");
-            }
-
-            Ok(())
-        }() {
-            Ok(()) => log::info!(target: T, "driver initalized"),
-            Err(err) => {
-                log::error!(target: T, "driver failed to initalize: {:#}", err);
-                self.status = PluginStatus::Error("driver failed to initialize".to_owned());
-            }
-        }
-    }
-
-    fn stop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        for handle in std::mem::replace(&mut *self.handles.lock(), Vec::new()) {
-            let _ = handle.join();
-        }
-        self.stop.store(false, Ordering::Release);
-        self.status = PluginStatus::Stopped;
-    }
-
-    fn status(&self) -> PluginStatus {
-        self.status.clone()
-    }
-}
-
-struct CallbackHandler {
-    api: Arc<Engine>,
-    stop: Arc<AtomicBool>,
-    next_id: Arc<AtomicU64>,
-    handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-}
-
-impl rusb::Hotplug<rusb::GlobalContext> for CallbackHandler {
-    fn device_arrived(&mut self, device: rusb::Device<rusb::GlobalContext>) {
-        let handle = std::thread::spawn(new_adaptor_thread(
-            device,
-            self.next_id.fetch_add(1, Ordering::SeqCst),
-            self.stop.clone(),
-            self.api.clone(),
-        ));
-        self.handles.lock().push(handle);
-    }
-
-    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {}
-}
-
-fn new_adaptor_thread(
-    usb_dev: rusb::Device<rusb::GlobalContext>,
-    id: u64,
-    stop: Arc<AtomicBool>,
-    api: Arc<Engine>,
-) -> impl FnOnce() {
-    move || {
         log::info!(target: T, "adaptor found, id: {}", id);
-        match adaptor_thread(usb_dev, id, stop, api) {
+        match adaptor_thread(data) {
             Ok(()) => log::info!(target: T, "adaptor thread {} closed", id),
             Err(err) => log::error!(target: T, "adaptor thread {} crashed: {:#}", id, err),
         }
-    }
+    })
 }
 
 fn adaptor_thread(
-    usb_dev: rusb::Device<rusb::GlobalContext>,
-    id: u64,
-    stop: Arc<AtomicBool>,
-    api: Arc<Engine>,
+    ThreadData {
+        device: usb_dev,
+        device_id: id,
+        stop,
+        engine: api,
+    }: ThreadData,
 ) -> Result<()> {
     let mut adaptor = usb_dev.open().context("failed to open device")?;
 
@@ -203,13 +63,7 @@ fn adaptor_thread(
         }
     }
 
-    let iface = usb_dev
-        .active_config_descriptor()
-        .context("failed to get active config descriptor")?
-        .interfaces()
-        .next()
-        .context("failed to find available interface")?
-        .number();
+    let iface = usb_dev.find_interface(|_| true)?;
 
     adaptor
         .claim_interface(iface)
