@@ -1,4 +1,3 @@
-
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Stick<T> {
     pub x: T,

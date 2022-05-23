@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use crate::{
-    common::{Stick, Acceleration, Gyroscope},
+    common::{Acceleration, Gyroscope, Stick},
     util::buttons,
 };
 

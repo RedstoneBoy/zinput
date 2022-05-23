@@ -1,7 +1,4 @@
-use crate::{
-    common::Stick,
-    util::buttons,
-};
+use crate::{common::Stick, util::buttons};
 
 pub const VENDOR_ID: u16 = 0x057E;
 pub const PRODUCT_ID: u16 = 0x0337;
@@ -59,8 +56,14 @@ impl Controller {
         Some(Controller {
             state,
             buttons: Buttons(packet[1] as u16 | ((packet[2] as u16) << 8)),
-            left_stick: Stick { x: packet[3], y: packet[4] },
-            right_stick: Stick { x: packet[5], y: packet[6] },
+            left_stick: Stick {
+                x: packet[3],
+                y: packet[4],
+            },
+            right_stick: Stick {
+                x: packet[5],
+                y: packet[6],
+            },
             left_trigger: packet[7],
             right_trigger: packet[8],
         })
@@ -74,7 +77,9 @@ pub struct Device {
 
 impl Device {
     pub fn update(&mut self, packet: &[u8; 37]) -> Result<(), InvalidData> {
-        if packet[0] != 0x21 { return Err(InvalidData); }
+        if packet[0] != 0x21 {
+            return Err(InvalidData);
+        }
         for i in 0..4 {
             let packet: [u8; 9] = packet[1 + (i * 9)..][..9].try_into().unwrap();
             self.controllers[i] = Controller::parse(packet);
@@ -87,9 +92,7 @@ impl Device {
 #[derive(Clone, Debug)]
 pub struct InvalidData;
 
-impl std::error::Error for InvalidData {
-
-}
+impl std::error::Error for InvalidData {}
 
 impl std::fmt::Display for InvalidData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

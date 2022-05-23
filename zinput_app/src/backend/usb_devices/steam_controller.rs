@@ -1,11 +1,9 @@
-use std::{convert::TryInto, sync::atomic::Ordering, time::Duration};
+use std::{sync::atomic::Ordering, time::Duration};
 
 use anyhow::{Context, Result};
-use hidcon::{
-    steam_controller::{
-        Button as HidButton, Buttons as HidButtons, Controller as HidController,
-        DISABLE_LIZARD_MODE, ENABLE_MOTION, EP_IN, PRODUCT_ID_WIRELESS, VENDOR_ID,
-    },
+use hidcon::steam_controller::{
+    Button as HidButton, Controller as HidController, DISABLE_LIZARD_MODE, ENABLE_MOTION, EP_IN,
+    PRODUCT_ID_WIRELESS, VENDOR_ID,
 };
 
 use zinput_engine::{

@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use crate::{
-    common::{Stick, Acceleration, Gyroscope},
+    common::{Acceleration, Gyroscope, Stick},
     util::buttons,
 };
 
@@ -24,8 +24,6 @@ pub const DISABLE_LIZARD_MODE: [u8; 64] = [
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
-
-const STATUS_INPUT: u8 = 0x1;
 
 buttons! {
     Buttons, Button: u32 =>
@@ -61,24 +59,22 @@ pub struct Controller {
 
 impl Controller {
     pub fn update(&mut self, packet: &[u8; 64]) -> Result<(), Infallible> {
-        // if packet[3] != STATUS_INPUT { return Ok(()); }
-        
         self.buttons.0 = u32::from_le_bytes(packet[7..11].try_into().unwrap());
 
         self.left_trigger = packet[11];
         self.right_trigger = packet[12];
-        
+
         self.left_pad.x = i16::from_le_bytes([packet[16], packet[17]]);
         self.left_pad.y = i16::from_le_bytes([packet[18], packet[19]]);
         self.right_pad.x = i16::from_le_bytes([packet[20], packet[21]]);
         self.right_pad.y = i16::from_le_bytes([packet[22], packet[23]]);
 
-        self.acceleration.x  = i16::from_le_bytes([packet[28], packet[29]]);
-        self.acceleration.y  = i16::from_le_bytes([packet[30], packet[31]]);
-        self.acceleration.z  = i16::from_le_bytes([packet[32], packet[33]]);
+        self.acceleration.x = i16::from_le_bytes([packet[28], packet[29]]);
+        self.acceleration.y = i16::from_le_bytes([packet[30], packet[31]]);
+        self.acceleration.z = i16::from_le_bytes([packet[32], packet[33]]);
         self.gyroscope.pitch = i16::from_le_bytes([packet[34], packet[35]]);
-        self.gyroscope.roll  = i16::from_le_bytes([packet[36], packet[37]]);
-        self.gyroscope.yaw   = i16::from_le_bytes([packet[38], packet[39]]);
+        self.gyroscope.roll = i16::from_le_bytes([packet[36], packet[37]]);
+        self.gyroscope.yaw = i16::from_le_bytes([packet[38], packet[39]]);
 
         Ok(())
     }

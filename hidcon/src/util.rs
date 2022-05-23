@@ -1,4 +1,3 @@
-
 macro_rules! buttons {
     ($name:ident, $ename:ident : $bty:ty => $($but:ident = $bit:expr),* $(,)?) => {
         #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
@@ -13,7 +12,7 @@ macro_rules! buttons {
                 }
             }
         }
-        
+
         #[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq)]
         pub struct $name($bty);
 
