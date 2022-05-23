@@ -1,20 +1,18 @@
-use std::convert::TryInto;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::{convert::TryInto, sync::atomic::Ordering, time::Duration};
 
 use anyhow::{Context, Result};
-use parking_lot::Mutex;
-use rusb::UsbContext;
-use zinput_engine::device::component::{
-    controller::{Button, Controller, ControllerInfo},
-    motion::{Motion, MotionInfo},
-    touch_pad::{TouchPad, TouchPadInfo, TouchPadShape},
-};
 use zinput_engine::{
-    plugin::{Plugin, PluginKind, PluginStatus},
+    device::component::{
+        controller::{Button, Controller, ControllerInfo},
+        motion::{Motion, MotionInfo},
+        touch_pad::{TouchPad, TouchPadInfo, TouchPadShape},
+    },
     Engine,
+};
+
+use super::{
+    util::{self, UsbExt},
+    ThreadData, UsbDriver,
 };
 
 const EP_IN: u8 = 0x82;
@@ -38,192 +36,52 @@ const ENABLE_MOTION: [u8; 64] = [
 
 const T: &'static str = "backend:steam_controller";
 
-pub struct SteamController {
-    inner: Mutex<Inner>,
-}
-
-impl SteamController {
-    pub fn new() -> Self {
-        SteamController {
-            inner: Mutex::new(Inner::new()),
-        }
+pub(super) fn driver() -> UsbDriver {
+    UsbDriver {
+        filter: Box::new(filter),
+        thread: new_controller_thread,
     }
 }
 
-impl Plugin for SteamController {
-    fn init(&self, zinput_api: Arc<Engine>) {
-        self.inner.lock().init(zinput_api)
-    }
-
-    fn stop(&self) {
-        self.inner.lock().stop()
-    }
-
-    fn status(&self) -> PluginStatus {
-        self.inner.lock().status()
-    }
-
-    fn name(&self) -> &str {
-        "steam_controller"
-    }
-
-    fn kind(&self) -> PluginKind {
-        PluginKind::Backend
-    }
+fn filter(dev: &rusb::Device<rusb::GlobalContext>) -> bool {
+    dev.device_descriptor()
+        .ok()
+        .map(|desc| desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID)
+        .unwrap_or(false)
 }
 
-struct Inner {
-    callback_registration: Option<rusb::Registration<rusb::GlobalContext>>,
-    handles: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
-    stop: Arc<AtomicBool>,
-    status: PluginStatus,
-}
+fn new_controller_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
+    Box::new(move || {
+        let id = data.device_id;
 
-impl Inner {
-    fn new() -> Self {
-        Inner {
-            callback_registration: None,
-            handles: Arc::new(Mutex::new(Vec::new())),
-            stop: Arc::new(AtomicBool::new(false)),
-            status: PluginStatus::Running,
-        }
-    }
-
-    fn init(&mut self, api: Arc<Engine>) {
-        log::info!(target: T, "driver initializing...");
-
-        self.status = PluginStatus::Running;
-        self.stop = Arc::new(AtomicBool::new(false));
-
-        match || -> Result<()> {
-            let next_id = Arc::new(AtomicU64::new(0));
-
-            for usb_dev in rusb::devices()
-                .context("failed to find devices")?
-                .iter()
-                .filter(|dev| {
-                    dev.device_descriptor()
-                        .ok()
-                        .map(|desc| {
-                            desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID
-                        })
-                        .unwrap_or(false)
-                })
-            {
-                let handle = std::thread::spawn(new_controller_thread(
-                    usb_dev,
-                    next_id.fetch_add(1, Ordering::SeqCst),
-                    self.stop.clone(),
-                    api.clone(),
-                ));
-                self.handles.lock().push(handle);
-            }
-
-            if rusb::has_hotplug() {
-                log::info!(
-                    target: T,
-                    "usb driver supports hotplug, registering callback handler"
-                );
-                self.callback_registration = rusb::GlobalContext {}
-                    .register_callback(
-                        Some(VENDOR_ID),
-                        Some(PRODUCT_ID),
-                        None,
-                        Box::new(CallbackHandler {
-                            api,
-                            stop: self.stop.clone(),
-                            next_id,
-                            handles: self.handles.clone(),
-                        }),
-                    )
-                    .map(Some)
-                    .context("failed to register callback handler")?;
-            } else {
-                log::info!(target: T, "usb driver does not support hotplug");
-            }
-
-            Ok(())
-        }() {
-            Ok(()) => log::info!(target: T, "driver initalized"),
-            Err(err) => {
-                log::error!(target: T, "driver failed to initalize: {:#}", err);
-                self.status = PluginStatus::Error("driver failed to initialize".to_owned());
-            }
-        }
-    }
-
-    fn stop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        for handle in std::mem::replace(&mut *self.handles.lock(), Vec::new()) {
-            let _ = handle.join();
-        }
-        self.stop.store(false, Ordering::Release);
-        self.status = PluginStatus::Stopped;
-    }
-
-    fn status(&self) -> PluginStatus {
-        self.status.clone()
-    }
-}
-
-struct CallbackHandler {
-    api: Arc<Engine>,
-    stop: Arc<AtomicBool>,
-    next_id: Arc<AtomicU64>,
-    handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-}
-
-impl rusb::Hotplug<rusb::GlobalContext> for CallbackHandler {
-    fn device_arrived(&mut self, device: rusb::Device<rusb::GlobalContext>) {
-        let handle = std::thread::spawn(new_controller_thread(
-            device,
-            self.next_id.fetch_add(1, Ordering::SeqCst),
-            self.stop.clone(),
-            self.api.clone(),
-        ));
-        self.handles.lock().push(handle);
-    }
-
-    fn device_left(&mut self, _device: rusb::Device<rusb::GlobalContext>) {}
-}
-
-fn new_controller_thread(
-    usb_dev: rusb::Device<rusb::GlobalContext>,
-    id: u64,
-    stop: Arc<AtomicBool>,
-    api: Arc<Engine>,
-) -> impl FnOnce() {
-    move || {
         log::info!(target: T, "controller found, id: {}", id);
-        match controller_thread(usb_dev, id, stop, api) {
+        match controller_thread(data) {
             Ok(()) => log::info!(target: T, "controller thread {} closed", id),
             Err(err) => log::error!(target: T, "controller thread {} crashed: {:#}", id, err),
         }
-    }
+    })
 }
 
 fn controller_thread(
-    usb_dev: rusb::Device<rusb::GlobalContext>,
-    id: u64,
-    stop: Arc<AtomicBool>,
-    api: Arc<Engine>,
+    ThreadData {
+        device,
+        device_id,
+        stop,
+        engine,
+    }: ThreadData,
 ) -> Result<()> {
-    let mut sc = usb_dev.open().context("failed to open device")?;
-    let iface = usb_dev
-        .config_descriptor(0)
-        .context("failed to get active config descriptor")?
-        .interfaces()
-        .find(|inter| {
-            inter.descriptors().any(|desc| {
-                desc.class_code() == 3 && desc.sub_class_code() == 0 && desc.protocol_code() == 0
-            })
-        })
-        .context("failed to find available interface")?
-        .number();
+    let mut sc = device.open().context("failed to open device")?;
 
-    // ignore error on windows
-    let _ = sc.set_auto_detach_kernel_driver(true);
-    
+    match sc.set_auto_detach_kernel_driver(true) {
+        Ok(()) => {}
+        Err(rusb::Error::NotSupported) => {}
+        Err(err) => {
+            Err(err).context("failed to auto-detach kernel drivers")?;
+        }
+    }
+
+    let iface = device.find_interface(util::hid_filter)?;
+
     sc.claim_interface(iface)
         .context("failed to claim interface")?;
 
@@ -235,7 +93,7 @@ fn controller_thread(
         &DISABLE_LIZARD,
         Duration::from_secs(3),
     )?;
-    
+
     sc.write_control(
         0x21,
         0x09,
@@ -245,7 +103,7 @@ fn controller_thread(
         Duration::from_secs(3),
     )?;
 
-    let mut bundle = SCBundle::new(id, &*api);
+    let mut bundle = SCBundle::new(device_id, &*engine);
 
     let mut buf = [0u8; 64];
 
@@ -277,9 +135,9 @@ struct SCBundle<'a> {
 }
 
 impl<'a> SCBundle<'a> {
-    fn new(adaptor_id: u64, api: &'a Engine) -> Self {
+    fn new(adaptor_id: u64, engine: &'a Engine) -> Self {
         let bundle = DeviceBundle::new(
-            api,
+            engine,
             format!("Steam Controller (Adaptor {})", adaptor_id),
             [sc_controller_info()],
             [MotionInfo::new(true, true)],

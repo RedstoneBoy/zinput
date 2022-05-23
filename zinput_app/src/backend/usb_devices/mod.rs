@@ -15,6 +15,7 @@ use zinput_engine::{
 
 mod gc_adaptor;
 mod pa_switch;
+mod steam_controller;
 mod util;
 
 const T: &'static str = "backend:usb_devices";
@@ -108,6 +109,7 @@ impl Inner {
         let drivers = vec![
             gc_adaptor::driver(),
             pa_switch::driver(),
+            steam_controller::driver(),
         ];
         let mut drivers: Vec<DriverData> = drivers
             .into_iter()

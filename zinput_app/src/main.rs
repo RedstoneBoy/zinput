@@ -13,7 +13,6 @@ fn main() {
 
     let mut zinput = zinput::ZInput::new();
     zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()));
-    zinput.add_plugin(Arc::new(backend::steam_controller::SteamController::new()));
     zinput.add_plugin(Arc::new(backend::swi_recv::Swi::new()));
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()));
 
