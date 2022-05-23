@@ -47,13 +47,13 @@ fn new_adaptor_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
 
 fn adaptor_thread(
     ThreadData {
-        device: usb_dev,
-        device_id: id,
+        device,
+        device_id,
         stop,
-        engine: api,
+        engine,
     }: ThreadData,
 ) -> Result<()> {
-    let mut adaptor = usb_dev.open().context("failed to open device")?;
+    let mut adaptor = device.open().context("failed to open device")?;
 
     match adaptor.set_auto_detach_kernel_driver(true) {
         Ok(()) => {}
@@ -63,7 +63,7 @@ fn adaptor_thread(
         }
     }
 
-    let iface = usb_dev.find_interface(|_| true)?;
+    let iface = device.find_interface(|_| true)?;
 
     adaptor
         .claim_interface(iface)
@@ -76,7 +76,7 @@ fn adaptor_thread(
         return Err(anyhow!("invalid size sent"));
     }
 
-    let mut ctrls = Controllers::new(id, &*api);
+    let mut ctrls = Controllers::new(device_id, &*engine);
 
     let mut payload = [0u8; 37];
 
@@ -97,16 +97,16 @@ fn adaptor_thread(
 }
 
 struct Controllers<'a> {
-    api: &'a Engine,
-    adaptor_id: u64,
+    engine: &'a Engine,
+    device_id: u64,
     bundles: [Option<DeviceBundle<'a>>; 4],
 }
 
 impl<'a> Controllers<'a> {
-    fn new(adaptor_id: u64, api: &'a Engine) -> Self {
+    fn new(device_id: u64, api: &'a Engine) -> Self {
         Controllers {
-            api,
-            adaptor_id,
+            engine: api,
+            device_id,
             bundles: [None, None, None, None],
         }
     }
@@ -125,7 +125,7 @@ impl<'a> Controllers<'a> {
                         target: T,
                         "removing slot {} from adaptor {}",
                         i + 1,
-                        self.adaptor_id
+                        self.device_id
                     );
 
                     self.bundles[i] = None;
@@ -138,15 +138,15 @@ impl<'a> Controllers<'a> {
                         target: T,
                         "adding slot {} from adaptor {}",
                         i + 1,
-                        self.adaptor_id
+                        self.device_id
                     );
 
                     let bundle = DeviceBundle::new(
-                        self.api,
+                        self.engine,
                         format!(
                             "Gamecube Adaptor Slot {} (Adaptor {})",
                             i + 1,
-                            self.adaptor_id
+                            self.device_id
                         ),
                         [gc_controller_info()],
                     );
