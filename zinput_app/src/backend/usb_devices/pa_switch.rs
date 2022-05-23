@@ -1,17 +1,16 @@
 use std::{sync::atomic::Ordering, time::Duration};
 
 use anyhow::{Context, Result};
+use hidcon::powera_pro_controller::{
+    Button as HidButton, Buttons as HidButtons, Controller as HidController, DPad, EP_IN,
+    PRODUCT_ID, VENDOR_ID,
+};
 use zinput_engine::{
     device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
 
 use super::{util::UsbExt, ThreadData, UsbDriver};
-
-const EP_IN: u8 = 0x81;
-
-const VENDOR_ID: u16 = 0x20D6;
-const PRODUCT_ID: u16 = 0xA713;
 
 const T: &'static str = "backend:usb_devices:pa_switch";
 
@@ -88,6 +87,7 @@ crate::device_bundle!(DeviceBundle, controller: Controller);
 
 struct PABundle<'a> {
     bundle: DeviceBundle<'a>,
+    controller: HidController,
 }
 
 impl<'a> PABundle<'a> {
@@ -98,61 +98,74 @@ impl<'a> PABundle<'a> {
             [controller_info()],
         );
 
-        PABundle { bundle }
+        PABundle {
+            bundle,
+            controller: Default::default(),
+        }
     }
 
-    fn update(&mut self, data: &[u8; 8]) -> Result<()> {
-        macro_rules! convert {
-            ($out:expr => $( ( $ine:expr ) $offset:expr , $button:expr );* $(;)?) => {
-                $(if (($ine >> $offset) & 1) != 0 {
-                    $button.set_pressed($out);
-                })*
-            }
-        }
+    fn update(&mut self, packet: &[u8; 8]) -> Result<()> {
+        self.controller.update(&packet)?;
 
-        let mut new_buttons = 0;
-        convert!(&mut new_buttons =>
-            (data[0]) 0, Button::Y;
-            (data[0]) 1, Button::B;
-            (data[0]) 2, Button::A;
-            (data[0]) 3, Button::X;
-            (data[0]) 4, Button::L1;
-            (data[0]) 5, Button::R1;
-            (data[0]) 6, Button::L2;
-            (data[0]) 7, Button::R2;
-            (data[1]) 0, Button::Select;
-            (data[1]) 1, Button::Start;
-            (data[1]) 2, Button::LStick;
-            (data[1]) 3, Button::RStick;
-            (data[1]) 4, Button::Home;
-            (data[1]) 5, Button::Capture;
-        );
-
-        if data[2] == 7 || data[2] == 0 || data[2] == 1 {
-            Button::Up.set_pressed(&mut new_buttons);
-        }
-        if data[2] == 1 || data[2] == 2 || data[2] == 3 {
-            Button::Right.set_pressed(&mut new_buttons);
-        }
-        if data[2] == 3 || data[2] == 4 || data[2] == 5 {
-            Button::Down.set_pressed(&mut new_buttons);
-        }
-        if data[2] == 5 || data[2] == 6 || data[2] == 7 {
-            Button::Left.set_pressed(&mut new_buttons);
-        }
-
-        self.bundle.controller[0].buttons = new_buttons;
-        self.bundle.controller[0].l2_analog = (Button::L2.is_pressed(new_buttons) as u8) * 255;
-        self.bundle.controller[0].r2_analog = (Button::R2.is_pressed(new_buttons) as u8) * 255;
-        self.bundle.controller[0].left_stick_x = data[3];
-        self.bundle.controller[0].left_stick_y = 255 - data[4];
-        self.bundle.controller[0].right_stick_x = data[5];
-        self.bundle.controller[0].right_stick_y = 255 - data[6];
+        self.bundle.controller[0].buttons =
+            convert_buttons(self.controller.buttons, self.controller.dpad);
+        self.bundle.controller[0].l2_analog =
+            (self.controller.buttons.is_pressed(HidButton::L2) as u8) * 255;
+        self.bundle.controller[0].r2_analog =
+            (self.controller.buttons.is_pressed(HidButton::R2) as u8) * 255;
+        self.bundle.controller[0].left_stick_x = self.controller.left_stick.x;
+        self.bundle.controller[0].left_stick_y = 255 - self.controller.left_stick.y;
+        self.bundle.controller[0].right_stick_x = self.controller.right_stick.x;
+        self.bundle.controller[0].right_stick_y = 255 - self.controller.right_stick.y;
 
         self.bundle.update()?;
 
         Ok(())
     }
+}
+
+fn convert_buttons(buttons: HidButtons, dpad: DPad) -> u64 {
+    let mut out = 0u64;
+
+    macro_rules! convert {
+        ($($hidbutton:expr, $button:expr);* $(;)?) => {
+            $(if buttons.is_pressed($hidbutton) {
+                $button.set_pressed(&mut out);
+            })*
+        }
+    }
+
+    convert!(
+        HidButton::Y,       Button::Y;
+        HidButton::B,       Button::B;
+        HidButton::A,       Button::A;
+        HidButton::X,       Button::X;
+        HidButton::L1,      Button::L1;
+        HidButton::R1,      Button::R1;
+        HidButton::L2,      Button::L2;
+        HidButton::R2,      Button::R2;
+        HidButton::Select,  Button::Select;
+        HidButton::Start,   Button::Start;
+        HidButton::LStick,  Button::LStick;
+        HidButton::RStick,  Button::RStick;
+        HidButton::Home,    Button::Home;
+        HidButton::Capture, Button::Capture;
+    );
+
+    if dpad.up() {
+        Button::Up.set_pressed(&mut out);
+    }
+    if dpad.down() {
+        Button::Down.set_pressed(&mut out);
+    }
+    if dpad.left() {
+        Button::Left.set_pressed(&mut out);
+    }
+    if dpad.right() {
+        Button::Right.set_pressed(&mut out);
+    }
+
+    out
 }
 
 fn controller_info() -> ControllerInfo {

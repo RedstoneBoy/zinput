@@ -1,21 +1,16 @@
 use std::{sync::atomic::Ordering, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
+use hidcon::gc_adaptor::{
+    Button as HidButton, Buttons as HidButtons, Device as HidDevice, EP_IN, EP_OUT, INITIALIZE,
+    PRODUCT_ID, VENDOR_ID,
+};
 use zinput_engine::{
     device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
 
 use super::{util::UsbExt, ThreadData, UsbDriver};
-
-const EP_IN: u8 = 0x81;
-const EP_OUT: u8 = 0x02;
-
-const VENDOR_ID: u16 = 0x057E;
-const PRODUCT_ID: u16 = 0x0337;
-
-const STATE_NORMAL: u8 = 0x10;
-const STATE_WAVEBIRD: u8 = 0x20;
 
 const T: &'static str = "backend:usb_devices:gc_adaptor";
 
@@ -69,7 +64,7 @@ fn adaptor_thread(
         .claim_interface(iface)
         .context("failed to claim interface")?;
 
-    if adaptor.write_interrupt(EP_OUT, &[0x13], Duration::from_secs(5))
+    if adaptor.write_interrupt(EP_OUT, &INITIALIZE, Duration::from_secs(5))
         .context("write interrupt error: is the correct driver installed for the device (i.e. using zadig)")?
         != 1
     {
@@ -86,11 +81,11 @@ fn adaptor_thread(
             Err(rusb::Error::NoDevice) => break,
             Err(err) => return Err(err.into()),
         };
-        if size != 37 || payload[0] != 0x21 {
+        if size != 37 {
             continue;
         }
 
-        ctrls.update(&payload[1..])?;
+        ctrls.update(&payload)?;
     }
 
     Ok(())
@@ -100,6 +95,7 @@ struct Controllers<'a> {
     engine: &'a Engine,
     device_id: u64,
     bundles: [Option<DeviceBundle<'a>>; 4],
+    device: HidDevice,
 }
 
 impl<'a> Controllers<'a> {
@@ -108,15 +104,15 @@ impl<'a> Controllers<'a> {
             engine: api,
             device_id,
             bundles: [None, None, None, None],
+            device: HidDevice::default(),
         }
     }
 
-    fn update(&mut self, data: &[u8]) -> Result<()> {
-        for i in 0..4 {
-            let data = &data[(i * 9)..][..9];
+    fn update(&mut self, packet: &[u8; 37]) -> Result<()> {
+        self.device.update(&packet)?;
 
-            let is_active = data[0] & (STATE_NORMAL | STATE_WAVEBIRD);
-            let is_active = is_active == STATE_NORMAL || is_active == STATE_WAVEBIRD;
+        for i in 0..4 {
+            let is_active = self.device.controllers[i].is_some();
 
             let bundle = match &mut self.bundles[i] {
                 Some(_) if !is_active => {
@@ -157,15 +153,17 @@ impl<'a> Controllers<'a> {
                 None => continue,
             };
 
-            bundle.controller[0].buttons = convert_buttons(data[1], data[2]);
-            bundle.controller[0].left_stick_x = data[3];
-            bundle.controller[0].left_stick_y = data[4];
-            bundle.controller[0].right_stick_x = data[5];
-            bundle.controller[0].right_stick_y = data[6];
-            bundle.controller[0].l2_analog = data[7];
-            bundle.controller[0].r2_analog = data[8];
+            if let Some(controller) = &self.device.controllers[i] {
+                bundle.controller[0].buttons = convert_buttons(controller.buttons);
+                bundle.controller[0].left_stick_x = controller.left_stick.x;
+                bundle.controller[0].left_stick_y = controller.left_stick.y;
+                bundle.controller[0].right_stick_x = controller.right_stick.x;
+                bundle.controller[0].right_stick_y = controller.right_stick.y;
+                bundle.controller[0].l2_analog = controller.left_trigger;
+                bundle.controller[0].r2_analog = controller.right_trigger;
 
-            bundle.update()?;
+                bundle.update()?;
+            }
         }
 
         Ok(())
@@ -174,47 +172,30 @@ impl<'a> Controllers<'a> {
 
 crate::device_bundle!(DeviceBundle, controller: Controller);
 
-fn convert_buttons(data1: u8, data2: u8) -> u64 {
-    enum GcButton {
-        Start = 0,
-        Z = 1,
-        R = 2,
-        L = 3,
-        A = 8,
-        B = 9,
-        X = 10,
-        Y = 11,
-        Left = 12,
-        Right = 13,
-        Down = 14,
-        Up = 15,
-    }
-
-    let buttons = ((data1 as u16) << 8) | (data2 as u16);
-
+fn convert_buttons(buttons: HidButtons) -> u64 {
     let mut out = 0u64;
 
     macro_rules! convert {
-        ($($gcbutton:expr, $button:expr);* $(;)?) => {
-            $(if (buttons >> ($gcbutton as u16)) & 1 == 1 {
+        ($($hidbutton:expr, $button:expr);* $(;)?) => {
+            $(if buttons.is_pressed($hidbutton) {
                 $button.set_pressed(&mut out);
             })*
         }
     }
 
     convert!(
-        GcButton::Start, Button::Start;
-        GcButton::Z,     Button::R1;
-        GcButton::R,     Button::R2;
-        GcButton::L,     Button::L2;
-        GcButton::A,     Button::A;
-        GcButton::B,     Button::B;
-        GcButton::X,     Button::X;
-        GcButton::Y,     Button::Y;
-        GcButton::Left,  Button::Left;
-        GcButton::Right, Button::Right;
-        GcButton::Down,  Button::Down;
-        GcButton::Up,    Button::Up;
+        HidButton::Start, Button::Start;
+        HidButton::Z,     Button::R1;
+        HidButton::R,     Button::R2;
+        HidButton::L,     Button::L2;
+        HidButton::A,     Button::A;
+        HidButton::B,     Button::B;
+        HidButton::X,     Button::X;
+        HidButton::Y,     Button::Y;
+        HidButton::Left,  Button::Left;
+        HidButton::Right, Button::Right;
+        HidButton::Down,  Button::Down;
+        HidButton::Up,    Button::Up;
     );
 
     out
