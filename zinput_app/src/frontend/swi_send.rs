@@ -27,7 +27,7 @@ use zinput_engine::{
 
 const T: &'static str = "frontend:swi_send";
 
-const DEFAULT_ADDRESS: &'static str = "10.0.0.177:26780";
+const DEFAULT_ADDRESS: &'static str = "10.0.0.176:26780";
 
 // Rotations Per Second -> Degrees Per Second
 const GYRO_SCALE: f32 = 360.0;
