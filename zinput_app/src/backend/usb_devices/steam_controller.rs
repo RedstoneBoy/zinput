@@ -210,10 +210,10 @@ impl<'a> SCBundle<'a> {
         convert!(&mut new_buttons =>
             SCButton::RClick, Button::RStick;
             SCButton::LClick, Button::LStick, if !lpad_touch;
-            SCButton::LClick, Button::Up,    if lpad_touch && lpad_y >= 0 && lpad_y  > lpad_x && lpad_y  > -lpad_x;
-            SCButton::LClick, Button::Down,  if lpad_touch && lpad_y <  0 && -lpad_y > lpad_x && -lpad_y > -lpad_x;
-            SCButton::LClick, Button::Left,  if lpad_touch && lpad_x <  0 && -lpad_x > lpad_y && -lpad_x > -lpad_y;
-            SCButton::LClick, Button::Right, if lpad_touch && lpad_x >= 0 && lpad_x  > lpad_y && lpad_x  > -lpad_y;
+            SCButton::LClick, Button::Up,    if lpad_touch && lpad_y > 8192;
+            SCButton::LClick, Button::Down,  if lpad_touch && lpad_y < -8192;
+            SCButton::LClick, Button::Left,  if lpad_touch && lpad_x < -8192;
+            SCButton::LClick, Button::Right, if lpad_touch && lpad_x > 8192;
             SCButton::RGrip,  Button::R3;
             SCButton::LGrip,  Button::L3;
             SCButton::Start,  Button::Start;
