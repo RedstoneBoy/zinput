@@ -1,111 +1,73 @@
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use hidcon::powera_pro_controller::{
     Button as HidButton, Buttons as HidButtons, Controller as HidController, DPad, EP_IN,
     PRODUCT_ID, VENDOR_ID,
 };
+use rusb::{DeviceHandle, GlobalContext};
 use zinput_engine::{
     device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
 
-use super::{util::UsbExt, ThreadData, UsbDriver};
-
-const T: &'static str = "backend:usb_devices:pa_switch";
+use super::{
+    device_thread::{DeviceDriver, DeviceThread},
+    UsbDriver,
+};
 
 pub(super) fn driver() -> UsbDriver {
     UsbDriver {
         filter: Box::new(filter),
-        thread: new_controller_thread,
+        thread: <DeviceThread<PADriver>>::new,
     }
 }
 
-fn filter(dev: &rusb::Device<rusb::GlobalContext>) -> bool {
+fn filter(dev: &rusb::Device<GlobalContext>) -> bool {
     dev.device_descriptor()
         .ok()
         .map(|desc| desc.vendor_id() == VENDOR_ID && desc.product_id() == PRODUCT_ID)
         .unwrap_or(false)
 }
 
-fn new_controller_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
-    Box::new(move || {
-        let id = data.device_id;
-        log::info!(target: T, "controller found, id: {}", id);
-        match controller_thread(data) {
-            Ok(()) => log::info!(target: T, "controller thread {} closed", id),
-            Err(err) => log::error!(target: T, "controller thread {} crashed: {:#}", id, err),
-        }
-    })
-}
+crate::device_bundle!(DeviceBundle(owned), controller: Controller);
 
-fn controller_thread(
-    ThreadData {
-        device_id,
-        device,
-        stop,
-        engine,
-    }: ThreadData,
-) -> Result<()> {
-    let mut pa = device.open().context("failed to open device")?;
-
-    match pa.set_auto_detach_kernel_driver(true) {
-        Ok(()) => {}
-        Err(rusb::Error::NotSupported) => {}
-        Err(err) => {
-            Err(err).context("failed to auto-detach kernel drivers")?;
-        }
-    }
-
-    let iface = device.find_interface(|_| true)?;
-
-    pa.claim_interface(iface)
-        .context("failed to claim interface")?;
-
-    let mut bundle = PABundle::new(device_id, &*engine);
-
-    let mut buf = [0u8; 8];
-
-    while !stop.load(Ordering::Acquire) {
-        let size = match pa.read_interrupt(EP_IN, &mut buf, Duration::from_millis(2000)) {
-            Ok(size) => size,
-            Err(rusb::Error::Timeout) => continue,
-            Err(rusb::Error::NoDevice) => break,
-            Err(err) => return Err(err.into()),
-        };
-        if size != 8 {
-            continue;
-        }
-
-        bundle.update(&buf)?;
-    }
-
-    Ok(())
-}
-
-crate::device_bundle!(DeviceBundle, controller: Controller);
-
-struct PABundle<'a> {
-    bundle: DeviceBundle<'a>,
+struct PADriver {
+    packet: [u8; 8],
+    bundle: DeviceBundle<'static>,
     controller: HidController,
 }
 
-impl<'a> PABundle<'a> {
-    fn new(adaptor_id: u64, engine: &'a Engine) -> Self {
+impl DeviceDriver for PADriver {
+    const NAME: &'static str = "PowerA Wired Pro Controller";
+
+    fn new(engine: &Arc<Engine>, id: u64) -> Self {
         let bundle = DeviceBundle::new(
-            engine,
-            format!("PowerA Wired Pro Controller (Adaptor {})", adaptor_id),
+            engine.clone(),
+            format!("PowerA Wired Pro Controller {}", id),
             [controller_info()],
         );
 
-        PABundle {
+        PADriver {
+            packet: [0; 8],
             bundle,
             controller: Default::default(),
         }
     }
 
-    fn update(&mut self, packet: &[u8; 8]) -> Result<()> {
-        self.controller.update(&packet)?;
+    fn update(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<ControlFlow<()>> {
+        let size = match handle.read_interrupt(EP_IN, &mut self.packet, Duration::from_millis(2000))
+        {
+            Ok(size) => size,
+            Err(rusb::Error::Timeout) => return Ok(ControlFlow::Continue(())),
+            Err(rusb::Error::NoDevice) => return Ok(ControlFlow::Break(())),
+            Err(err) => return Err(err.into()),
+        };
+        if size != 8 {
+            return Ok(ControlFlow::Continue(()));
+        }
+
+        self.controller.update(&self.packet)?;
 
         self.bundle.controller[0].buttons =
             convert_buttons(self.controller.buttons, self.controller.dpad);
@@ -120,7 +82,7 @@ impl<'a> PABundle<'a> {
 
         self.bundle.update()?;
 
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
 
@@ -169,38 +131,30 @@ fn convert_buttons(buttons: HidButtons, dpad: DPad) -> u64 {
 }
 
 fn controller_info() -> ControllerInfo {
-    let mut info = ControllerInfo {
-        buttons: 0,
+    use Button::*;
+
+    ControllerInfo {
+        buttons: 0
+            | A
+            | B
+            | X
+            | Y
+            | Up
+            | Down
+            | Left
+            | Right
+            | Start
+            | Select
+            | L1
+            | R1
+            | L2
+            | R2
+            | LStick
+            | RStick
+            | Home
+            | Capture,
         analogs: 0,
     }
     .with_lstick()
-    .with_rstick();
-
-    macro_rules! for_buttons {
-        ($($button:expr),* $(,)?) => {
-            $($button.set_pressed(&mut info.buttons);)*
-        }
-    }
-    for_buttons!(
-        Button::A,
-        Button::B,
-        Button::X,
-        Button::Y,
-        Button::Up,
-        Button::Down,
-        Button::Left,
-        Button::Right,
-        Button::Start,
-        Button::Select,
-        Button::L1,
-        Button::R1,
-        Button::L2,
-        Button::R2,
-        Button::LStick,
-        Button::RStick,
-        Button::Home,
-        Button::Capture,
-    );
-
-    info
+    .with_rstick()
 }

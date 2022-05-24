@@ -13,6 +13,7 @@ use zinput_engine::{
     Engine,
 };
 
+mod device_thread;
 mod gc_adaptor;
 mod pa_switch;
 mod steam_controller;

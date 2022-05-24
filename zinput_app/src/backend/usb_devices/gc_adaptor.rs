@@ -1,23 +1,27 @@
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
 use hidcon::gc_adaptor::{
     Button as HidButton, Buttons as HidButtons, Device as HidDevice, EP_IN, EP_OUT, INITIALIZE,
     PRODUCT_ID, VENDOR_ID,
 };
+use rusb::{DeviceHandle, GlobalContext};
 use zinput_engine::{
     device::component::controller::{Button, Controller, ControllerInfo},
     Engine,
 };
 
-use super::{util::UsbExt, ThreadData, UsbDriver};
+use super::{
+    device_thread::{DeviceDriver, DeviceThread},
+    UsbDriver,
+};
 
 const T: &'static str = "backend:usb_devices:gc_adaptor";
 
 pub(super) fn driver() -> UsbDriver {
     UsbDriver {
         filter: Box::new(filter),
-        thread: new_adaptor_thread,
+        thread: <DeviceThread<GCDriver>>::new,
     }
 }
 
@@ -28,88 +32,53 @@ fn filter(dev: &rusb::Device<rusb::GlobalContext>) -> bool {
         .unwrap_or(false)
 }
 
-fn new_adaptor_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
-    Box::new(move || {
-        let id = data.device_id;
+crate::device_bundle!(DeviceBundle(owned), controller: Controller);
 
-        log::info!(target: T, "adaptor found, id: {}", id);
-        match adaptor_thread(data) {
-            Ok(()) => log::info!(target: T, "adaptor thread {} closed", id),
-            Err(err) => log::error!(target: T, "adaptor thread {} crashed: {:#}", id, err),
-        }
-    })
-}
-
-fn adaptor_thread(
-    ThreadData {
-        device,
-        device_id,
-        stop,
-        engine,
-    }: ThreadData,
-) -> Result<()> {
-    let mut adaptor = device.open().context("failed to open device")?;
-
-    match adaptor.set_auto_detach_kernel_driver(true) {
-        Ok(()) => {}
-        Err(rusb::Error::NotSupported) => {}
-        Err(err) => {
-            Err(err).context("failed to auto-detach kernel drivers")?;
-        }
-    }
-
-    let iface = device.find_interface(|_| true)?;
-
-    adaptor
-        .claim_interface(iface)
-        .context("failed to claim interface")?;
-
-    if adaptor.write_interrupt(EP_OUT, &INITIALIZE, Duration::from_secs(5))
-        .context("write interrupt error: is the correct driver installed for the device (i.e. using zadig)")?
-        != 1
-    {
-        return Err(anyhow!("invalid size sent"));
-    }
-
-    let mut ctrls = Controllers::new(device_id, &*engine);
-
-    let mut payload = [0u8; 37];
-
-    while !stop.load(Ordering::Acquire) {
-        let size = match adaptor.read_interrupt(EP_IN, &mut payload, Duration::from_millis(2000)) {
-            Ok(size) => size,
-            Err(rusb::Error::NoDevice) => break,
-            Err(err) => return Err(err.into()),
-        };
-        if size != 37 {
-            continue;
-        }
-
-        ctrls.update(&payload)?;
-    }
-
-    Ok(())
-}
-
-struct Controllers<'a> {
-    engine: &'a Engine,
+struct GCDriver {
+    packet: [u8; 37],
+    engine: Arc<Engine>,
     device_id: u64,
-    bundles: [Option<DeviceBundle<'a>>; 4],
+    bundles: [Option<DeviceBundle<'static>>; 4],
     device: HidDevice,
 }
 
-impl<'a> Controllers<'a> {
-    fn new(device_id: u64, api: &'a Engine) -> Self {
-        Controllers {
-            engine: api,
+impl DeviceDriver for GCDriver {
+    const NAME: &'static str = "Gamecube Adaptor";
+
+    fn new(engine: &Arc<Engine>, device_id: u64) -> Self {
+        GCDriver {
+            packet: [0; 37],
+            engine: engine.clone(),
             device_id,
             bundles: [None, None, None, None],
             device: HidDevice::default(),
         }
     }
 
-    fn update(&mut self, packet: &[u8; 37]) -> Result<()> {
-        self.device.update(&packet)?;
+    fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
+        if handle.write_interrupt(EP_OUT, &INITIALIZE, Duration::from_secs(5))
+            .context("write interrupt error: is the correct driver installed for the device (i.e. using zadig)")?
+            != 1
+        {
+            return Err(anyhow!("invalid size sent"));
+        }
+
+        Ok(())
+    }
+
+    fn update(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<ControlFlow<()>> {
+        let size = match handle.read_interrupt(EP_IN, &mut self.packet, Duration::from_millis(2000))
+        {
+            Ok(size) => size,
+            Err(rusb::Error::Timeout) => return Ok(ControlFlow::Continue(())),
+            Err(rusb::Error::NoDevice) => return Ok(ControlFlow::Break(())),
+            Err(err) => return Err(err.into()),
+        };
+        if size != 37 {
+            return Ok(ControlFlow::Continue(()));
+        }
+
+        self.device.update(&self.packet)?;
 
         for i in 0..4 {
             let is_active = self.device.controllers[i].is_some();
@@ -125,7 +94,7 @@ impl<'a> Controllers<'a> {
                     );
 
                     self.bundles[i] = None;
-                    continue;
+                    return Ok(ControlFlow::Continue(()));
                 }
                 Some(bundle) => bundle,
                 None if is_active => {
@@ -138,19 +107,15 @@ impl<'a> Controllers<'a> {
                     );
 
                     let bundle = DeviceBundle::new(
-                        self.engine,
-                        format!(
-                            "Gamecube Adaptor Slot {} (Adaptor {})",
-                            i + 1,
-                            self.device_id
-                        ),
+                        self.engine.clone(),
+                        format!("Gamecube Adaptor {} Slot {}", self.device_id, i + 1),
                         [gc_controller_info()],
                     );
 
                     self.bundles[i] = Some(bundle);
                     self.bundles[i].as_mut().unwrap()
                 }
-                None => continue,
+                None => return Ok(ControlFlow::Continue(())),
             };
 
             if let Some(controller) = &self.device.controllers[i] {
@@ -166,11 +131,9 @@ impl<'a> Controllers<'a> {
             }
         }
 
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
 }
-
-crate::device_bundle!(DeviceBundle, controller: Controller);
 
 fn convert_buttons(buttons: HidButtons) -> u64 {
     let mut out = 0u64;
@@ -202,34 +165,14 @@ fn convert_buttons(buttons: HidButtons) -> u64 {
 }
 
 fn gc_controller_info() -> ControllerInfo {
-    let mut info = ControllerInfo {
-        buttons: 0,
+    use Button::*;
+
+    ControllerInfo {
+        buttons: A | B | X | Y | Up | Down | Left | Right | Start | R1 | L2 | R2,
         analogs: 0,
     }
     .with_lstick()
     .with_rstick()
     .with_l2_analog()
-    .with_r2_analog();
-
-    macro_rules! for_buttons {
-        ($($button:expr),* $(,)?) => {
-            $($button.set_pressed(&mut info.buttons);)*
-        }
-    }
-    for_buttons!(
-        Button::A,
-        Button::B,
-        Button::X,
-        Button::Y,
-        Button::Up,
-        Button::Down,
-        Button::Left,
-        Button::Right,
-        Button::Start,
-        Button::R1,
-        Button::L2,
-        Button::R2
-    );
-
-    info
+    .with_r2_analog()
 }

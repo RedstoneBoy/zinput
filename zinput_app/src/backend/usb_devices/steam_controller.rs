@@ -1,4 +1,4 @@
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{ops::ControlFlow, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use hidcon::steam_controller::{
@@ -6,6 +6,7 @@ use hidcon::steam_controller::{
     PRODUCT_ID_WIRELESS, VENDOR_ID,
 };
 
+use rusb::{Device, DeviceHandle, GlobalContext};
 use zinput_engine::{
     device::component::{
         controller::{Button, Controller, ControllerInfo},
@@ -16,16 +17,15 @@ use zinput_engine::{
 };
 
 use super::{
+    device_thread::{DeviceDriver, DeviceThread},
     util::{self, UsbExt},
-    ThreadData, UsbDriver,
+    UsbDriver,
 };
-
-const T: &'static str = "backend:usb_devices:steam_controller";
 
 pub(super) fn driver() -> UsbDriver {
     UsbDriver {
         filter: Box::new(filter),
-        thread: new_controller_thread,
+        thread: <DeviceThread<SCDriver>>::new,
     }
 }
 
@@ -36,97 +36,25 @@ fn filter(dev: &rusb::Device<rusb::GlobalContext>) -> bool {
         .unwrap_or(false)
 }
 
-fn new_controller_thread(data: ThreadData) -> Box<dyn FnOnce() + Send> {
-    Box::new(move || {
-        let id = data.device_id;
-
-        log::info!(target: T, "controller found, id: {}", id);
-        match controller_thread(data) {
-            Ok(()) => log::info!(target: T, "controller thread {} closed", id),
-            Err(err) => log::error!(target: T, "controller thread {} crashed: {:#}", id, err),
-        }
-    })
-}
-
-fn controller_thread(
-    ThreadData {
-        device,
-        device_id,
-        stop,
-        engine,
-    }: ThreadData,
-) -> Result<()> {
-    let mut sc = device.open().context("failed to open device")?;
-
-    match sc.set_auto_detach_kernel_driver(true) {
-        Ok(()) => {}
-        Err(rusb::Error::NotSupported) => {}
-        Err(err) => {
-            Err(err).context("failed to auto-detach kernel drivers")?;
-        }
-    }
-
-    let iface = device.find_interface(util::hid_filter)?;
-
-    sc.claim_interface(iface)
-        .context("failed to claim interface")?;
-
-    sc.write_control(
-        0x21,
-        0x09,
-        0x300,
-        1,
-        &DISABLE_LIZARD_MODE,
-        Duration::from_secs(3),
-    )?;
-
-    sc.write_control(
-        0x21,
-        0x09,
-        0x0300,
-        1,
-        &ENABLE_MOTION,
-        Duration::from_secs(3),
-    )?;
-
-    let mut bundle = SCBundle::new(device_id, &*engine);
-
-    let mut buf = [0u8; 64];
-
-    while !stop.load(Ordering::Acquire) {
-        let size = match sc.read_interrupt(EP_IN, &mut buf, Duration::from_millis(2000)) {
-            Ok(size) => size,
-            Err(rusb::Error::Timeout) => continue,
-            Err(rusb::Error::NoDevice) => break,
-            Err(err) => return Err(err.into()),
-        };
-
-        if size != 64 {
-            continue;
-        }
-
-        bundle.update(&buf)?;
-    }
-
-    Ok(())
-}
-
-crate::device_bundle!(DeviceBundle,
+crate::device_bundle!(DeviceBundle (owned),
     controller: Controller,
     motion: Motion,
     touch_pad: TouchPad[2],
 );
 
-struct SCBundle<'a> {
-    bundle: DeviceBundle<'a>,
+struct SCDriver {
+    packet: [u8; 64],
+    bundle: DeviceBundle<'static>,
     controller: HidController,
 }
 
-impl<'a> SCBundle<'a> {
-    fn new(adaptor_id: u64, engine: &'a Engine) -> Self {
+impl DeviceDriver for SCDriver {
+    const NAME: &'static str = "Steam Controller";
+
+    fn new(engine: &Arc<Engine>, adaptor_id: u64) -> Self {
         let bundle = DeviceBundle::new(
-            engine,
-            format!("Steam Controller (Adaptor {})", adaptor_id),
+            engine.clone(),
+            format!("Steam Controller {}", adaptor_id),
             [sc_controller_info()],
             [MotionInfo::new(true, true)],
             [
@@ -135,14 +63,71 @@ impl<'a> SCBundle<'a> {
             ],
         );
 
-        SCBundle {
+        SCDriver {
+            packet: [0; 64],
             bundle,
             controller: Default::default(),
         }
     }
 
-    fn update(&mut self, packet: &[u8; 64]) -> Result<()> {
-        self.controller.update(packet)?;
+    fn open_device(
+        &mut self,
+        device: &Device<GlobalContext>,
+    ) -> Result<DeviceHandle<GlobalContext>> {
+        let mut handle = device.open().context("failed to open device")?;
+
+        match handle.set_auto_detach_kernel_driver(true) {
+            Ok(()) => {}
+            Err(rusb::Error::NotSupported) => {}
+            Err(err) => {
+                Err(err).context("failed to auto-detach kernel drivers")?;
+            }
+        }
+
+        let iface = device.find_interface(util::hid_filter)?;
+
+        handle
+            .claim_interface(iface)
+            .context("failed to claim interface")?;
+
+        Ok(handle)
+    }
+
+    fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
+        handle.write_control(
+            0x21,
+            0x09,
+            0x300,
+            1,
+            &DISABLE_LIZARD_MODE,
+            Duration::from_secs(3),
+        )?;
+
+        handle.write_control(
+            0x21,
+            0x09,
+            0x0300,
+            1,
+            &ENABLE_MOTION,
+            Duration::from_secs(3),
+        )?;
+
+        Ok(())
+    }
+
+    fn update(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<ControlFlow<()>> {
+        let size = match handle.read_interrupt(EP_IN, &mut self.packet, Duration::from_millis(2000))
+        {
+            Ok(size) => size,
+            Err(rusb::Error::Timeout) => return Ok(ControlFlow::Continue(())),
+            Err(rusb::Error::NoDevice) => return Ok(ControlFlow::Break(())),
+            Err(err) => return Err(err.into()),
+        };
+        if size != 64 {
+            return Ok(ControlFlow::Continue(()));
+        }
+
+        self.controller.update(&self.packet)?;
 
         self.update_controller();
         self.update_touch_pads();
@@ -150,9 +135,11 @@ impl<'a> SCBundle<'a> {
 
         self.bundle.update()?;
 
-        Ok(())
+        Ok(ControlFlow::Continue(()))
     }
+}
 
+impl SCDriver {
     fn update_controller(&mut self) {
         let buttons = self.controller.buttons;
         let lpad_x = self.controller.left_pad.x;
@@ -255,41 +242,33 @@ impl<'a> SCBundle<'a> {
 }
 
 fn sc_controller_info() -> ControllerInfo {
-    let mut info = ControllerInfo {
-        buttons: 0,
+    use Button::*;
+
+    ControllerInfo {
+        buttons: 0
+            | A
+            | B
+            | X
+            | Y
+            | Up
+            | Down
+            | Left
+            | Right
+            | Start
+            | Select
+            | L1
+            | R1
+            | L2
+            | R2
+            | L3
+            | R3
+            | LStick
+            | RStick
+            | Home,
         analogs: 0,
     }
     .with_lstick()
     .with_rstick()
     .with_l2_analog()
-    .with_r2_analog();
-
-    macro_rules! for_buttons {
-        ($($button:expr),* $(,)?) => {
-            $($button.set_pressed(&mut info.buttons);)*
-        }
-    }
-    for_buttons!(
-        Button::A,
-        Button::B,
-        Button::X,
-        Button::Y,
-        Button::Up,
-        Button::Down,
-        Button::Left,
-        Button::Right,
-        Button::Start,
-        Button::Select,
-        Button::L1,
-        Button::R1,
-        Button::L2,
-        Button::R2,
-        Button::L3,
-        Button::R3,
-        Button::LStick,
-        Button::RStick,
-        Button::Home,
-    );
-
-    info
+    .with_r2_analog()
 }

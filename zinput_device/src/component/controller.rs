@@ -1,3 +1,5 @@
+use std::ops::BitOr;
+
 use super::ComponentData;
 
 #[derive(Clone)]
@@ -153,6 +155,22 @@ impl Button {
 
     pub fn is_pressed(&self, buttons: u64) -> bool {
         buttons & (1 << self.bit()) != 0
+    }
+}
+
+impl BitOr for Button {
+    type Output = u64;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.bit() | rhs.bit()
+    }
+}
+
+impl BitOr<Button> for u64 {
+    type Output = u64;
+
+    fn bitor(self, rhs: Button) -> u64 {
+        self | rhs.bit()
     }
 }
 
