@@ -17,7 +17,7 @@ use zinput_engine::{
 const VENDOR_ID: u16 = 0x057E;
 const PID_JOYCON_L: u16 = 0x2006;
 const PID_JOYCON_R: u16 = 0x2007;
-// const PID_JOYCON_PRO: u16 = 0x2009;
+const PID_JOYCON_PRO: u16 = 0x2009;
 // const PID_JOYCON_CHARGEGRIP: u16 = 0x2007;
 
 // TODO: Differentiate between usb and bluetooth
@@ -103,6 +103,7 @@ impl Inner {
                 let joy_type = match hid_info.product_id() {
                     PID_JOYCON_L => JoyconType::Left,
                     PID_JOYCON_R => JoyconType::Right,
+                    PID_JOYCON_PRO    => JoyconType::Pro,
                     _ => continue,
                 };
 
@@ -332,6 +333,7 @@ impl<'a> JoyconBundle<'a> {
             [match joy_type {
                 JoyconType::Left => joycon_l_info(),
                 JoyconType::Right => joycon_r_info(),
+                JoyconType::Pro => joycon_pro_info(),
             }],
             [MotionInfo::new(true, true)],
         );
@@ -479,6 +481,34 @@ fn joycon_r_info() -> ControllerInfo {
     .with_rstick()
 }
 
+fn joycon_pro_info() -> ControllerInfo {
+    ControllerInfo {
+        buttons: buttons!(
+            Button::A,
+            Button::B,
+            Button::X,
+            Button::Y,
+            Button::Start,
+            Button::R1,
+            Button::R2,
+            Button::RStick,
+            Button::Home,
+            Button::Up,
+            Button::Down,
+            Button::Left,
+            Button::Right,
+            Button::Select,
+            Button::L1,
+            Button::L2,
+            Button::LStick,
+            Button::Capture,
+        ),
+        analogs: 0,
+    }
+    .with_lstick()
+    .with_rstick()
+}
+
 #[derive(Copy, Clone, Default)]
 struct MotionData {
     accel: [i16; 3],
@@ -488,6 +518,7 @@ struct MotionData {
 enum JoyconType {
     Left,
     Right,
+    Pro,
 }
 
 impl std::fmt::Display for JoyconType {
@@ -495,6 +526,7 @@ impl std::fmt::Display for JoyconType {
         match self {
             JoyconType::Left => write!(f, "Joycon Left"),
             JoyconType::Right => write!(f, "Joycon Right"),
+            JoyconType::Pro => write!(f, "Pro Controller"),
         }
     }
 }
