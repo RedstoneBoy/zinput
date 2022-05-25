@@ -1,5 +1,6 @@
-#![feature(maybe_uninit_uninit_array)]
+#![feature(let_else)]
 #![feature(generic_associated_types)]
+#![feature(maybe_uninit_uninit_array)]
 
 use std::sync::Arc;
 
@@ -23,7 +24,7 @@ fn main() {
     {
         zinput.add_plugin(Arc::new(backend::raw_input::RawInput::new()));
         zinput.add_plugin(Arc::new(backend::xinput::XInput::new()));
-        zinput.add_plugin(Arc::new(frontend::xinput::XInput::new()));
+        zinput.add_plugin(Arc::new(frontend::vigem::Vigem::new()));
     }
 
     #[cfg(target_os = "linux")]

@@ -1591,20 +1591,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
-name = "vigem"
-version = "0.9.1"
+name = "vigem-client"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f278d79f2c5741341911d709433b0bc5c54ccd17fc218bff1fd1ade8af35eb52"
+checksum = "5d886912e88b1d3b02a97d933df7829db8fb8561920410805794a48680c212d5"
 dependencies = [
- "bitflags",
- "vigem-sys",
+ "winapi",
 ]
-
-[[package]]
-name = "vigem-sys"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76ce57f3037d8bd899c33e5f8e34db0c507ee82a7fb6adb6ce5f237dab2b6ac7"
 
 [[package]]
 name = "walkdir"
@@ -2010,7 +2003,7 @@ dependencies = [
  "simple_logger",
  "swi_packet",
  "udev",
- "vigem",
+ "vigem-client",
  "winapi",
  "zinput_engine",
 ]
