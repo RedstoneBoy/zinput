@@ -9,9 +9,11 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use crossbeam_channel::{Receiver, RecvError, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
-use vigem_client::{Client, TargetId, XButtons, XGamepad, Xbox360Wired};
+use vigem_client::{
+    Client, DS4Report, DualShock4Wired, TargetId, XButtons, XGamepad, Xbox360Wired,
+};
 use zinput_engine::{
     device::component::controller::{Button, Controller},
     eframe::{egui, epi},
@@ -89,9 +91,11 @@ enum Inner {
         stop: Arc<AtomicBool>,
         handle: JoinHandle<()>,
 
-        device_send: Sender<(usize, Option<Uuid>)>,
+        xbox_send: Sender<Vec<Uuid>>,
+        selected_xbox: Vec<Uuid>,
 
-        selected_devices: [Option<Uuid>; 4],
+        ds4_send: Sender<Vec<Uuid>>,
+        selected_ds4: Vec<Uuid>,
     },
 }
 
@@ -110,11 +114,13 @@ impl Inner {
         let status = Arc::new(Mutex::new(PluginStatus::Running));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let (device_send, device_recv) = crossbeam_channel::unbounded();
+        let (xbox_send, xbox_recv) = crossbeam_channel::unbounded();
+        let (ds4_send, ds4_recv) = crossbeam_channel::unbounded();
 
         let handle = std::thread::spawn(new_vigem_thread(Thread {
             engine: engine.clone(),
-            device_recv,
+            xbox_recv,
+            ds4_recv,
             signals,
             status: status.clone(),
             stop: stop.clone(),
@@ -126,9 +132,11 @@ impl Inner {
             stop,
             handle,
 
-            device_send,
+            xbox_send,
+            selected_xbox: Vec::new(),
 
-            selected_devices: [None; 4],
+            ds4_send,
+            selected_ds4: Vec::new(),
         };
     }
 
@@ -163,39 +171,134 @@ impl Inner {
     fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         let Inner::Init {
             engine,
-            device_send,
-            selected_devices,
+            xbox_send,
+            selected_xbox,
+            ds4_send,
+            selected_ds4,
             ..
         } = self
         else { return };
 
-        for i in 0..selected_devices.len() {
-            egui::ComboBox::from_label(format!("Vigem XBox Controller {}", i + 1))
-                .selected_text(
-                    selected_devices[i]
-                        .and_then(|id| engine.get_device_info(&id))
-                        .map_or("[None]".to_owned(), |dev| dev.name.clone()),
-                )
-                .show_ui(ui, |ui| {
-                    if ui
-                        .selectable_value(&mut selected_devices[i], None, "[None]")
-                        .clicked()
-                    {
-                        device_send.send((i, None)).unwrap();
+        #[derive(PartialEq, Eq)]
+        enum Action {
+            Remove(usize),
+            Change(usize, Uuid),
+            Add(Uuid),
+        }
+
+        let mut action = None;
+
+        // XBox Controllers
+
+        for i in 0..selected_xbox.len() {
+            if action.is_some() {
+                break;
+            }
+            egui::ComboBox::from_label(format!("ViGEm XBox Controller {}", i + 1))
+                .selected_text(match engine.get_device_info(&selected_xbox[i]) {
+                    Some(info) => info.name.clone(),
+                    None => {
+                        action = Some(Action::Remove(i));
+                        break;
                     }
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
                     for device_ref in engine.devices() {
-                        if ui
-                            .selectable_value(
-                                &mut selected_devices[i],
-                                Some(*device_ref.id()),
-                                &device_ref.name,
-                            )
-                            .clicked()
-                        {
-                            device_send.send((i, Some(*device_ref.id()))).unwrap();
-                        }
+                        ui.selectable_value(
+                            &mut action,
+                            Some(Action::Change(i, *device_ref.id())),
+                            &device_ref.name,
+                        );
                     }
                 });
+        }
+
+        if selected_xbox.len() < 4 && action.is_none() {
+            egui::ComboBox::from_label(format!(
+                "ViGEm XBox Controller {}",
+                selected_xbox.len() + 1
+            ))
+            .selected_text("[None]")
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut action, None, "[None]");
+                for device_ref in engine.devices() {
+                    ui.selectable_value(
+                        &mut action,
+                        Some(Action::Add(*device_ref.id())),
+                        &device_ref.name,
+                    );
+                }
+            });
+        }
+
+        if let Some(action) = action {
+            match action {
+                Action::Remove(i) => {
+                    selected_xbox.remove(i);
+                }
+                Action::Change(i, id) => selected_xbox[i] = id,
+                Action::Add(id) => selected_xbox.push(id),
+            }
+
+            xbox_send.send(selected_xbox.clone()).unwrap();
+        }
+
+        ui.separator();
+
+        // DS4 Controllers
+
+        action = None;
+
+        for i in 0..selected_ds4.len() {
+            if action.is_some() {
+                break;
+            }
+            egui::ComboBox::from_label(format!("ViGEm DS4 Controller {}", i + 1))
+                .selected_text(match engine.get_device_info(&selected_ds4[i]) {
+                    Some(info) => info.name.clone(),
+                    None => {
+                        action = Some(Action::Remove(i));
+                        break;
+                    }
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
+                    for device_ref in engine.devices() {
+                        ui.selectable_value(
+                            &mut action,
+                            Some(Action::Change(i, *device_ref.id())),
+                            &device_ref.name,
+                        );
+                    }
+                });
+        }
+
+        if selected_ds4.len() < u16::MAX as usize - 1 && action.is_none() {
+            egui::ComboBox::from_label(format!("ViGEm DS4 Controller {}", selected_ds4.len() + 1))
+                .selected_text("[None]")
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut action, None, "[None]");
+                    for device_ref in engine.devices() {
+                        ui.selectable_value(
+                            &mut action,
+                            Some(Action::Add(*device_ref.id())),
+                            &device_ref.name,
+                        );
+                    }
+                });
+        }
+
+        if let Some(action) = action {
+            match action {
+                Action::Remove(i) => {
+                    selected_ds4.remove(i);
+                }
+                Action::Change(i, id) => selected_ds4[i] = id,
+                Action::Add(id) => selected_ds4.push(id),
+            }
+
+            ds4_send.send(selected_ds4.clone()).unwrap();
         }
     }
 }
@@ -216,7 +319,8 @@ impl Signals {
 
 struct Thread {
     engine: Arc<Engine>,
-    device_recv: Receiver<(usize, Option<Uuid>)>,
+    xbox_recv: Receiver<Vec<Uuid>>,
+    ds4_recv: Receiver<Vec<Uuid>>,
     signals: Arc<Signals>,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
@@ -231,7 +335,7 @@ fn new_vigem_thread(thread: Thread) -> impl FnOnce() {
                 *status.lock() = PluginStatus::Stopped;
             }
             Err(e) => {
-                log::error!(target: T, "vigem thread crashed: {}", e);
+                log::error!(target: T, "vigem thread crashed: {:?}", e);
                 *status.lock() = PluginStatus::Error(format!("vigem thread crashed: {}", e));
             }
         }
@@ -241,7 +345,8 @@ fn new_vigem_thread(thread: Thread) -> impl FnOnce() {
 fn vigem_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
-        device_recv: device_change,
+        xbox_recv,
+        ds4_recv,
         signals,
         stop,
         ..
@@ -249,44 +354,78 @@ fn vigem_thread(thread: Thread) -> Result<()> {
 
     let vigem = Client::connect()?;
 
-    let mut targets = [(); 4].map(|_| Xbox360Wired::new(&vigem, TargetId::XBOX360_WIRED));
-    let mut ids: [Option<Uuid>; 4] = [None; 4];
+    let mut ds4_targets = Vec::<(Uuid, DualShock4Wired<_>)>::new();
+    let mut xbox_targets = Vec::<(Uuid, Xbox360Wired<_>)>::new();
 
     loop {
         crossbeam_channel::select! {
-            recv(device_change) -> device_change => {
-                match device_change {
-                    // change controller[idx] to new controller
-                    Ok((idx, Some(device_id))) => {
-                        // remove old controller
-                        if let Some(did) = &mut ids[idx] {
-                            targets[idx].unplug().context("failed to unplug target being replaced")?;
-                            signals.listen_update.lock().remove(did);
-                        }
+            recv(xbox_recv) -> xbox_recv => {
+                let Ok(xbox_ids) = xbox_recv
+                else { return Ok(()); }; // Sender dropped which means plugin is uninitialized
 
-                        ids[idx] = Some(device_id);
-                        targets[idx].plugin().context("failed to plugin target")?;
-                        targets[idx].wait_ready().context("failed to wait on target")?;
-                        signals.listen_update.lock().insert(device_id);
+                if xbox_ids.len() < xbox_targets.len() {
+                    for (_, xbox_target) in &mut xbox_targets[xbox_ids.len()..] {
+                        xbox_target.unplug().context("failed to unplug xbox target")?;
                     }
-                    // remove controller[idx]
-                    Ok((idx, None)) => {
-                        if let Some(did) = ids[idx].as_mut() {
-                            targets[idx].unplug().context("failed to unplug target")?;
-                            signals.listen_update.lock().remove(did);
-                        }
-                        ids[idx] = None;
+                    for _ in xbox_ids.len()..xbox_targets.len() {
+                        xbox_targets.pop();
                     }
-                    Err(RecvError) => {
-                        // Sender dropped which means plugin is uninitialized
-                        return Ok(());
+                } else if xbox_ids.len() > xbox_targets.len() {
+                    for i in xbox_targets.len()..xbox_ids.len() {
+                        let mut xbox = Xbox360Wired::new(&vigem, TargetId::XBOX360_WIRED);
+                        xbox.plugin().context("failed to plugin xbox target")?;
+                        xbox.wait_ready().context("xbox target failed to ready")?;
+                        xbox_targets.push((xbox_ids[i], xbox));
+                    }
+                }
+
+                {
+                    let mut listen_to = signals.listen_update.lock();
+                    listen_to.clear();
+                    for (id, _) in &xbox_targets {
+                        listen_to.insert(*id);
+                    }
+                    for (id, _) in &ds4_targets {
+                        listen_to.insert(*id);
                     }
                 }
             },
-            recv(signals.update.1) -> _ => {
-                for i in 0..ids.len() {
-                    if let Some(did) = &ids[i] {
-                        let device = match engine.get_device(did) {
+            recv(ds4_recv) -> ds4_recv => {
+                let Ok(ds4_ids) = ds4_recv
+                else { return Ok(()); }; // Sender dropped which means plugin is uninitialized
+
+                if ds4_ids.len() < ds4_targets.len() {
+                    for (_, ds4_target) in &mut ds4_targets[ds4_ids.len()..] {
+                        ds4_target.unplug().context("failed to unplug ds4 target")?;
+                    }
+                    for _ in ds4_ids.len()..ds4_targets.len() {
+                        ds4_targets.pop();
+                    }
+                } else if ds4_ids.len() > ds4_targets.len() {
+                    for i in ds4_targets.len()..ds4_ids.len() {
+                        let mut ds4 = DualShock4Wired::new(&vigem, TargetId::DUALSHOCK4_WIRED);
+                        ds4.plugin().context("failed to plugin ds4 target")?;
+                        ds4.wait_ready().context("ds4 target failed to ready")?;
+                        ds4_targets.push((ds4_ids[i], ds4));
+                    }
+                }
+
+                {
+                    let mut listen_to = signals.listen_update.lock();
+                    listen_to.clear();
+                    for (id, _) in &xbox_targets {
+                        listen_to.insert(*id);
+                    }
+                    for (id, _) in &ds4_targets {
+                        listen_to.insert(*id);
+                    }
+                }
+            },
+            recv(signals.update.1) -> rid => {
+                if let Ok(rid) = rid {
+                    for (id, target) in &mut xbox_targets {
+                        if id != &rid { continue; }
+                        let device = match engine.get_device(id) {
                             Some(device) => device,
                             None => continue,
                         };
@@ -295,7 +434,21 @@ fn vigem_thread(thread: Thread) -> Result<()> {
                             None => continue,
                         };
 
-                        update_target(&mut targets[i], controller).with_context(|| format!("failed to update target {}", i))?;
+                        update_xbox_target(target, controller).with_context(|| "failed to update xbox target")?;
+                    }
+
+                    for (id, target) in &mut ds4_targets {
+                        if id != &rid { continue; }
+                        let device = match engine.get_device(id) {
+                            Some(device) => device,
+                            None => continue,
+                        };
+                        let controller = match device.controllers.get(0) {
+                            Some(controller) => controller,
+                            None => continue,
+                        };
+
+                        update_ds4_target(target, controller).with_context(|| "failed to update ds4 target")?;
                     }
                 }
             }
@@ -310,7 +463,7 @@ fn vigem_thread(thread: Thread) -> Result<()> {
     Ok(())
 }
 
-fn update_target(target: &mut Xbox360Wired<&Client>, data: &Controller) -> Result<()> {
+fn update_xbox_target(target: &mut Xbox360Wired<&Client>, data: &Controller) -> Result<()> {
     macro_rules! translate {
         ($data:expr, $($from:expr => $to:expr),* $(,)?) => {{
             XButtons {
@@ -351,6 +504,103 @@ fn update_target(target: &mut Xbox360Wired<&Client>, data: &Controller) -> Resul
         thumb_ly: (((data.left_stick_y as i32) - 128) * 256) as i16,
         thumb_rx: (((data.right_stick_x as i32) - 128) * 256) as i16,
         thumb_ry: (((data.right_stick_y as i32) - 128) * 256) as i16,
+    })?;
+
+    Ok(())
+}
+
+fn update_ds4_target(target: &mut DualShock4Wired<&Client>, data: &Controller) -> Result<()> {
+    enum DS4Buttons {
+        Square = 4,
+        Cross = 5,
+        Circle = 6,
+        Triangle = 7,
+        LB = 8,
+        RB = 9,
+        LT = 10,
+        RT = 11,
+        Share = 12,
+        Options = 13,
+        LStick = 14,
+        RStick = 15,
+    }
+
+    enum DS4Special {
+        PS = 0,
+        // TouchPad = 1,
+    }
+
+    enum DS4DPad {
+        None = 8,
+        NW = 7,
+        W = 6,
+        SW = 5,
+        S = 4,
+        SE = 3,
+        E = 2,
+        NE = 1,
+        N = 0,
+    }
+
+    macro_rules! translate {
+        ($data:expr, $($from:expr => $to:expr),* $(,)?) => {{
+            0 $(| if $from.is_pressed($data) { 1 << ($to as u16) } else { 0 })*
+        }};
+    }
+
+    let dpad = match (
+        Button::Up.is_pressed(data.buttons),
+        Button::Right.is_pressed(data.buttons),
+        Button::Down.is_pressed(data.buttons),
+        Button::Left.is_pressed(data.buttons),
+    ) {
+        (true, false, false, false) => DS4DPad::N,
+        (true, true, false, false) => DS4DPad::NE,
+        (false, true, false, false) => DS4DPad::E,
+        (false, true, true, false) => DS4DPad::SE,
+        (false, false, true, false) => DS4DPad::S,
+        (false, false, true, true) => DS4DPad::SW,
+        (false, false, false, true) => DS4DPad::W,
+        (true, false, false, true) => DS4DPad::NW,
+        _ => DS4DPad::None,
+    };
+
+    let special = if Button::Home.is_pressed(data.buttons) {
+        1 << (DS4Special::PS as u8)
+    } else {
+        0
+    };
+
+    target.update(&DS4Report {
+        buttons: translate!(data.buttons,
+            Button::A =>      DS4Buttons::Cross,
+            Button::B =>      DS4Buttons::Circle,
+            Button::X =>      DS4Buttons::Square,
+            Button::Y =>      DS4Buttons::Triangle,
+            Button::Start =>  DS4Buttons::Options,
+            Button::Select => DS4Buttons::Share,
+            Button::L1 =>     DS4Buttons::LB,
+            Button::R1 =>     DS4Buttons::RB,
+            Button::L2 =>     DS4Buttons::LT,
+            Button::R2 =>     DS4Buttons::RT,
+            Button::LStick => DS4Buttons::LStick,
+            Button::RStick => DS4Buttons::RStick,
+        ) | (dpad as u16),
+        special,
+        trigger_l: if Button::L2.is_pressed(data.buttons) {
+            255
+        } else {
+            data.l2_analog
+        },
+        trigger_r: if Button::R2.is_pressed(data.buttons) {
+            255
+        } else {
+            data.r2_analog
+        },
+        thumb_lx: data.left_stick_x,
+        thumb_ly: data.left_stick_y,
+        thumb_rx: data.right_stick_x,
+        thumb_ry: data.right_stick_y,
     })?;
 
     Ok(())

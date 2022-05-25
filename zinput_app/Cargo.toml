@@ -24,7 +24,7 @@ zinput_engine = { path = "../zinput_engine" }
 
 [target.'cfg(windows)'.dependencies]
 rusty-xinput = "1.2"
-vigem-client = "0.1"
+vigem-client = { version = "0.1", features = ["unstable"] }
 winapi = { version = "0.3", features = ["hidpi", "hidusage", "windef", "winuser"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
