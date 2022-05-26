@@ -103,7 +103,7 @@ impl Inner {
                 let joy_type = match hid_info.product_id() {
                     PID_JOYCON_L => JoyconType::Left,
                     PID_JOYCON_R => JoyconType::Right,
-                    PID_JOYCON_PRO    => JoyconType::Pro,
+                    PID_JOYCON_PRO => JoyconType::Pro,
                     _ => continue,
                 };
 
@@ -312,13 +312,25 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
         rstick_data.copy_from_slice(&stick_data[9..]);
     }
 
-    let lstick = StickCalibration::parse(lstick_data, true);
-    let rstick = StickCalibration::parse(rstick_data, false);
+    let mut deadzone_l = [0; 2];
+    let mut deadzone_r = [0; 2];
+
+    deadzone_l.copy_from_slice(
+        read_memory(dev, spi_addr(0x6086 + 3), 2, &mut buf)
+            .context("failed to read left stick deadzone data")?,
+    );
+    deadzone_r.copy_from_slice(
+        read_memory(dev, spi_addr(0x6098 + 3), 2, &mut buf)
+            .context("failed to read right stick deadzone data")?,
+    );
+
+    let lstick = StickCalibration::parse(lstick_data, deadzone_l, true);
+    let rstick = StickCalibration::parse(rstick_data, deadzone_r, false);
 
     Ok(Calibration { lstick, rstick })
 }
 
-crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion,);
+crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion);
 
 struct JoyconBundle<'a> {
     bundle: DeviceBundle<'a>,
@@ -598,10 +610,11 @@ struct StickCalibration {
     center: [f32; 2],
     omin: [f32; 2],
     omax: [f32; 2],
+    deadzone: f32,
 }
 
 impl StickCalibration {
-    fn parse(data: [u8; 9], is_left: bool) -> Self {
+    fn parse(data: [u8; 9], deadzone_data: [u8; 2], is_left: bool) -> Self {
         let data = data.map(|v| v as u16);
         let v0 = (data[1] << 8) & 0xF00 | data[0];
         let v1 = (data[2] << 4) | (data[1] >> 4);
@@ -609,6 +622,11 @@ impl StickCalibration {
         let v3 = (data[5] << 4) | (data[4] >> 4);
         let v4 = (data[7] << 8) & 0xF00 | data[6];
         let v5 = (data[8] << 4) | (data[7] >> 4);
+
+        let deadzone_data = deadzone_data.map(|v| v as u16);
+        let deadzone = (deadzone_data[1] << 8) & 0xF00 | deadzone_data[0];
+        let deadzone = deadzone as f32;
+        let deadzone = deadzone * deadzone;
 
         let [omin, center, omax] = if is_left {
             [[v4, v5], [v2, v3], [v0, v1]]
@@ -620,12 +638,21 @@ impl StickCalibration {
         let omin = omin.map(|v| v as f32);
         let omax = omax.map(|v| v as f32);
 
-        StickCalibration { center, omin, omax }
+        StickCalibration {
+            center,
+            omin,
+            omax,
+            deadzone,
+        }
     }
 
     fn apply(&self, [x, y]: [f32; 2]) -> [f32; 2] {
         let x = x - self.center[0];
         let y = y - self.center[1];
+
+        if x * x + y * y < self.deadzone {
+            return [0.5, 0.5];
+        }
 
         // TODO: deadzone
 
