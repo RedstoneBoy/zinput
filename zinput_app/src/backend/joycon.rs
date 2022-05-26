@@ -21,7 +21,6 @@ const PID_JOYCON_PRO: u16 = 0x2009;
 // const PID_JOYCON_CHARGEGRIP: u16 = 0x2007;
 
 // TODO: Differentiate between usb and bluetooth
-// TODO: Callibration for useful analog data
 // TODO: Implement bluetooth pro controller
 // TODO: Implement usb pro controller
 // TODO: Implement usb joycon left and right (charge grip)
@@ -33,6 +32,13 @@ const STANDARD_FULL_MODE: [u8; 12] = [
     0x00, // Packet Number
     0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, // Rumble: Neutral
     0x03, 0x30, // Subcommand: Standard Full Mode
+];
+
+const ENABLE_IMU: [u8; 12] = [
+    0x01, // Report: Rumble and Subcommand
+    0x00, // Packet Number
+    0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, // Rumble: Neutral
+    0x40, 0x01, // Subcommand: Standard Full Mode
 ];
 
 pub struct Joycon {
@@ -182,6 +188,10 @@ fn controller_thread(
     let calibration = read_calibration(&joycon).context("failed to read calibration data")?;
 
     joycon
+        .write(&ENABLE_IMU)
+        .context("failed to enable motion data")?;
+
+    joycon
         .write(&STANDARD_FULL_MODE)
         .context("failed to set controller to standard full mode")?;
 
@@ -283,7 +293,7 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
         Ok(&mut buf[7..][..(size as usize)])
     }
 
-    let mut buf = [0u8; 32];
+    let mut buf = [0u8; 40];
 
     let mut lstick_data = [0; 9];
     let mut rstick_data = [0; 9];
@@ -324,10 +334,25 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
             .context("failed to read right stick deadzone data")?,
     );
 
+    let mut motion = [0; 24];
+    motion.copy_from_slice(
+        read_memory(dev, spi_addr(0x6020), 24, &mut buf)
+            .context("failed to read motion calibration data")?,
+    );
+
+    {
+        let buf = read_memory(dev, spi_addr(0x8026), 26, &mut buf)
+            .context("failed to read user motion calibration data")?;
+        if buf[0] == 0xB2 && buf[1] == 0xA1 {
+            motion.copy_from_slice(&buf[2..]);
+        }
+    }
+
     let lstick = StickCalibration::parse(lstick_data, deadzone_l, true);
     let rstick = StickCalibration::parse(rstick_data, deadzone_r, false);
+    let motion = MotionCalibration::parse(motion);
 
-    Ok(Calibration { lstick, rstick })
+    Ok(Calibration { lstick, rstick, motion })
 }
 
 crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion);
@@ -335,6 +360,7 @@ crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion);
 struct JoyconBundle<'a> {
     bundle: DeviceBundle<'a>,
     calibration: Calibration,
+    joy_type: JoyconType,
 }
 
 impl<'a> JoyconBundle<'a> {
@@ -353,6 +379,7 @@ impl<'a> JoyconBundle<'a> {
         JoyconBundle {
             bundle,
             calibration,
+            joy_type,
         }
     }
 
@@ -417,9 +444,6 @@ impl<'a> JoyconBundle<'a> {
             JButton::Capture, Button::Capture;
         );
 
-        let lstick = lstick.map(|v| v as f32);
-        let rstick = rstick.map(|v| v as f32);
-
         let lstick = self.calibration.lstick.apply(lstick);
         let rstick = self.calibration.rstick.apply(rstick);
 
@@ -433,8 +457,23 @@ impl<'a> JoyconBundle<'a> {
         self.bundle.controller[0].right_stick_y = rstick[1];
     }
 
-    fn update_motion(&mut self, _data: [MotionData; 3]) {
-        // todo: motion
+    fn update_motion(&mut self, data: [MotionData; 3]) {
+        let [accel, gyro] = self.calibration.motion.apply(&data[2]);
+        self.bundle.motion[0].accel_x = accel[1];
+        self.bundle.motion[0].accel_y = -accel[0];
+        self.bundle.motion[0].accel_z = accel[2];
+
+        self.bundle.motion[0].gyro_pitch = -gyro[1];
+        self.bundle.motion[0].gyro_roll = -gyro[0];
+        self.bundle.motion[0].gyro_yaw = gyro[2];
+
+        if self.joy_type == JoyconType::Right {
+            self.bundle.motion[0].accel_x = -self.bundle.motion[0].accel_x;
+            self.bundle.motion[0].accel_z = -self.bundle.motion[0].accel_z;
+
+            self.bundle.motion[0].gyro_pitch = -self.bundle.motion[0].gyro_pitch;
+            self.bundle.motion[0].gyro_yaw = -self.bundle.motion[0].gyro_yaw;
+        }
     }
 
     fn parse_stick(data: [u8; 3]) -> [u16; 2] {
@@ -527,6 +566,7 @@ struct MotionData {
     gyro: [i16; 3],
 }
 
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum JoyconType {
     Left,
     Right,
@@ -603,6 +643,7 @@ impl JButton {
 struct Calibration {
     lstick: StickCalibration,
     rstick: StickCalibration,
+    motion: MotionCalibration,
 }
 
 #[derive(Debug)]
@@ -646,15 +687,14 @@ impl StickCalibration {
         }
     }
 
-    fn apply(&self, [x, y]: [f32; 2]) -> [f32; 2] {
+    fn apply(&self, [x, y]: [u16; 2]) -> [f32; 2] {
+        let [x, y] = [x as f32, y as f32];
         let x = x - self.center[0];
         let y = y - self.center[1];
 
         if x * x + y * y < self.deadzone {
             return [0.5, 0.5];
         }
-
-        // TODO: deadzone
 
         let x = x / if x > 0.0 { self.omax[0] } else { self.omin[0] };
         let y = y / if y > 0.0 { self.omax[1] } else { self.omin[1] };
@@ -663,5 +703,47 @@ impl StickCalibration {
         let y = y + 0.5;
 
         [x, y]
+    }
+}
+
+#[derive(Debug)]
+struct MotionCalibration {
+    accel_neutral: [f32; 3],
+    accel_sens: [f32; 3],
+    gyro_neutral: [f32; 3],
+    gyro_sens: [f32; 3],
+}
+
+impl MotionCalibration {
+    fn parse(data: [u8; 24]) -> Self {
+        let mut groups = [[0; 3]; 4];
+        for i in 0..4 {
+            for j in 0..3 {
+                groups[i][j] = i16::from_le_bytes([data[i * 6 + j * 2], data[i * 6 + j * 2 + 1]]);
+            }
+        }
+
+        let groups = groups.map(|arr| arr.map(|v| v as f32));
+        
+        MotionCalibration {
+            accel_neutral: groups[0],
+            accel_sens: groups[1],
+            gyro_neutral: groups[2],
+            gyro_sens: groups[3],
+        }
+    }
+
+    fn apply(&self, MotionData { accel, gyro }: &MotionData) -> [[f32; 3]; 2] {
+        let accel = [
+            accel[0] as f32 * (1.0 / (self.accel_sens[0] - self.accel_neutral[0])) * 4.0,
+            accel[1] as f32 * (1.0 / (self.accel_sens[1] - self.accel_neutral[1])) * 4.0,
+            accel[2] as f32 * (1.0 / (self.accel_sens[2] - self.accel_neutral[2])) * 4.0,
+        ];
+        let gyro = [
+            (gyro[0] as f32 - self.gyro_neutral[0]) * (816.0 / (self.gyro_sens[0] - self.gyro_neutral[0])),
+            (gyro[1] as f32 - self.gyro_neutral[1]) * (816.0 / (self.gyro_sens[1] - self.gyro_neutral[1])),
+            (gyro[2] as f32 - self.gyro_neutral[2]) * (816.0 / (self.gyro_sens[2] - self.gyro_neutral[2])),
+        ];
+        [accel, gyro]
     }
 }
