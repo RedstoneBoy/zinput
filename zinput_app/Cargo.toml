@@ -17,7 +17,7 @@ hidcon = { path = "../hidcon" }
 log = "0.4"
 parking_lot = "0.11"
 paste = "1.0"
-rusb = "0.8"
+rusb = "0.9"
 simple_logger = "2.1"
 swi_packet = { path = "../swi_packet" }
 zinput_engine = { path = "../zinput_engine" }
@@ -25,7 +25,7 @@ zinput_engine = { path = "../zinput_engine" }
 [target.'cfg(windows)'.dependencies]
 rusty-xinput = "1.2"
 vigem-client = { version = "0.1", features = ["unstable"] }
-winapi = { version = "0.3", features = ["hidpi", "hidusage", "windef", "winuser"] }
+winapi = { version = "0.3", features = ["dbt", "hidpi", "hidusage", "windef", "winuser"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 input-linux = "0.5"

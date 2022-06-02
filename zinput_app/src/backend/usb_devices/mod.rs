@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -13,8 +14,11 @@ use zinput_engine::{
     Engine,
 };
 
+use self::hotplug::HotPlug;
+
 mod device_thread;
 mod gc_adaptor;
+mod hotplug;
 mod pa_switch;
 mod steam_controller;
 mod util;
@@ -75,11 +79,97 @@ impl Plugin for UsbDevices {
 enum Inner {
     Uninit,
     Init {
-        drivers: Arc<Mutex<Vec<DriverData>>>,
-        handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-        stop: Arc<AtomicBool>,
+        scan_context: Arc<Mutex<ScanContext>>,
+        hotplug: Option<HotPlug>,
+
         status: Arc<Mutex<PluginStatus>>,
     },
+}
+
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+struct UsbDeviceId {
+    bus_number: u8,
+    address: u8,
+    port: u8,
+}
+
+struct ScanContext {
+    drivers: Vec<DriverData>,
+    handles: HashMap<UsbDeviceId, JoinHandle<()>>,
+    to_remove: Vec<UsbDeviceId>,
+
+    stop: Arc<AtomicBool>,
+    engine: Arc<Engine>,
+}
+
+impl ScanContext {
+    fn new(drivers: Vec<DriverData>, stop: Arc<AtomicBool>, engine: Arc<Engine>) -> Self {
+        ScanContext {
+            drivers,
+            handles: HashMap::new(),
+            to_remove: Vec::new(),
+
+            stop,
+            engine,
+        }
+    }
+    fn scan_devices(&mut self) -> Result<()> {
+        self.to_remove.clear();
+
+        for (id, handle) in &self.handles {
+            if handle.is_finished() {
+                self.to_remove.push(*id);
+            }
+        }
+
+        for id in &self.to_remove {
+            let _ = self.handles.remove(id).unwrap().join();
+        }
+
+        for usb_device in rusb::devices()
+            .context("failed to find usb devices")?
+            .iter()
+        {
+            let id = UsbDeviceId {
+                bus_number: usb_device.bus_number(),
+                address: usb_device.address(),
+                port: usb_device.port_number(),
+            };
+
+            if self.handles.contains_key(&id) {
+                continue;
+            }
+
+            for driver_data in &mut self.drivers {
+                if (driver_data.driver.filter)(&usb_device) {
+                    let device_id = driver_data.device_id;
+                    driver_data.device_id += 1;
+
+                    let handle = std::thread::spawn((driver_data.driver.thread)(ThreadData {
+                        device_id,
+                        device: usb_device,
+                        stop: self.stop.clone(),
+                        engine: self.engine.clone(),
+                    }));
+
+                    self.handles.insert(id, handle);
+
+                    break;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn hotplug_function(scan_context: Arc<Mutex<ScanContext>>) -> impl FnMut() + Send + 'static {
+    move || match scan_context.lock().scan_devices() {
+        Ok(()) => {}
+        Err(e) => {
+            log::warn!(target: T, "failed to scan devices: {}", e);
+        }
+    }
 }
 
 impl Inner {
@@ -112,7 +202,7 @@ impl Inner {
             pa_switch::driver(),
             steam_controller::driver(),
         ];
-        let mut drivers: Vec<DriverData> = drivers
+        let drivers: Vec<DriverData> = drivers
             .into_iter()
             .map(|driver| DriverData {
                 driver,
@@ -120,39 +210,28 @@ impl Inner {
             })
             .collect();
 
-        let mut handles = Vec::new();
+        let mut scan_context = ScanContext::new(drivers, stop.clone(), engine.clone());
+        scan_context
+            .scan_devices()
+            .context("failed to scan devices")?;
 
-        for usb_device in rusb::devices()
-            .context("failed to find usb devices")?
-            .iter()
-        {
-            for driver_data in &mut drivers {
-                if (driver_data.driver.filter)(&usb_device) {
-                    let device_id = driver_data.device_id;
-                    driver_data.device_id += 1;
-                    let handle = std::thread::spawn((driver_data.driver.thread)(ThreadData {
-                        device_id,
-                        device: usb_device,
-                        stop: stop.clone(),
-                        engine: engine.clone(),
-                    }));
+        let scan_context = Arc::new(Mutex::new(scan_context));
 
-                    handles.push(handle);
+        let hotplug = HotPlug::register(hotplug_function(scan_context.clone()));
 
-                    break;
-                }
+        let hotplug = match hotplug {
+            Ok(v) => Some(v),
+            Err(e) => {
+                log::warn!(target: T, "failed to register hotplug: {}", e);
+                None
             }
-        }
-
-        let drivers = Arc::new(Mutex::new(drivers));
-
-        let handles = Arc::new(Mutex::new(handles));
+        };
 
         *self = Inner::Init {
-            drivers,
-            handles,
-            stop,
+            scan_context,
             status,
+
+            hotplug,
         };
 
         Ok(())
@@ -162,15 +241,18 @@ impl Inner {
         match std::mem::replace(self, Inner::Uninit) {
             Inner::Uninit => {}
             Inner::Init {
-                handles,
-                stop,
+                scan_context,
                 status,
+                hotplug,
                 ..
             } => {
-                stop.store(true, Ordering::Release);
+                drop(hotplug);
 
-                let mut handles = handles.lock();
-                for handle in std::mem::replace(&mut *handles, Vec::new()) {
+                let mut scan_context = scan_context.lock();
+
+                scan_context.stop.store(true, Ordering::Release);
+
+                for (_, handle) in std::mem::replace(&mut scan_context.handles, HashMap::new()) {
                     match handle.join() {
                         Ok(()) => (),
                         Err(_) => log::info!(target: T, "a usb driver panicked"),
