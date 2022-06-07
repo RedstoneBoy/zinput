@@ -15,7 +15,7 @@ use vigem_client::{
     Client, DS4Report, DualShock4Wired, TargetId, XButtons, XGamepad, Xbox360Wired,
 };
 use zinput_engine::{
-    device::component::controller::{Button, Controller},
+    device::{component::controller::{Button, Controller}, DeviceInfo},
     eframe::{egui, epi},
     event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
@@ -78,6 +78,8 @@ impl Plugin for Vigem {
                     self.signals.update.0.send(*id).unwrap();
                 }
             }
+            Event::DeviceAdded(id, info) => self.inner.lock().device_added(id, info),
+            Event::DeviceRemoved(id) => self.inner.lock().device_removed(id),
             _ => {}
         }
     }
@@ -93,6 +95,7 @@ enum Inner {
 
         xbox_send: Sender<Vec<Uuid>>,
         selected_xbox: Vec<Uuid>,
+        xbox_ids: Vec<Option<String>>,
 
         ds4_send: Sender<Vec<Uuid>>,
         selected_ds4: Vec<Uuid>,
@@ -134,6 +137,7 @@ impl Inner {
 
             xbox_send,
             selected_xbox: Vec::new(),
+            xbox_ids: Vec::new(),
 
             ds4_send,
             selected_ds4: Vec::new(),
@@ -300,6 +304,30 @@ impl Inner {
 
             ds4_send.send(selected_ds4.clone()).unwrap();
         }
+    }
+
+    fn device_added(&mut self, id: &Uuid, info: &DeviceInfo) {
+        let Inner::Init {
+            engine,
+            xbox_send,
+            selected_xbox,
+            ds4_send,
+            selected_ds4,
+            ..
+        } = self
+        else { return };
+    }
+
+    fn device_removed(&mut self, id: &Uuid) {
+        let Inner::Init {
+            engine,
+            xbox_send,
+            selected_xbox,
+            ds4_send,
+            selected_ds4,
+            ..
+        } = self
+        else { return };
     }
 }
 

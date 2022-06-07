@@ -268,7 +268,7 @@ mod ctx {
 use ctx::HotPlugInner;
 
 pub struct HotPlug {
-    inner: HotPlugInner,
+    _inner: HotPlugInner,
 }
 
 impl HotPlug {
@@ -277,7 +277,7 @@ impl HotPlug {
         F: FnMut() + Send + 'static,
     {
         Ok(HotPlug {
-            inner: HotPlugInner::register(callback).context("failed to register hotplug event")?,
+            _inner: HotPlugInner::register(callback).context("failed to register hotplug event")?,
         })
     }
 }

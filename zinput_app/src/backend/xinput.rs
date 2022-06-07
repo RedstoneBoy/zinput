@@ -205,6 +205,8 @@ impl<'a> Controllers<'a> {
             self.controllers[index] = Some(XController::new(
                 self.api,
                 format!("XInput Controller {}", index + 1),
+                // TODO: ID
+                None,
                 [xinput_controller_info()],
             ));
         }

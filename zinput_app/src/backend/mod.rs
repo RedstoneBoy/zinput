@@ -35,9 +35,11 @@ macro_rules! device_bundle {
                 fn new(
                     api: $($api_type<'a>)+,
                     name: String,
+                    id: Option<String>,
                     $($cname: crate::device_bundle!(info $cname : $ctype $( [ $clen ] )? ),)*
                 ) -> Self {
                     let mut device_info = zinput_engine::device::DeviceInfo::new(name);
+                    device_info.id = id;
 
                     $(let $cname = crate::device_bundle!(init(api, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
 
