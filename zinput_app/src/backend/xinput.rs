@@ -171,7 +171,7 @@ impl<'a> Controllers<'a> {
         for i in 0..self.controllers.len() {
             if let Some(ctrl) = &mut self.controllers[i] {
                 match self.xinput.get_state(i as u32) {
-                    Ok(state) => ctrl.write(&state)?,
+                    Ok(state) => ctrl.write(&state),
                     Err(XInputUsageError::DeviceNotConnected) => self.disconnect(i),
                     Err(err) => {
                         log::error!(target: T, "controller polling error: {:?}", err);
@@ -183,11 +183,11 @@ impl<'a> Controllers<'a> {
         Ok(())
     }
 
-    fn poll_disconnected(&mut self) {
+    fn poll_disconnected(&mut self) -> Result<()> {
         for i in 0..self.controllers.len() {
             if self.controllers[i].is_none() {
                 match self.xinput.get_state(i as u32) {
-                    Ok(_) => self.connect(i),
+                    Ok(_) => self.connect(i)?,
                     // polling a non-connected controller causes a long delay
                     // so we only poll at most one non-connected controller.
                     Err(XInputUsageError::DeviceNotConnected) => break,
@@ -198,16 +198,20 @@ impl<'a> Controllers<'a> {
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn connect(&mut self, index: usize) {
+    fn connect(&mut self, index: usize) -> Result<()> {
         if self.controllers[index].is_none() {
             self.controllers[index] = Some(XController::new(
                 self.api,
                 format!("XInput Controller {}", index + 1),
                 [xinput_controller_info()],
-            ));
+            )?);
         }
+
+        Ok(())
     }
 
     fn disconnect(&mut self, index: usize) {
@@ -226,7 +230,7 @@ impl<'a> Drop for Controllers<'a> {
 crate::device_bundle!(XController, controller: Controller,);
 
 impl<'a> XController<'a> {
-    fn write(&mut self, state: &XInputState) -> Result<()> {
+    fn write(&mut self, state: &XInputState) {
         macro_rules! translate {
             ($state:expr, $($from:ident => $to:expr),* $(,)?) => {{
                 let mut buttons = 0;
@@ -265,9 +269,7 @@ impl<'a> XController<'a> {
         self.controller[0].right_stick_x = ((rpad_x / 256) + 128) as u8;
         self.controller[0].right_stick_y = ((rpad_y / 256) + 128) as u8;
 
-        self.update()?;
-
-        Ok(())
+        self.update();
     }
 }
 

@@ -45,14 +45,14 @@ struct GCDriver {
 impl DeviceDriver for GCDriver {
     const NAME: &'static str = "Gamecube Adaptor";
 
-    fn new(engine: &Arc<Engine>, device_id: u64) -> Self {
-        GCDriver {
+    fn new(engine: &Arc<Engine>, device_id: u64) -> Result<Self> {
+        Ok(GCDriver {
             packet: [0; 37],
             engine: engine.clone(),
             device_id,
             bundles: [None, None, None, None],
             device: HidDevice::default(),
-        }
+        })
     }
 
     fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
@@ -110,7 +110,7 @@ impl DeviceDriver for GCDriver {
                         self.engine.clone(),
                         format!("Gamecube Adaptor {} Slot {}", self.device_id, i + 1),
                         [gc_controller_info()],
-                    );
+                    )?;
 
                     self.bundles[i] = Some(bundle);
                     self.bundles[i].as_mut().unwrap()
@@ -127,7 +127,7 @@ impl DeviceDriver for GCDriver {
                 bundle.controller[0].l2_analog = controller.left_trigger;
                 bundle.controller[0].r2_analog = controller.right_trigger;
 
-                bundle.update()?;
+                bundle.update();
             }
         }
 

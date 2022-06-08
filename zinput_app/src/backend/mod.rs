@@ -26,7 +26,7 @@ macro_rules! device_bundle {
         struct $name<'a> {
             _lifetime: std::marker::PhantomData<&'a ()>,
             api: $($api_type<'a>)+,
-            device_id: zinput_engine::util::Uuid,
+            handle: zinput_engine::DeviceHandle,
             $($cname: crate::device_bundle!(field $cname : $ctype $( [ $clen ] )?),)*
         }
 
@@ -36,35 +36,27 @@ macro_rules! device_bundle {
                     api: $($api_type<'a>)+,
                     name: String,
                     $($cname: crate::device_bundle!(info $cname : $ctype $( [ $clen ] )? ),)*
-                ) -> Self {
+                ) -> std::result::Result<Self, zinput_engine::DeviceAlreadyExists> {
                     let mut device_info = zinput_engine::device::DeviceInfo::new(name);
 
                     $(let $cname = crate::device_bundle!(init(api, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
 
-                    let device_id = api.new_device(device_info);
+                    let handle = api.new_device(device_info)?;
 
-                    $name {
+                    Ok($name {
                         _lifetime: std::marker::PhantomData,
                         api,
-                        device_id,
+                        handle,
                         $($cname,)*
-                    }
+                    })
                 }
 
-                fn update(&self) -> Result<(), zinput_engine::ComponentUpdateError> {
+                fn update(&self) {
                     use zinput_engine::device::component::ComponentData;
 
-                    self.api.update(&self.device_id, |dev| {
+                    self.handle.update(|dev| {
                         $(crate::device_bundle!(update(self, dev) $cname : $ctype $( [ $clen ] )?);)*
-                    })?;
-
-                    Ok(())
-                }
-            }
-
-            impl<'a> Drop for $name<'a> {
-                fn drop(&mut self) {
-                    self.api.remove_device(&self.device_id);
+                    });
                 }
             }
         }

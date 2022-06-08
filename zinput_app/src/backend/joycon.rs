@@ -195,7 +195,7 @@ fn controller_thread(
         .write(&STANDARD_FULL_MODE)
         .context("failed to set controller to standard full mode")?;
 
-    let mut bundle = JoyconBundle::new(id, joy_type, calibration, &*api);
+    let mut bundle = JoyconBundle::new(id, joy_type, calibration, &*api)?;
 
     let mut buf = [0u8; 49];
 
@@ -364,7 +364,7 @@ struct JoyconBundle<'a> {
 }
 
 impl<'a> JoyconBundle<'a> {
-    fn new(id: u64, joy_type: JoyconType, calibration: Calibration, api: &'a Engine) -> Self {
+    fn new(id: u64, joy_type: JoyconType, calibration: Calibration, api: &'a Engine) -> Result<Self> {
         let bundle = DeviceBundle::new(
             api,
             format!("{} (id {})", joy_type, id + 1),
@@ -374,13 +374,13 @@ impl<'a> JoyconBundle<'a> {
                 JoyconType::Pro => joycon_pro_info(),
             }],
             [MotionInfo::new(true, true)],
-        );
+        )?;
 
-        JoyconBundle {
+        Ok(JoyconBundle {
             bundle,
             calibration,
             joy_type,
-        }
+        })
     }
 
     fn update(&mut self, data: &[u8; 49]) -> Result<()> {
@@ -403,7 +403,7 @@ impl<'a> JoyconBundle<'a> {
 
         self.update_motion(motions);
 
-        self.bundle.update()?;
+        self.bundle.update();
 
         Ok(())
     }

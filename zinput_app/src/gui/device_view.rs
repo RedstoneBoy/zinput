@@ -4,18 +4,18 @@ use zinput_engine::{
     device::component::{controller::Button, touch_pad::TouchPadShape},
     eframe::{egui, epi},
     util::Uuid,
-    Engine,
+    Engine, DeviceView,
 };
 
-pub struct DeviceView {
+pub struct DeviceViewer {
     engine: Arc<Engine>,
 
-    selected_controller: Option<Uuid>,
+    selected_controller: Option<DeviceView>,
 }
 
-impl DeviceView {
+impl DeviceViewer {
     pub fn new(engine: Arc<Engine>) -> Self {
-        DeviceView {
+        DeviceViewer {
             engine,
 
             selected_controller: None,
@@ -27,32 +27,23 @@ impl DeviceView {
             egui::ComboBox::from_label("Devices")
                 .selected_text(
                     self.selected_controller
-                        .and_then(|id| self.engine.get_device_info(&id))
-                        .map_or("".to_owned(), |dev| dev.name.clone()),
+                        .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    for device_ref in self.engine.devices() {
+                    let devices = self.engine.devices();
+                    let mut index = None;
+                    for (i, info) in devices.iter().enumerate() {
                         ui.selectable_value(
-                            &mut self.selected_controller,
-                            Some(*device_ref.id()),
-                            &device_ref.name,
+                            &mut index,
+                            Some(i),
+                            &info.name,
                         );
                     }
+                    self.selected_controller = index.and_then(|i| devices.get(i));
                 });
 
-            let device = match self
-                .selected_controller
-                .and_then(|id| self.engine.get_device(&id))
-            {
-                Some(device) => device,
-                None => return,
-            };
-
-            let device_info = match self
-                .selected_controller
-                .and_then(|id| self.engine.get_device_info(&id))
-            {
-                Some(device_info) => device_info,
+            let (device, device_info) = match self.selected_controller {
+                Some(view) => (view.device(), view.info()),
                 None => return,
             };
 

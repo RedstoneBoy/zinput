@@ -17,7 +17,8 @@ const T: &'static str = "backend:usb_devices";
 pub trait DeviceDriver {
     const NAME: &'static str;
 
-    fn new(engine: &Arc<Engine>, id: u64) -> Self;
+    fn new(engine: &Arc<Engine>, id: u64) -> Result<Self>
+    where Self: Sized;
 
     fn open_device(
         &mut self,
@@ -71,12 +72,6 @@ where
                 stop,
                 engine,
             } = data;
-            let driver = D::new(&engine, device_id);
-            let thread = Self {
-                device,
-                driver,
-                stop,
-            };
 
             log::info!(
                 target: T,
@@ -84,6 +79,19 @@ where
                 D::NAME,
                 device_id
             );
+
+            let driver = match D::new(&engine, device_id) {
+                Ok(driver) => driver,
+                Err(err) => {
+                    log::warn!(target: T, "failed to create device driver for '{}' (id {}): {:?}", D::NAME, device_id, err);
+                    return;
+                }
+            };
+            let thread = Self {
+                device,
+                driver,
+                stop,
+            };
 
             match thread.run() {
                 Ok(()) => {

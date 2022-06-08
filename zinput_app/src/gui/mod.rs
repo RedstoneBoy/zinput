@@ -8,7 +8,7 @@ mod plugins;
 
 pub struct Gui {
     plugins: plugins::PluginConfig,
-    cv: device_view::DeviceView,
+    cv: device_view::DeviceViewer,
     motion: motion_cmp::MotionCmp,
 }
 
@@ -16,7 +16,7 @@ impl Gui {
     pub fn new(engine: Arc<Engine>, plugins: Vec<Arc<dyn Plugin + Send + Sync>>) -> Self {
         Gui {
             plugins: plugins::PluginConfig::new(engine.clone(), plugins),
-            cv: device_view::DeviceView::new(engine.clone()),
+            cv: device_view::DeviceViewer::new(engine.clone()),
             motion: motion_cmp::MotionCmp::new(engine),
         }
     }

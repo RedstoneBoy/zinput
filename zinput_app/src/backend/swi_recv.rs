@@ -266,15 +266,20 @@ impl<'a> SwiConn<'a> {
 
                 let api = self.api;
 
-                let bundle = self.devices[ctrl_num].get_or_insert_with(|| {
-                    DeviceBundle::new(
-                        api,
-                        format!("Swi Controller {}", ctrl_num),
-                        [controller_info()],
-                        [MotionInfo::new(true, true)],
-                    )
-                });
-                bundle.update_data(&data)?;
+                let bundle = match &mut self.devices[ctrl_num] {
+                    Some(dev) => dev,
+                    None => {
+                        self.devices[ctrl_num] = Some(DeviceBundle::new(
+                            api,
+                            format!("Swi Controller {}", ctrl_num),
+                            [controller_info()],
+                            [MotionInfo::new(true, true)],
+                        )?);
+                        self.devices[ctrl_num].as_mut().unwrap()
+                    }
+                };
+
+                bundle.update_data(&data);
             }
         }
 
@@ -295,7 +300,7 @@ crate::device_bundle! {
 }
 
 impl<'a> DeviceBundle<'a> {
-    fn update_data(&mut self, from: &SwiController) -> Result<()> {
+    fn update_data(&mut self, from: &SwiController) {
         let mut buttons = 0;
 
         macro_rules! translate {
@@ -342,9 +347,7 @@ impl<'a> DeviceBundle<'a> {
         motion.gyro_roll = from.gyroscope[1] * -GYRO_SCALE;
         motion.gyro_yaw = from.gyroscope[2] * GYRO_SCALE;
 
-        self.update()?;
-
-        Ok(())
+        self.update();
     }
 }
 

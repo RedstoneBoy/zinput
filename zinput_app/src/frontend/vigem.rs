@@ -27,21 +27,19 @@ const T: &'static str = "frontend:vigem";
 
 pub struct Vigem {
     inner: Mutex<Inner>,
-    signals: Arc<Signals>,
 }
 
 impl Vigem {
     pub fn new() -> Self {
         Vigem {
             inner: Mutex::new(Inner::new()),
-            signals: Arc::new(Signals::new()),
         }
     }
 }
 
 impl Plugin for Vigem {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine, self.signals.clone());
+        self.inner.lock().init(engine);
     }
 
     fn stop(&self) {
@@ -60,26 +58,8 @@ impl Plugin for Vigem {
         PluginKind::Frontend
     }
 
-    fn events(&self) -> &[EventKind] {
-        &[EventKind::DeviceUpdate]
-    }
-
     fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
-    }
-
-    fn on_event(&self, event: &Event) {
-        match event {
-            Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id)
-                    && !self.signals.update.0.is_full()
-                {
-                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-                    self.signals.update.0.send(*id).unwrap();
-                }
-            }
-            _ => {}
-        }
     }
 }
 
@@ -91,11 +71,11 @@ enum Inner {
         stop: Arc<AtomicBool>,
         handle: JoinHandle<()>,
 
-        xbox_send: Sender<Vec<Uuid>>,
-        selected_xbox: Vec<Uuid>,
+        xbox_change: Arc<AtomicBool>,
+        selected_xbox: Arc<Mutex<Vec<Uuid>>>,
 
-        ds4_send: Sender<Vec<Uuid>>,
-        selected_ds4: Vec<Uuid>,
+        ds4_change: Arc<AtomicBool>,
+        selected_ds4: Arc<Mutex<Vec<Uuid>>>,
     },
 }
 
@@ -106,7 +86,7 @@ impl Inner {
 }
 
 impl Inner {
-    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
+    fn init(&mut self, engine: Arc<Engine>) {
         if matches!(self, Inner::Init { .. }) {
             self.stop();
         }
@@ -114,14 +94,17 @@ impl Inner {
         let status = Arc::new(Mutex::new(PluginStatus::Running));
         let stop = Arc::new(AtomicBool::new(false));
 
-        let (xbox_send, xbox_recv) = crossbeam_channel::unbounded();
-        let (ds4_send, ds4_recv) = crossbeam_channel::unbounded();
+        let xbox_change = Arc::new(AtomicBool::new(false));
+        let selected_xbox = Arc::new(Mutex::default());
+        let ds4_change = Arc::new(AtomicBool::new(false));
+        let selected_ds4 = Arc::new(Mutex::default());
 
         let handle = std::thread::spawn(new_vigem_thread(Thread {
             engine: engine.clone(),
-            xbox_recv,
-            ds4_recv,
-            signals,
+            xbox_change: xbox_change.clone(),
+            selected_xbox: selected_xbox.clone(),
+            ds4_change: ds4_change.clone(),
+            selected_ds4: selected_ds4.clone(),
             status: status.clone(),
             stop: stop.clone(),
         }));
@@ -132,11 +115,11 @@ impl Inner {
             stop,
             handle,
 
-            xbox_send,
-            selected_xbox: Vec::new(),
+            xbox_change,
+            selected_xbox,
 
-            ds4_send,
-            selected_ds4: Vec::new(),
+            ds4_change,
+            selected_ds4,
         };
     }
 
@@ -171,9 +154,9 @@ impl Inner {
     fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         let Inner::Init {
             engine,
-            xbox_send,
+            xbox_change: xbox_send,
             selected_xbox,
-            ds4_send,
+            ds4_change: ds4_send,
             selected_ds4,
             ..
         } = self
@@ -303,25 +286,15 @@ impl Inner {
     }
 }
 
-struct Signals {
-    listen_update: Mutex<HashSet<Uuid>>,
-    update: (Sender<Uuid>, Receiver<Uuid>),
-}
-
-impl Signals {
-    fn new() -> Self {
-        Signals {
-            listen_update: Mutex::new(HashSet::new()),
-            update: crossbeam_channel::bounded(4),
-        }
-    }
-}
-
 struct Thread {
     engine: Arc<Engine>,
-    xbox_recv: Receiver<Vec<Uuid>>,
-    ds4_recv: Receiver<Vec<Uuid>>,
-    signals: Arc<Signals>,
+
+    xbox_change: Arc<AtomicBool>,
+    selected_xbox: Arc<Mutex<Vec<Uuid>>>,
+
+    ds4_change: Arc<AtomicBool>,
+    selected_ds4: Arc<Mutex<Vec<Uuid>>>,
+    
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
 }

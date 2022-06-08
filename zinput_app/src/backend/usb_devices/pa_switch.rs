@@ -41,18 +41,18 @@ struct PADriver {
 impl DeviceDriver for PADriver {
     const NAME: &'static str = "PowerA Wired Pro Controller";
 
-    fn new(engine: &Arc<Engine>, id: u64) -> Self {
+    fn new(engine: &Arc<Engine>, id: u64) -> Result<Self> {
         let bundle = DeviceBundle::new(
             engine.clone(),
             format!("PowerA Wired Pro Controller {}", id),
             [controller_info()],
-        );
+        )?;
 
-        PADriver {
+        Ok(PADriver {
             packet: [0; 8],
             bundle,
             controller: Default::default(),
-        }
+        })
     }
 
     fn update(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<ControlFlow<()>> {
@@ -80,7 +80,7 @@ impl DeviceDriver for PADriver {
         self.bundle.controller[0].right_stick_x = self.controller.right_stick.x;
         self.bundle.controller[0].right_stick_y = 255 - self.controller.right_stick.y;
 
-        self.bundle.update()?;
+        self.bundle.update();
 
         Ok(ControlFlow::Continue(()))
     }

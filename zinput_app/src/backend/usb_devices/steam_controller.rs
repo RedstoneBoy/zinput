@@ -51,7 +51,7 @@ struct SCDriver {
 impl DeviceDriver for SCDriver {
     const NAME: &'static str = "Steam Controller";
 
-    fn new(engine: &Arc<Engine>, adaptor_id: u64) -> Self {
+    fn new(engine: &Arc<Engine>, adaptor_id: u64) -> Result<Self> {
         let bundle = DeviceBundle::new(
             engine.clone(),
             format!("Steam Controller {}", adaptor_id),
@@ -61,13 +61,13 @@ impl DeviceDriver for SCDriver {
                 TouchPadInfo::new(TouchPadShape::Circle, true),
                 TouchPadInfo::new(TouchPadShape::Circle, true),
             ],
-        );
+        )?;
 
-        SCDriver {
+        Ok(SCDriver {
             packet: [0; 64],
             bundle,
             controller: Default::default(),
-        }
+        })
     }
 
     fn open_device(
@@ -133,7 +133,7 @@ impl DeviceDriver for SCDriver {
         self.update_touch_pads();
         self.update_motion();
 
-        self.bundle.update()?;
+        self.bundle.update();
 
         Ok(ControlFlow::Continue(()))
     }
