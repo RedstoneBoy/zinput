@@ -30,6 +30,7 @@ macro_rules! device_info {
             #[derive(Clone)]
             pub struct DeviceInfo {
                 pub name: String,
+                pub id: Option<String>,
     
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
@@ -38,9 +39,15 @@ macro_rules! device_info {
                 pub fn new(name: String) -> Self {
                     DeviceInfo {
                         name,
+                        id: None,
 
                         $([< $cname s >]: Vec::new(),)*
                     }
+                }
+
+                pub fn with_id(mut self, id: String) -> Self {
+                    self.id = Some(id);
+                    self
                 }
 
                 $(

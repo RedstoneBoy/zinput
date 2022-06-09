@@ -272,6 +272,8 @@ impl<'a> SwiConn<'a> {
                         self.devices[ctrl_num] = Some(DeviceBundle::new(
                             api,
                             format!("Swi Controller {}", ctrl_num),
+                            // TODO: ID
+                            None,
                             [controller_info()],
                             [MotionInfo::new(true, true)],
                         )?);

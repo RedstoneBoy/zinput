@@ -43,6 +43,7 @@ crate::device_bundle!(DeviceBundle (owned),
 );
 
 struct SCDriver {
+    adaptor_id: u64,
     packet: [u8; 64],
     bundle: DeviceBundle<'static>,
     controller: HidController,
@@ -55,6 +56,7 @@ impl DeviceDriver for SCDriver {
         let bundle = DeviceBundle::new(
             engine.clone(),
             format!("Steam Controller {}", adaptor_id),
+            None,
             [sc_controller_info()],
             [MotionInfo::new(true, true)],
             [
@@ -63,7 +65,8 @@ impl DeviceDriver for SCDriver {
             ],
         )?;
 
-        Ok(SCDriver {
+        SCDriver {
+            adaptor_id,
             packet: [0; 64],
             bundle,
             controller: Default::default(),
@@ -94,6 +97,28 @@ impl DeviceDriver for SCDriver {
     }
 
     fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
+        let id = handle
+            .device()
+            .device_descriptor()
+            .and_then(|desc| handle.read_serial_number_string_ascii(&desc))
+            .ok()
+            .map(|mut serial| {
+                serial.insert_str(0, "pa_switch/");
+                serial
+            });
+        
+        self.bundle = DeviceBundle::new(
+            self.bundle.api.clone(),
+            format!("Steam Controller {}", self.adaptor_id),
+            id,
+            [sc_controller_info()],
+            [MotionInfo::new(true, true)],
+            [
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+            ],
+        );
+
         handle.write_control(
             0x21,
             0x09,
