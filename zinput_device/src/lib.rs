@@ -27,7 +27,7 @@ macro_rules! components {
 macro_rules! device_info {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste! {
-            #[derive(Clone)]
+            #[derive(Clone, PartialEq, Eq)]
             pub struct DeviceInfo {
                 pub name: String,
                 pub id: Option<String>,

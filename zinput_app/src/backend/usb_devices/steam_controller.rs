@@ -44,6 +44,7 @@ crate::device_bundle!(DeviceBundle (owned),
 
 struct SCDriver {
     adaptor_id: u64,
+    engine: Arc<Engine>,
     packet: [u8; 64],
     bundle: DeviceBundle<'static>,
     controller: HidController,
@@ -65,8 +66,9 @@ impl DeviceDriver for SCDriver {
             ],
         )?;
 
-        SCDriver {
+        Ok(SCDriver {
             adaptor_id,
+            engine: engine.clone(),
             packet: [0; 64],
             bundle,
             controller: Default::default(),
@@ -108,7 +110,7 @@ impl DeviceDriver for SCDriver {
             });
         
         self.bundle = DeviceBundle::new(
-            self.bundle.api.clone(),
+            self.engine.clone(),
             format!("Steam Controller {}", self.adaptor_id),
             id,
             [sc_controller_info()],
@@ -117,7 +119,7 @@ impl DeviceDriver for SCDriver {
                 TouchPadInfo::new(TouchPadShape::Circle, true),
                 TouchPadInfo::new(TouchPadShape::Circle, true),
             ],
-        );
+        )?;
 
         handle.write_control(
             0x21,

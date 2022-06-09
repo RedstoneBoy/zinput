@@ -109,9 +109,9 @@ impl<'a> Deref for DeviceRead<'a> {
 }
 
 pub(super) struct InternalDevice {
-    uuid: Uuid,
+    pub(super) uuid: Uuid,
 
-    handle: AtomicBool,
+    pub(super) handle: AtomicBool,
     views: AtomicUsize,
 
     info: DeviceInfo,

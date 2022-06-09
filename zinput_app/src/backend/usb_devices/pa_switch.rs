@@ -34,6 +34,7 @@ crate::device_bundle!(DeviceBundle(owned), controller: Controller);
 
 struct PADriver {
     id: u64,
+    engine: Arc<Engine>,
     packet: [u8; 8],
     bundle: DeviceBundle<'static>,
     controller: HidController,
@@ -50,8 +51,9 @@ impl DeviceDriver for PADriver {
             [controller_info()],
         )?;
 
-        PADriver {
+        Ok(PADriver {
             id,
+            engine: engine.clone(),
             packet: [0; 8],
             bundle,
             controller: Default::default(),
@@ -70,11 +72,11 @@ impl DeviceDriver for PADriver {
             });
         
         self.bundle = DeviceBundle::new(
-            self.bundle.api.clone(),
+            self.engine.clone(),
             format!("PowerA Wired Pro Controller {}", self.id),
             id,
             [controller_info()],
-        );
+        )?;
 
         Ok(())
     }

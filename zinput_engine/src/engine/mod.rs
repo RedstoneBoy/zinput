@@ -11,17 +11,25 @@ use self::device::InternalDevice;
 
 pub struct Engine {
     devices: DashMap<Uuid, Arc<InternalDevice>>,
+    ids: DashMap<String, Uuid>,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Engine {
             devices: Default::default(),
+            ids: DashMap::new(),
         }
     }
 
     pub fn new_device(&self, info: DeviceInfo) -> Result<DeviceHandle, DeviceAlreadyExists> {
         self.release_devices();
+
+        match self.reclaim_device(&info) {
+            Ok(handle) => return Ok(handle),
+            Err(ReclaimError::InUse) => return Err(DeviceAlreadyExists),
+            Err(ReclaimError::NoId) => {},
+        }
 
         let id = Uuid::new_v4();
         let internal = InternalDevice::new(info, id);
@@ -31,6 +39,38 @@ impl Engine {
         self.devices.insert(id, internal);
         
         Ok(handle)
+    }
+
+    fn reclaim_device(&self, info: &DeviceInfo) -> Result<DeviceHandle, ReclaimError> {
+        let id = info.id.as_ref().ok_or(ReclaimError::NoId)?;
+
+        let device = match self.ids.get(id) {
+            Some(uuid) => {
+                match self.devices.get(uuid.value()) {
+                    Some(device) => {
+                        device.value().clone()
+                    }
+                    None => {
+                        let device = InternalDevice::new(info.clone(), *uuid.value());
+                        self.devices.insert(*uuid.value(), device.clone());
+
+                        device
+                    }
+                }
+            }
+            None => {
+                let uuid = Uuid::new_v4();
+                self.ids.insert(id.to_owned(), uuid);
+
+                let device = InternalDevice::new(info.clone(), uuid);
+                self.devices.insert(uuid, device.clone());
+
+                device
+            }
+        };
+
+        DeviceHandle::new(device)
+            .ok_or(ReclaimError::InUse)
     }
 
     pub fn devices(&self) -> Devices {
@@ -50,6 +90,11 @@ impl Engine {
     fn release_devices(&self) {
         self.devices.retain(|_, int| !int.should_remove());
     }
+}
+
+enum ReclaimError {
+    NoId,
+    InUse,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
