@@ -141,7 +141,7 @@ fn xinput_thread(thread: Thread) -> Result<()> {
                 if new_controller_timer >= 1.0 {
                     new_controller_timer = 0.0;
 
-                    controllers.poll_disconnected();
+                    controllers.poll_disconnected()?;
                 }
 
                 controllers.update()?;

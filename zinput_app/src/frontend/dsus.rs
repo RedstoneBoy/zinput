@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -11,7 +10,7 @@ use std::{
 
 use anyhow::Result;
 use crc::{crc32, Hasher32};
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, RecvError, Sender};
 use dashmap::DashMap;
 use dsu_protocol::{
     types::{
@@ -20,13 +19,15 @@ use dsu_protocol::{
     ControllerData, ControllerInfo as DsuControllerInfo, MessageRef, ProtocolVersionInfo,
 };
 use parking_lot::Mutex;
-use zinput_engine::device::component::{
-    controller::{Button, Controller},
-    motion::Motion,
+use zinput_engine::{
+    device::component::{
+        controller::{Button, Controller},
+        motion::Motion,
+    },
+    DeviceView,
 };
 use zinput_engine::{
-    eframe::{epi, egui},
-    event::{Event, EventKind},
+    eframe::{egui, epi},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
     Engine,
@@ -39,21 +40,19 @@ const DSU_CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Dsus {
     inner: Mutex<Inner>,
-    signals: Arc<Signals>,
 }
 
 impl Dsus {
     pub fn new() -> Self {
         Dsus {
             inner: Mutex::new(Inner::new()),
-            signals: Arc::new(Signals::new()),
         }
     }
 }
 
 impl Plugin for Dsus {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine, self.signals.clone());
+        self.inner.lock().init(engine);
     }
 
     fn stop(&self) {
@@ -72,31 +71,8 @@ impl Plugin for Dsus {
         PluginKind::Frontend
     }
 
-    fn events(&self) -> &[EventKind] {
-        &[EventKind::DeviceUpdate]
-    }
-
-    fn update_gui(
-        &self,
-        ctx: &egui::CtxRef,
-        frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
-    }
-
-    fn on_event(&self, event: &Event) {
-        match event {
-            Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id)
-                    && !self.signals.update.0.is_full()
-                {
-                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-                    self.signals.update.0.send(*id).unwrap();
-                }
-            }
-            _ => {}
-        }
     }
 }
 
@@ -141,7 +117,7 @@ impl Inner {
 }
 
 impl Inner {
-    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
+    fn init(&mut self, engine: Arc<Engine>) {
         self.engine = Some(engine.clone());
         let conn = Arc::new(
             match || -> Result<UdpSocket> {
@@ -166,7 +142,6 @@ impl Inner {
             engine,
             device_change: self.device_recv.clone(),
             stop: self.stop.clone(),
-            signals,
 
             conn: conn.clone(),
             clients: clients.clone(),
@@ -202,19 +177,14 @@ impl Inner {
         *self.status.lock() = PluginStatus::Stopped;
     }
 
-    fn update_gui(
-        &mut self,
-        _ctx: &egui::CtxRef,
-        _frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
                 egui::ComboBox::from_label(format!("Dsus Controller {}", i + 1))
                     .selected_text(
                         self.selected_devices[i]
-                            .and_then(|id| engine.get_device_info(&id))
-                            .map_or("[None]".to_owned(), |dev| dev.name.clone()),
+                            .and_then(|id| engine.get_device(&id))
+                            .map_or("[None]".to_owned(), |view| view.info().name.clone()),
                     )
                     .show_ui(ui, |ui| {
                         if ui
@@ -224,35 +194,21 @@ impl Inner {
                             self.device.send((i, None)).unwrap();
                             self.controllers.lock()[i] = false;
                         }
-                        for device_ref in engine.devices() {
+                        for entry in engine.devices() {
                             if ui
                                 .selectable_value(
                                     &mut self.selected_devices[i],
-                                    Some(*device_ref.id()),
-                                    &device_ref.name,
+                                    Some(*entry.uuid()),
+                                    &entry.info().name,
                                 )
                                 .clicked()
                             {
-                                self.device.send((i, Some(*device_ref.id()))).unwrap();
+                                self.device.send((i, Some(*entry.uuid()))).unwrap();
                                 self.controllers.lock()[i] = true;
                             }
                         }
                     });
             }
-        }
-    }
-}
-
-struct Signals {
-    listen_update: Mutex<HashSet<Uuid>>,
-    update: (Sender<Uuid>, Receiver<Uuid>),
-}
-
-impl Signals {
-    fn new() -> Self {
-        Signals {
-            listen_update: Mutex::new(HashSet::new()),
-            update: crossbeam_channel::bounded(4),
         }
     }
 }
@@ -478,7 +434,6 @@ struct Thread {
 
     device_change: Receiver<(usize, Option<Uuid>)>,
     stop: Arc<AtomicBool>,
-    signals: Arc<Signals>,
 
     conn: Arc<UdpSocket>,
     clients: Arc<DashMap<SocketAddr, DsuClient>>,
@@ -491,59 +446,52 @@ fn dsus_thread(thread: Thread) -> Result<()> {
         engine,
         device_change,
         stop,
-        signals,
         conn,
         clients,
         ..
     } = thread;
 
+    let (update_send, update_recv) = crossbeam_channel::bounded(10);
+
     let mut server = Server::new(conn);
 
-    let mut dids: [Option<Uuid>; 4] = [None; 4];
+    let mut views: [Option<DeviceView>; 4] = [None, None, None, None];
 
     loop {
         crossbeam_channel::select! {
             recv(device_change) -> device_change => {
                 match device_change {
                     Ok((idx, Some(device_id))) => {
-                        if let Some(did) = &dids[idx] {
-                            signals.listen_update.lock().remove(did);
-                            dids[idx] = None;
+                        views[idx] = engine.get_device(&device_id);
+                        if let Some(view) = &mut views[idx] {
+                            view.register_channel(update_send.clone());
                         }
-
-                        dids[idx] = Some(device_id);
-                        signals.listen_update.lock().insert(device_id);
 
                         server.set_connected(idx as u8, true);
                     }
                     Ok((idx, None)) => {
-                        if let Some(did) = &dids[idx] {
-                            signals.listen_update.lock().remove(did);
-                            dids[idx] = None;
-                        }
+                        views[idx] = None;
 
                         server.set_connected(idx as u8, false);
                     }
-                    Err(_) => {
-                        // todo
+                    Err(RecvError) => {
+                        // Sender dropped which means plugin is uninitialized
+                        return Ok(());
                     }
                 }
             },
-            recv(signals.update.1) -> uid => {
+            recv(update_recv) -> uid => {
                 let uid = match uid {
                     Ok(uid) => uid,
-                    Err(_) => {
-                        // todo
-                        continue;
+                    Err(RecvError) => {
+                        // this thread owns a sender, receiver does not error
+                        unreachable!();
                     }
                 };
 
-                for (i, did) in dids.iter().filter_map(|did| did.as_ref()).enumerate() {
-                    if &uid == did {
-                        let device = match engine.get_device(did) {
-                            Some(device) => device,
-                            None => continue,
-                        };
+                for (i, view) in views.iter().filter_map(|view| view.as_ref()).enumerate() {
+                    if &uid == view.uuid() {
+                        let device = view.device();
                         match device.controllers.get(0) {
                             Some(controller) => server.update_controller(i as u8, controller),
                             None => {},
@@ -632,7 +580,7 @@ impl Server {
         dsu_data.set_analog_l2(data.l2_analog);
         dsu_data.set_analog_r2(data.r2_analog);
         dsu_data.set_analog_l2(data.l2_analog);
-        
+
         let buttons = translate!(data.buttons, dsu_data,
             Button::A =>      DButton::A      => set_analog_a,
             Button::B =>      DButton::B      => set_analog_b,
@@ -661,7 +609,6 @@ impl Server {
         dsu_data.set_left_stick_y(data.left_stick_y);
         dsu_data.set_right_stick_x(data.right_stick_x);
         dsu_data.set_right_stick_y(data.right_stick_y);
-        
     }
 
     fn update_motion(&mut self, slot: u8, data: &Motion) {

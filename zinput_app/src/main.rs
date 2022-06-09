@@ -18,7 +18,7 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()));
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()));
-    zinput.add_plugin(Arc::new(frontend::swi_send::Swi::new()));    
+    zinput.add_plugin(Arc::new(frontend::swi_send::Swi::new()));
 
     #[cfg(target_os = "windows")]
     {

@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use zinput_engine::{plugin::Plugin, eframe::{egui, epi}, Engine};
+use zinput_engine::{
+    eframe::{egui, epi},
+    plugin::Plugin,
+    Engine,
+};
 
 mod device_view;
 mod motion_cmp;

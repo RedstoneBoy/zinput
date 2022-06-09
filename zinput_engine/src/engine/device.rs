@@ -1,7 +1,10 @@
-use std::{sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}}, ops::Deref, time::Duration};
+use std::{sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}}, ops::Deref};
 
-use parking_lot::{RwLock, RwLockReadGuard, Condvar, Mutex};
+use crossbeam_channel::{Sender, TrySendError};
+use index_map::IndexMap;
+use parking_lot::{RwLock, RwLockReadGuard, Mutex};
 use paste::paste;
+use uuid::Uuid;
 use zinput_device::{DeviceInfo, Device, DeviceMut};
 
 pub struct DeviceHandle {
@@ -15,16 +18,19 @@ impl DeviceHandle {
             .map(|_| DeviceHandle { internal })
     }
 
-    pub fn update<F>(&mut self, updater: F)
+    pub fn update<F>(&self, updater: F)
     where
         F: for<'a> FnOnce(DeviceMut<'a>),
     {
         updater(self.internal.device.write().as_mut());
 
-        // match self.event_channel.send(Event::DeviceUpdate(*id)) {
-        //     Ok(()) => {}
-        //     Err(_) => {}
-        // }
+        self.internal.channels.lock().retain(|_, channel| {
+            match channel.try_send(self.internal.uuid) {
+                Ok(()) => true,
+                Err(TrySendError::Full(_)) => true,
+                Err(TrySendError::Disconnected(_)) => false,
+            }
+        });
     }
 }
 
@@ -38,12 +44,14 @@ impl Drop for DeviceHandle {
 
 pub struct DeviceView {
     internal: Arc<InternalDevice>,
+
+    channel: Option<usize>,
 }
 
 impl DeviceView {
     pub(super) fn new(internal: Arc<InternalDevice>) -> Self {
         internal.views.fetch_add(1, Ordering::AcqRel);
-        DeviceView { internal }
+        DeviceView { internal, channel: None }
     }
 
     pub fn info(&self) -> &DeviceInfo {
@@ -56,9 +64,17 @@ impl DeviceView {
         }
     }
 
-    pub fn wait(&mut self, timeout: Duration) -> Result<DeviceRead, Timeout> {
-        self.internal.update_signal.wait(timeout)?;
-        Ok(self.device())
+    pub fn uuid(&self) -> &Uuid {
+        &self.internal.uuid
+    }
+
+    pub fn register_channel(&mut self, channel: Sender<Uuid>) {
+        if let Some(channel) = self.channel.take() {
+            self.internal.channels.lock().remove(channel);
+        }
+
+        let channel = self.internal.channels.lock().insert(channel);
+        self.channel = Some(channel);
     }
 }
 
@@ -71,6 +87,10 @@ impl Clone for DeviceView {
 impl Drop for DeviceView {
     fn drop(&mut self) {
         assert!(self.internal.views.load(Ordering::Acquire) > 0, "number of DeviceViews was incorrect");
+
+        if let Some(channel) = self.channel.take() {
+            self.internal.channels.lock().remove(channel);
+        }
 
         self.internal.views.fetch_sub(1, Ordering::AcqRel);
     }
@@ -89,33 +109,37 @@ impl<'a> Deref for DeviceRead<'a> {
 }
 
 pub(super) struct InternalDevice {
+    uuid: Uuid,
+
     handle: AtomicBool,
     views: AtomicUsize,
 
     info: DeviceInfo,
     device: RwLock<Device>,
 
-    update_signal: Signal,
+    channels: Mutex<IndexMap<Sender<Uuid>>>,
 }
 
 macro_rules! internal_device_components {
     ($($field_name:ident : $ctype:ty),* $(,)?) => {
         paste! {
             impl InternalDevice {
-                pub(super) fn new(info: DeviceInfo) -> Arc<Self> {
+                pub(super) fn new(info: DeviceInfo, uuid: Uuid) -> Arc<Self> {
                     let device = Device {
                         $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
                     };
                     let device = RwLock::new(device);
 
                     Arc::new(InternalDevice {
+                        uuid,
+
                         handle: AtomicBool::new(false),
                         views: AtomicUsize::new(0),
 
                         info,
                         device,
 
-                        update_signal: Signal::new(),
+                        channels: Mutex::default(),
                     })
                 }
 
@@ -139,31 +163,3 @@ internal_device_components!(
     button: Buttons,
     touch_pad: TouchPad,
 );
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Timeout;
-
-struct Signal {
-    cvar: Condvar,
-    mutex: Mutex<()>,
-}
-
-impl Signal {
-    fn new() -> Self {
-        Signal { cvar: Condvar::new(), mutex: Mutex::new(()) }
-    }
-
-    fn send(&self) {
-        let _ = self.mutex.lock();
-        self.cvar.notify_all();
-    }
-
-    fn wait(&self, timeout: Duration) -> Result<(), Timeout> {
-        let mut guard = self.mutex.lock();
-        if self.cvar.wait_for(&mut guard, timeout).timed_out() {
-            Err(Timeout)
-        } else {
-            Ok(())
-        }
-    }
-}

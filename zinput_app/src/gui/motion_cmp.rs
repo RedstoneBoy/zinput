@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use zinput_engine::{eframe::{egui, epi}, util::Uuid, Engine, DeviceView};
+use zinput_engine::{
+    eframe::{egui, epi},
+    DeviceView, Engine,
+};
 
 pub struct MotionCmp {
     engine: Arc<Engine>,
@@ -30,36 +33,28 @@ impl MotionCmp {
             egui::ComboBox::from_label("Device 1")
                 .selected_text(
                     self.dev1
+                        .as_ref()
                         .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    let devices = self.engine.devices();
                     let mut index = None;
-                    for (i, info) in devices.iter().enumerate() {
-                        ui.selectable_value(
-                            &mut index,
-                            Some(i),
-                            &info.name,
-                        );
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
-                    self.dev1 = index.and_then(|i| devices.get(i));
+                    self.dev1 = index.and_then(|i| self.engine.get_device(&i));
                 });
             egui::ComboBox::from_label("Device 2")
                 .selected_text(
                     self.dev2
+                        .as_ref()
                         .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    let devices = self.engine.devices();
                     let mut index = None;
-                    for (i, info) in devices.iter().enumerate() {
-                        ui.selectable_value(
-                            &mut index,
-                            Some(i),
-                            &info.name,
-                        );
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
-                    self.dev2 = index.and_then(|i| devices.get(i));
+                    self.dev2 = index.and_then(|i| self.engine.get_device(&i));
                 });
 
             let (motion1, motion2) = match (&self.dev1, &self.dev2) {

@@ -352,7 +352,11 @@ fn read_calibration(dev: &HidDevice) -> Result<Calibration> {
     let rstick = StickCalibration::parse(rstick_data, deadzone_r, false);
     let motion = MotionCalibration::parse(motion);
 
-    Ok(Calibration { lstick, rstick, motion })
+    Ok(Calibration {
+        lstick,
+        rstick,
+        motion,
+    })
 }
 
 crate::device_bundle!(DeviceBundle, controller: Controller, motion: Motion);
@@ -364,7 +368,12 @@ struct JoyconBundle<'a> {
 }
 
 impl<'a> JoyconBundle<'a> {
-    fn new(id: u64, joy_type: JoyconType, calibration: Calibration, api: &'a Engine) -> Result<Self> {
+    fn new(
+        id: u64,
+        joy_type: JoyconType,
+        calibration: Calibration,
+        api: &'a Engine,
+    ) -> Result<Self> {
         let bundle = DeviceBundle::new(
             api,
             format!("{} (id {})", joy_type, id + 1),
@@ -724,7 +733,7 @@ impl MotionCalibration {
         }
 
         let groups = groups.map(|arr| arr.map(|v| v as f32));
-        
+
         MotionCalibration {
             accel_neutral: groups[0],
             accel_sens: groups[1],
@@ -740,9 +749,12 @@ impl MotionCalibration {
             accel[2] as f32 * (1.0 / (self.accel_sens[2] - self.accel_neutral[2])) * 4.0,
         ];
         let gyro = [
-            (gyro[0] as f32 - self.gyro_neutral[0]) * (816.0 / (self.gyro_sens[0] - self.gyro_neutral[0])),
-            (gyro[1] as f32 - self.gyro_neutral[1]) * (816.0 / (self.gyro_sens[1] - self.gyro_neutral[1])),
-            (gyro[2] as f32 - self.gyro_neutral[2]) * (816.0 / (self.gyro_sens[2] - self.gyro_neutral[2])),
+            (gyro[0] as f32 - self.gyro_neutral[0])
+                * (816.0 / (self.gyro_sens[0] - self.gyro_neutral[0])),
+            (gyro[1] as f32 - self.gyro_neutral[1])
+                * (816.0 / (self.gyro_sens[1] - self.gyro_neutral[1])),
+            (gyro[2] as f32 - self.gyro_neutral[2])
+                * (816.0 / (self.gyro_sens[2] - self.gyro_neutral[2])),
         ];
         [accel, gyro]
     }

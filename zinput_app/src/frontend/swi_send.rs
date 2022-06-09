@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     net::{SocketAddr, UdpSocket},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,16 +9,18 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use crossbeam_channel::{Receiver, Sender, RecvError};
+use crossbeam_channel::{Receiver, RecvError, Sender};
 use parking_lot::Mutex;
 use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
-use zinput_engine::device::component::{
-    controller::{Button, Controller},
-    motion::Motion,
+use zinput_engine::{
+    device::component::{
+        controller::{Button, Controller},
+        motion::Motion,
+    },
+    DeviceView,
 };
 use zinput_engine::{
     eframe::{egui, epi},
-    event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
     Engine,
@@ -34,21 +35,19 @@ const GYRO_SCALE: f32 = 360.0;
 
 pub struct Swi {
     inner: Mutex<Inner>,
-    signals: Arc<Signals>,
 }
 
 impl Swi {
     pub fn new() -> Self {
         Swi {
             inner: Mutex::new(Inner::new()),
-            signals: Arc::new(Signals::new()),
         }
     }
 }
 
 impl Plugin for Swi {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine, self.signals.clone());
+        self.inner.lock().init(engine);
     }
 
     fn stop(&self) {
@@ -67,31 +66,8 @@ impl Plugin for Swi {
         PluginKind::Frontend
     }
 
-    fn events(&self) -> &[EventKind] {
-        &[EventKind::DeviceUpdate]
-    }
-
-    fn update_gui(
-        &self,
-        ctx: &egui::CtxRef,
-        frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
-    }
-
-    fn on_event(&self, event: &Event) {
-        match event {
-            Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id)
-                    && !self.signals.update.0.is_full()
-                {
-                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-                    self.signals.update.0.send(*id).unwrap();
-                }
-            }
-            _ => {}
-        }
     }
 }
 
@@ -142,7 +118,7 @@ impl Inner {
         }
     }
 
-    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
+    fn init(&mut self, engine: Arc<Engine>) {
         if matches!(self, Inner::Init { .. }) {
             self.stop();
         }
@@ -160,7 +136,6 @@ impl Inner {
         let handle = std::thread::spawn(new_swi_thread(Thread {
             engine: engine.clone(),
             device_recv,
-            signals,
             status: status.clone(),
             stop: stop.clone(),
             addr: gui.address.clone(),
@@ -208,12 +183,7 @@ impl Inner {
         }
     }
 
-    fn update_gui(
-        &mut self,
-        _ctx: &egui::CtxRef,
-        _frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         match self {
             Inner::Uninit { gui } => {
                 ui.label(format!("Switch Address: {}", gui.old_address));
@@ -229,8 +199,8 @@ impl Inner {
                     egui::ComboBox::from_label(format!("Swi Controller {}", i + 1))
                         .selected_text(
                             gui.selected_devices[i]
-                                .and_then(|id| engine.get_device_info(&id))
-                                .map_or("[None]".to_owned(), |dev| dev.name.clone()),
+                                .and_then(|id| engine.get_device(&id))
+                                .map_or("[None]".to_owned(), |view| view.info().name.clone()),
                         )
                         .show_ui(ui, |ui| {
                             if ui
@@ -239,16 +209,16 @@ impl Inner {
                             {
                                 device_send.send((i, None)).unwrap();
                             }
-                            for device_ref in engine.devices() {
+                            for entry in engine.devices() {
                                 if ui
                                     .selectable_value(
                                         &mut gui.selected_devices[i],
-                                        Some(*device_ref.id()),
-                                        &device_ref.name,
+                                        Some(*entry.uuid()),
+                                        &entry.info().name,
                                     )
                                     .clicked()
                                 {
-                                    device_send.send((i, Some(*device_ref.id()))).unwrap();
+                                    device_send.send((i, Some(*entry.uuid()))).unwrap();
                                 }
                             }
                         });
@@ -258,24 +228,9 @@ impl Inner {
     }
 }
 
-struct Signals {
-    listen_update: Mutex<HashSet<Uuid>>,
-    update: (Sender<Uuid>, Receiver<Uuid>),
-}
-
-impl Signals {
-    fn new() -> Self {
-        Signals {
-            listen_update: Mutex::new(HashSet::new()),
-            update: crossbeam_channel::bounded(8),
-        }
-    }
-}
-
 struct Thread {
     engine: Arc<Engine>,
     device_recv: Receiver<(usize, Option<Uuid>)>,
-    signals: Arc<Signals>,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
     addr: String,
@@ -301,34 +256,29 @@ fn swi_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
         device_recv: device_change,
-        signals,
         stop,
         addr,
         ..
     } = thread;
 
+    let (update_send, update_recv) = crossbeam_channel::bounded(10);
+
     let mut conn = SwiConn::new(&addr)?;
 
-    let mut dids: [Option<Uuid>; 8] = [None; 8];
+    let mut views: [Option<DeviceView>; 8] = [None, None, None, None, None, None, None, None];
 
     loop {
         crossbeam_channel::select! {
             recv(device_change) -> device_change => {
                 match device_change {
                     Ok((idx, Some(device_id))) => {
-                        if let Some(did) = &dids[idx] {
-                            signals.listen_update.lock().remove(did);
-                            dids[idx] = None;
+                        views[idx] = engine.get_device(&device_id);
+                        if let Some(view) = &mut views[idx] {
+                            view.register_channel(update_send.clone());
                         }
-
-                        dids[idx] = Some(device_id);
-                        signals.listen_update.lock().insert(device_id);
                     }
                     Ok((idx, None)) => {
-                        if let Some(did) = &dids[idx] {
-                            signals.listen_update.lock().remove(did);
-                            dids[idx] = None;
-                        }
+                        views[idx] = None;
                     }
                     Err(RecvError) => {
                         // Sender dropped which means plugin is uninitialized
@@ -336,21 +286,18 @@ fn swi_thread(thread: Thread) -> Result<()> {
                     }
                 }
             },
-            recv(signals.update.1) -> uid => {
+            recv(update_recv) -> uid => {
                 let uid = match uid {
                     Ok(uid) => uid,
                     Err(RecvError) => {
-                        // Sender can't be dropped since we own it
+                        // this thread owns a sender, receiver does not error
                         unreachable!()
                     }
                 };
 
-                for (i, did) in dids.iter().filter_map(|did| did.as_ref()).enumerate() {
-                    if &uid == did {
-                        let device = match engine.get_device(did) {
-                            Some(device) => device,
-                            None => continue,
-                        };
+                for (i, view) in views.iter().filter_map(|view| view.as_ref()).enumerate() {
+                    if &uid == view.uuid() {
+                        let device = view.device();
                         match device.controllers.get(0) {
                             Some(controller) => conn.update_controller(i, controller),
                             None => {},
@@ -364,7 +311,7 @@ fn swi_thread(thread: Thread) -> Result<()> {
 
                 conn.set_num_controllers(0);
                 for i in (0..8).rev() {
-                    if dids[i].is_some() {
+                    if views[i].is_some() {
                         conn.set_num_controllers(i + 1);
                         break;
                     }

@@ -3,8 +3,7 @@ use std::sync::Arc;
 use zinput_engine::{
     device::component::{controller::Button, touch_pad::TouchPadShape},
     eframe::{egui, epi},
-    util::Uuid,
-    Engine, DeviceView,
+    DeviceView, Engine,
 };
 
 pub struct DeviceViewer {
@@ -27,22 +26,18 @@ impl DeviceViewer {
             egui::ComboBox::from_label("Devices")
                 .selected_text(
                     self.selected_controller
+                        .as_ref()
                         .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    let devices = self.engine.devices();
                     let mut index = None;
-                    for (i, info) in devices.iter().enumerate() {
-                        ui.selectable_value(
-                            &mut index,
-                            Some(i),
-                            &info.name,
-                        );
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
-                    self.selected_controller = index.and_then(|i| devices.get(i));
+                    self.selected_controller = index.and_then(|i| self.engine.get_device(&i));
                 });
 
-            let (device, device_info) = match self.selected_controller {
+            let (device, device_info) = match &self.selected_controller {
                 Some(view) => (view.device(), view.info()),
                 None => return,
             };
