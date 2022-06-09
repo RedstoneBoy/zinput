@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use dashmap::DashMap;
 use uuid::Uuid;
@@ -116,8 +116,13 @@ impl<'a> Iterator for Devices<'a> {
     type Item = DeviceEntry<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let entry = self.iter.next()?;
-        Some(DeviceEntry { entry })
+        while let Some(entry) = self.iter.next() {
+            if entry.handle.load(Ordering::Acquire) {
+                return Some(DeviceEntry { entry });
+            }
+        }
+        
+        None
     }
 }
 
