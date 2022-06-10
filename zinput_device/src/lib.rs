@@ -4,6 +4,15 @@ pub mod component;
 
 #[macro_export]
 macro_rules! components {
+    (config $macro:ident) => {
+        $macro! {
+            controller: $crate::component::controller::ControllerConfig,
+            motion:     $crate::component::motion::MotionConfig,
+            analog:     $crate::component::analogs::AnalogsConfig,
+            button:     $crate::component::buttons::ButtonsConfig,
+            touch_pad:  $crate::component::touch_pad::TouchPadConfig,
+        }
+    };
     (data $macro:ident) => {
         $macro! {
             controller: $crate::component::controller::Controller,
@@ -20,6 +29,27 @@ macro_rules! components {
             analog:     $crate::component::analogs::AnalogsInfo,
             button:     $crate::component::buttons::ButtonsInfo,
             touch_pad:  $crate::component::touch_pad::TouchPadInfo,
+        }
+    }
+}
+
+macro_rules! device_config {
+    ($($cname:ident : $ctype:ty),* $(,)?) => {
+        paste! {
+            pub struct DeviceConfig {    
+                $(pub [< $cname s >]: Vec<$ctype>,)*
+            }
+    
+            impl DeviceConfig {
+                pub fn configure(&self, device: DeviceMut) {
+                    use component::ComponentData;
+                    $(
+                        for i in 0..device.[< $cname s >].len() {
+                            device.[< $cname s >][i].configure(&self.[< $cname s >][i]);
+                        }
+                    )*
+                }
+            }
         }
     }
 }
@@ -83,5 +113,6 @@ macro_rules! device {
     }
 }
 
+components!(config device_config);
 components!(info device_info);
 components!(data device);

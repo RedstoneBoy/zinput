@@ -49,6 +49,59 @@ impl Default for ControllerInfo {
     }
 }
 
+#[derive(Clone)]
+pub struct ControllerConfig {
+    pub left_stick: StickConfig,
+    pub right_stick: StickConfig,
+    pub l1_range: [u8; 2],
+    pub r1_range: [u8; 2],
+    pub l2_range: [u8; 2],
+    pub r2_range: [u8; 2],
+}
+
+impl Default for ControllerConfig {
+    fn default() -> Self {
+        ControllerConfig {
+            left_stick: Default::default(),
+            right_stick: Default::default(),
+            l1_range: [0, 255],
+            r1_range: [0, 255],
+            l2_range: [0, 255],
+            r2_range: [0, 255],
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct StickConfig {
+    pub deadzone_squared: u16,
+    // TODO: FIXME completely incorrect
+    pub x_range: [u8; 2],
+    pub y_range: [u8; 2],
+}
+
+impl StickConfig {
+    fn configure(&self, x: u8, y: u8) -> [u8; 2] {
+        let x = configure_analog(x, self.x_range);
+        let y = configure_analog(y, self.y_range);
+        if (x as f32 - 127.5).powi(2) + (y as f32 - 127.5).powi(2) <= (self.deadzone_squared as f32) {
+            return [0, 0];
+        }
+
+        [x, y]
+    }
+}
+
+impl Default for StickConfig {
+    fn default() -> Self {
+        StickConfig {
+            deadzone_squared: 0,
+            x_range: [0, 255],
+            y_range: [0, 255],
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Controller {
@@ -80,10 +133,24 @@ impl Default for Controller {
 }
 
 impl ComponentData for Controller {
+    type Config = ControllerConfig;
     type Info = ControllerInfo;
 
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
+    }
+    
+    fn configure(&mut self, config: &Self::Config) {
+        let [lx, ly] = config.left_stick.configure(self.left_stick_x, self.left_stick_y);
+        let [rx, ry] = config.right_stick.configure(self.right_stick_x, self.right_stick_y);
+        self.left_stick_x = lx;
+        self.left_stick_y = ly;
+        self.right_stick_x = rx;
+        self.right_stick_y = ry;
+        self.l1_analog = configure_analog(self.l1_analog, config.l1_range);
+        self.r1_analog = configure_analog(self.r1_analog, config.r1_range);
+        self.l2_analog = configure_analog(self.l2_analog, config.l2_range);
+        self.r2_analog = configure_analog(self.r2_analog, config.r2_range);
     }
 }
 
@@ -206,4 +273,11 @@ impl std::fmt::Display for Button {
             }
         )
     }
+}
+
+fn configure_analog(analog: u8, range: [u8; 2]) -> u8 {
+    let min = range[0] as f32;
+    let max = range[1] as f32;
+    let range = max - min;
+    ((f32::clamp(analog as f32, min, max) / range) * 255.0) as u8
 }

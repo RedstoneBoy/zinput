@@ -11,6 +11,8 @@ impl Default for ButtonsInfo {
     }
 }
 
+pub type ButtonsConfig = ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Buttons {
@@ -24,9 +26,12 @@ impl Default for Buttons {
 }
 
 impl ComponentData for Buttons {
+    type Config = ButtonsConfig;
     type Info = ButtonsInfo;
 
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
     }
+
+    fn configure(&mut self, _: &Self::Config) {}
 }

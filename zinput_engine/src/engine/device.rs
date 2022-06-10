@@ -5,7 +5,7 @@ use index_map::IndexMap;
 use parking_lot::{RwLock, RwLockReadGuard, Mutex};
 use paste::paste;
 use uuid::Uuid;
-use zinput_device::{DeviceInfo, Device, DeviceMut};
+use zinput_device::{DeviceInfo, Device, DeviceMut, DeviceConfig};
 
 pub struct DeviceHandle {
     internal: Arc<InternalDevice>,
@@ -22,7 +22,9 @@ impl DeviceHandle {
     where
         F: for<'a> FnOnce(DeviceMut<'a>),
     {
-        updater(self.internal.device.write().as_mut());
+        let mut device = self.internal.device.write();
+        updater(device.as_mut());
+        self.internal.config.read().configure(device.as_mut());
 
         self.internal.channels.lock().retain(|_, channel| {
             match channel.try_send(self.internal.uuid) {
@@ -114,6 +116,7 @@ pub(super) struct InternalDevice {
     pub(super) handle: AtomicBool,
     views: AtomicUsize,
 
+    config: RwLock<DeviceConfig>,
     info: DeviceInfo,
     device: RwLock<Device>,
 
@@ -130,12 +133,18 @@ macro_rules! internal_device_components {
                     };
                     let device = RwLock::new(device);
 
+                    let config = DeviceConfig {
+                        $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
+                    };
+                    let config = RwLock::new(config);
+
                     Arc::new(InternalDevice {
                         uuid,
 
                         handle: AtomicBool::new(false),
                         views: AtomicUsize::new(0),
 
+                        config,
                         info,
                         device,
 

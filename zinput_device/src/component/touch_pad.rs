@@ -18,6 +18,8 @@ impl TouchPadInfo {
     }
 }
 
+pub type TouchPadConfig = ();
+
 #[repr(C)]
 #[derive(Copy, Clone, Default)]
 pub struct TouchPad {
@@ -28,9 +30,12 @@ pub struct TouchPad {
 }
 
 impl ComponentData for TouchPad {
+    type Config = TouchPadConfig;
     type Info = TouchPadInfo;
 
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
     }
+
+    fn configure(&mut self, _: &Self::Config) {}
 }

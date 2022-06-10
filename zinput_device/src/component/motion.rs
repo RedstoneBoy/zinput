@@ -15,6 +15,8 @@ impl MotionInfo {
     }
 }
 
+pub type MotionConfig = ();
+
 /// Gyro values are degrees per second
 /// Acceleration is in g (9.8m/s^2)
 #[repr(C)]
@@ -38,9 +40,12 @@ pub struct Motion {
 }
 
 impl ComponentData for Motion {
+    type Config = MotionConfig;
     type Info = MotionInfo;
 
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
     }
+
+    fn configure(&mut self, _: &Self::Config) {}
 }
