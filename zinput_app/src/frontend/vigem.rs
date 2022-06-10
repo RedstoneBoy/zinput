@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -15,33 +14,30 @@ use vigem_client::{
     Client, DS4Report, DualShock4Wired, TargetId, XButtons, XGamepad, Xbox360Wired,
 };
 use zinput_engine::{
-    device::component::controller::{Button, Controller},
+    device::{component::controller::{Button, Controller}, DeviceInfo},
     eframe::{egui, epi},
-    event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
-    Engine,
+    DeviceView, Engine,
 };
 
 const T: &'static str = "frontend:vigem";
 
 pub struct Vigem {
     inner: Mutex<Inner>,
-    signals: Arc<Signals>,
 }
 
 impl Vigem {
     pub fn new() -> Self {
         Vigem {
             inner: Mutex::new(Inner::new()),
-            signals: Arc::new(Signals::new()),
         }
     }
 }
 
 impl Plugin for Vigem {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine, self.signals.clone());
+        self.inner.lock().init(engine);
     }
 
     fn stop(&self) {
@@ -60,26 +56,8 @@ impl Plugin for Vigem {
         PluginKind::Frontend
     }
 
-    fn events(&self) -> &[EventKind] {
-        &[EventKind::DeviceUpdate]
-    }
-
     fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
-    }
-
-    fn on_event(&self, event: &Event) {
-        match event {
-            Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id)
-                    && !self.signals.update.0.is_full()
-                {
-                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-                    self.signals.update.0.send(*id).unwrap();
-                }
-            }
-            _ => {}
-        }
     }
 }
 
@@ -93,6 +71,7 @@ enum Inner {
 
         xbox_send: Sender<Vec<Uuid>>,
         selected_xbox: Vec<Uuid>,
+        xbox_ids: Vec<Option<String>>,
 
         ds4_send: Sender<Vec<Uuid>>,
         selected_ds4: Vec<Uuid>,
@@ -106,7 +85,7 @@ impl Inner {
 }
 
 impl Inner {
-    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
+    fn init(&mut self, engine: Arc<Engine>) {
         if matches!(self, Inner::Init { .. }) {
             self.stop();
         }
@@ -121,7 +100,6 @@ impl Inner {
             engine: engine.clone(),
             xbox_recv,
             ds4_recv,
-            signals,
             status: status.clone(),
             stop: stop.clone(),
         }));
@@ -134,6 +112,7 @@ impl Inner {
 
             xbox_send,
             selected_xbox: Vec::new(),
+            xbox_ids: Vec::new(),
 
             ds4_send,
             selected_ds4: Vec::new(),
@@ -195,8 +174,8 @@ impl Inner {
                 break;
             }
             egui::ComboBox::from_label(format!("ViGEm XBox Controller {}", i + 1))
-                .selected_text(match engine.get_device_info(&selected_xbox[i]) {
-                    Some(info) => info.name.clone(),
+                .selected_text(match engine.get_device(&selected_xbox[i]) {
+                    Some(view) => view.info().name.clone(),
                     None => {
                         action = Some(Action::Remove(i));
                         break;
@@ -204,11 +183,11 @@ impl Inner {
                 })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
-                    for device_ref in engine.devices() {
+                    for entry in engine.devices() {
                         ui.selectable_value(
                             &mut action,
-                            Some(Action::Change(i, *device_ref.id())),
-                            &device_ref.name,
+                            Some(Action::Change(i, *entry.uuid())),
+                            &entry.info().name,
                         );
                     }
                 });
@@ -222,11 +201,11 @@ impl Inner {
             .selected_text("[None]")
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut action, None, "[None]");
-                for device_ref in engine.devices() {
+                for entry in engine.devices() {
                     ui.selectable_value(
                         &mut action,
-                        Some(Action::Add(*device_ref.id())),
-                        &device_ref.name,
+                        Some(Action::Add(*entry.uuid())),
+                        &entry.info().name,
                     );
                 }
             });
@@ -255,8 +234,8 @@ impl Inner {
                 break;
             }
             egui::ComboBox::from_label(format!("ViGEm DS4 Controller {}", i + 1))
-                .selected_text(match engine.get_device_info(&selected_ds4[i]) {
-                    Some(info) => info.name.clone(),
+                .selected_text(match engine.get_device(&selected_ds4[i]) {
+                    Some(view) => view.info().name.clone(),
                     None => {
                         action = Some(Action::Remove(i));
                         break;
@@ -264,11 +243,11 @@ impl Inner {
                 })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
-                    for device_ref in engine.devices() {
+                    for entry in engine.devices() {
                         ui.selectable_value(
                             &mut action,
-                            Some(Action::Change(i, *device_ref.id())),
-                            &device_ref.name,
+                            Some(Action::Change(i, *entry.uuid())),
+                            &entry.info().name,
                         );
                     }
                 });
@@ -279,11 +258,11 @@ impl Inner {
                 .selected_text("[None]")
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut action, None, "[None]");
-                    for device_ref in engine.devices() {
+                    for entry in engine.devices() {
                         ui.selectable_value(
                             &mut action,
-                            Some(Action::Add(*device_ref.id())),
-                            &device_ref.name,
+                            Some(Action::Add(*entry.uuid())),
+                            &entry.info().name,
                         );
                     }
                 });
@@ -301,19 +280,29 @@ impl Inner {
             ds4_send.send(selected_ds4.clone()).unwrap();
         }
     }
-}
 
-struct Signals {
-    listen_update: Mutex<HashSet<Uuid>>,
-    update: (Sender<Uuid>, Receiver<Uuid>),
-}
+    fn device_added(&mut self, id: &Uuid, info: &DeviceInfo) {
+        let Inner::Init {
+            engine,
+            xbox_send,
+            selected_xbox,
+            ds4_send,
+            selected_ds4,
+            ..
+        } = self
+        else { return };
+    }
 
-impl Signals {
-    fn new() -> Self {
-        Signals {
-            listen_update: Mutex::new(HashSet::new()),
-            update: crossbeam_channel::bounded(4),
-        }
+    fn device_removed(&mut self, id: &Uuid) {
+        let Inner::Init {
+            engine,
+            xbox_send,
+            selected_xbox,
+            ds4_send,
+            selected_ds4,
+            ..
+        } = self
+        else { return };
     }
 }
 
@@ -321,7 +310,6 @@ struct Thread {
     engine: Arc<Engine>,
     xbox_recv: Receiver<Vec<Uuid>>,
     ds4_recv: Receiver<Vec<Uuid>>,
-    signals: Arc<Signals>,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
 }
@@ -347,15 +335,16 @@ fn vigem_thread(thread: Thread) -> Result<()> {
         engine,
         xbox_recv,
         ds4_recv,
-        signals,
         stop,
         ..
     } = thread;
 
     let vigem = Client::connect()?;
 
-    let mut ds4_targets = Vec::<(Uuid, DualShock4Wired<_>)>::new();
-    let mut xbox_targets = Vec::<(Uuid, Xbox360Wired<_>)>::new();
+    let (update_send, update_recv) = crossbeam_channel::bounded(10);
+
+    let mut ds4_targets = Vec::<(DeviceView, DualShock4Wired<_>)>::new();
+    let mut xbox_targets = Vec::<(DeviceView, Xbox360Wired<_>)>::new();
 
     loop {
         crossbeam_channel::select! {
@@ -375,18 +364,13 @@ fn vigem_thread(thread: Thread) -> Result<()> {
                         let mut xbox = Xbox360Wired::new(&vigem, TargetId::XBOX360_WIRED);
                         xbox.plugin().context("failed to plugin xbox target")?;
                         xbox.wait_ready().context("xbox target failed to ready")?;
-                        xbox_targets.push((xbox_ids[i], xbox));
-                    }
-                }
-
-                {
-                    let mut listen_to = signals.listen_update.lock();
-                    listen_to.clear();
-                    for (id, _) in &xbox_targets {
-                        listen_to.insert(*id);
-                    }
-                    for (id, _) in &ds4_targets {
-                        listen_to.insert(*id);
+                        xbox_targets.push((match engine.get_device(&xbox_ids[i]) {
+                            Some(mut dev) => {
+                                dev.register_channel(update_send.clone());
+                                dev
+                            }
+                            None => anyhow::bail!("tried to get device with invalid uuid for xbox"),
+                        }, xbox));
                     }
                 }
             },
@@ -406,29 +390,21 @@ fn vigem_thread(thread: Thread) -> Result<()> {
                         let mut ds4 = DualShock4Wired::new(&vigem, TargetId::DUALSHOCK4_WIRED);
                         ds4.plugin().context("failed to plugin ds4 target")?;
                         ds4.wait_ready().context("ds4 target failed to ready")?;
-                        ds4_targets.push((ds4_ids[i], ds4));
-                    }
-                }
-
-                {
-                    let mut listen_to = signals.listen_update.lock();
-                    listen_to.clear();
-                    for (id, _) in &xbox_targets {
-                        listen_to.insert(*id);
-                    }
-                    for (id, _) in &ds4_targets {
-                        listen_to.insert(*id);
+                        ds4_targets.push((match engine.get_device(&ds4_ids[i]) {
+                            Some(mut dev) => {
+                                dev.register_channel(update_send.clone());
+                                dev
+                            }
+                            None => anyhow::bail!("tried to get device with invalid uuid for ds4"),
+                        }, ds4));
                     }
                 }
             },
-            recv(signals.update.1) -> rid => {
+            recv(update_recv) -> rid => {
                 if let Ok(rid) = rid {
-                    for (id, target) in &mut xbox_targets {
-                        if id != &rid { continue; }
-                        let device = match engine.get_device(id) {
-                            Some(device) => device,
-                            None => continue,
-                        };
+                    for (view, target) in &mut xbox_targets {
+                        if view.uuid() != &rid { continue; }
+                        let device = view.device();
                         let controller = match device.controllers.get(0) {
                             Some(controller) => controller,
                             None => continue,
@@ -437,12 +413,9 @@ fn vigem_thread(thread: Thread) -> Result<()> {
                         update_xbox_target(target, controller).with_context(|| "failed to update xbox target")?;
                     }
 
-                    for (id, target) in &mut ds4_targets {
-                        if id != &rid { continue; }
-                        let device = match engine.get_device(id) {
-                            Some(device) => device,
-                            None => continue,
-                        };
+                    for (view, target) in &mut ds4_targets {
+                        if view.uuid() != &rid { continue; }
+                        let device = view.device();
                         let controller = match device.controllers.get(0) {
                             Some(controller) => controller,
                             None => continue,

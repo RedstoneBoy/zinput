@@ -2,7 +2,7 @@ use std::ops::BitOr;
 
 use super::ComponentData;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ControllerInfo {
     pub buttons: u64,
     pub analogs: u8,

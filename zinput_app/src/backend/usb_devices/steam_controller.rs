@@ -43,6 +43,8 @@ crate::device_bundle!(DeviceBundle (owned),
 );
 
 struct SCDriver {
+    adaptor_id: u64,
+    engine: Arc<Engine>,
     packet: [u8; 64],
     bundle: DeviceBundle<'static>,
     controller: HidController,
@@ -51,23 +53,26 @@ struct SCDriver {
 impl DeviceDriver for SCDriver {
     const NAME: &'static str = "Steam Controller";
 
-    fn new(engine: &Arc<Engine>, adaptor_id: u64) -> Self {
+    fn new(engine: &Arc<Engine>, adaptor_id: u64) -> Result<Self> {
         let bundle = DeviceBundle::new(
             engine.clone(),
             format!("Steam Controller {}", adaptor_id),
+            None,
             [sc_controller_info()],
             [MotionInfo::new(true, true)],
             [
                 TouchPadInfo::new(TouchPadShape::Circle, true),
                 TouchPadInfo::new(TouchPadShape::Circle, true),
             ],
-        );
+        )?;
 
-        SCDriver {
+        Ok(SCDriver {
+            adaptor_id,
+            engine: engine.clone(),
             packet: [0; 64],
             bundle,
             controller: Default::default(),
-        }
+        })
     }
 
     fn open_device(
@@ -94,6 +99,28 @@ impl DeviceDriver for SCDriver {
     }
 
     fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
+        let id = handle
+            .device()
+            .device_descriptor()
+            .and_then(|desc| handle.read_serial_number_string_ascii(&desc))
+            .ok()
+            .map(|mut serial| {
+                serial.insert_str(0, "pa_switch/");
+                serial
+            });
+        
+        self.bundle = DeviceBundle::new(
+            self.engine.clone(),
+            format!("Steam Controller {}", self.adaptor_id),
+            id,
+            [sc_controller_info()],
+            [MotionInfo::new(true, true)],
+            [
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+                TouchPadInfo::new(TouchPadShape::Circle, true),
+            ],
+        )?;
+
         handle.write_control(
             0x21,
             0x09,
@@ -133,7 +160,7 @@ impl DeviceDriver for SCDriver {
         self.update_touch_pads();
         self.update_motion();
 
-        self.bundle.update()?;
+        self.bundle.update();
 
         Ok(ControlFlow::Continue(()))
     }

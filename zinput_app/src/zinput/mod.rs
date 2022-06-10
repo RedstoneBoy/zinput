@@ -1,30 +1,19 @@
-use std::{sync::Arc, thread::JoinHandle};
+use std::sync::Arc;
 
-use crossbeam_channel::Receiver;
-use zinput_engine::{eframe, event::Event, plugin::Plugin, Engine};
+use zinput_engine::{eframe, plugin::Plugin, Engine};
 
 use crate::gui::Gui;
-
-pub mod events;
 
 pub struct ZInput {
     plugins: Vec<Arc<dyn Plugin + Send + Sync>>,
     engine: Arc<Engine>,
-
-    event_channel: Receiver<Event>,
-    event_thread_handler: Option<JoinHandle<()>>,
 }
 
 impl ZInput {
     pub fn new() -> Self {
-        let (event_sender, event_channel) = crossbeam_channel::bounded(32);
-
         ZInput {
             plugins: Vec::new(),
-            engine: Arc::new(Engine::new(event_sender)),
-
-            event_channel,
-            event_thread_handler: None,
+            engine: Arc::new(Engine::new()),
         }
     }
 
@@ -36,12 +25,6 @@ impl ZInput {
         for plugin in &self.plugins {
             plugin.init(self.engine.clone());
         }
-
-        let event_thread_handler = std::thread::spawn(events::new_event_thread(events::Thread {
-            event_channel: self.event_channel.clone(),
-            plugins: self.plugins.clone(),
-        }));
-        self.event_thread_handler = Some(event_thread_handler);
 
         let app = Gui::new(self.engine.clone(), self.plugins.clone());
         let options = eframe::NativeOptions::default();

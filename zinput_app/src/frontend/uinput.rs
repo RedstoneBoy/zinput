@@ -66,12 +66,7 @@ impl Plugin for UInput {
         &[EventKind::DeviceUpdate]
     }
 
-    fn update_gui(
-        &self,
-        ctx: &egui::CtxRef,
-        frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 
@@ -150,12 +145,7 @@ impl Inner {
         }
     }
 
-    fn update_gui(
-        &mut self,
-        _ctx: &egui::CtxRef,
-        _frame: &mut epi::Frame<'_>,
-        ui: &mut egui::Ui,
-    ) {
+    fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
                 egui::ComboBox::from_label(format!("UInput Controller {}", i + 1))

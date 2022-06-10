@@ -39,20 +39,22 @@ struct GCDriver {
     engine: Arc<Engine>,
     device_id: u64,
     bundles: [Option<DeviceBundle<'static>>; 4],
+    ids: [Option<String>; 4],
     device: HidDevice,
 }
 
 impl DeviceDriver for GCDriver {
     const NAME: &'static str = "Gamecube Adaptor";
 
-    fn new(engine: &Arc<Engine>, device_id: u64) -> Self {
-        GCDriver {
+    fn new(engine: &Arc<Engine>, device_id: u64) -> Result<Self> {
+        Ok(GCDriver {
             packet: [0; 37],
             engine: engine.clone(),
             device_id,
             bundles: [None, None, None, None],
+            ids: [None, None, None, None],
             device: HidDevice::default(),
-        }
+        })
     }
 
     fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
@@ -62,6 +64,18 @@ impl DeviceDriver for GCDriver {
         {
             return Err(anyhow!("invalid size sent"));
         }
+
+        let serial = handle
+            .device()
+            .device_descriptor()
+            .and_then(|desc| handle.read_serial_number_string_ascii(&desc))
+            .ok();
+
+        self.ids = [0, 1, 2, 3].map(|i| {
+            serial
+                .as_ref()
+                .map(|serial| format!("gc_adaptor/{}/{}", serial, i))
+        });
 
         Ok(())
     }
@@ -109,8 +123,9 @@ impl DeviceDriver for GCDriver {
                     let bundle = DeviceBundle::new(
                         self.engine.clone(),
                         format!("Gamecube Adaptor {} Slot {}", self.device_id, i + 1),
+                        self.ids[i].clone(),
                         [gc_controller_info()],
-                    );
+                    )?;
 
                     self.bundles[i] = Some(bundle);
                     self.bundles[i].as_mut().unwrap()
@@ -120,14 +135,15 @@ impl DeviceDriver for GCDriver {
 
             if let Some(controller) = &self.device.controllers[i] {
                 bundle.controller[0].buttons = convert_buttons(controller.buttons);
-                bundle.controller[0].left_stick_x = controller.left_stick.x;
-                bundle.controller[0].left_stick_y = controller.left_stick.y;
+                // TODO: Change back
+                bundle.controller[0].left_stick_x = ((((controller.left_stick.x as f32) - 127.0) * 1.25) + 127.0) as u8;
+                bundle.controller[0].left_stick_y = ((((controller.left_stick.y as f32) - 127.0) * 1.25) + 127.0) as u8;
                 bundle.controller[0].right_stick_x = controller.right_stick.x;
                 bundle.controller[0].right_stick_y = controller.right_stick.y;
                 bundle.controller[0].l2_analog = controller.left_trigger;
                 bundle.controller[0].r2_analog = controller.right_trigger;
 
-                bundle.update()?;
+                bundle.update();
             }
         }
 

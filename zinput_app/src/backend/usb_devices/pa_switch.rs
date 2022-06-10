@@ -33,6 +33,8 @@ fn filter(dev: &rusb::Device<GlobalContext>) -> bool {
 crate::device_bundle!(DeviceBundle(owned), controller: Controller);
 
 struct PADriver {
+    id: u64,
+    engine: Arc<Engine>,
     packet: [u8; 8],
     bundle: DeviceBundle<'static>,
     controller: HidController,
@@ -41,18 +43,42 @@ struct PADriver {
 impl DeviceDriver for PADriver {
     const NAME: &'static str = "PowerA Wired Pro Controller";
 
-    fn new(engine: &Arc<Engine>, id: u64) -> Self {
+    fn new(engine: &Arc<Engine>, id: u64) -> Result<Self> {
         let bundle = DeviceBundle::new(
             engine.clone(),
             format!("PowerA Wired Pro Controller {}", id),
+            None,
             [controller_info()],
-        );
+        )?;
 
-        PADriver {
+        Ok(PADriver {
+            id,
+            engine: engine.clone(),
             packet: [0; 8],
             bundle,
             controller: Default::default(),
-        }
+        })
+    }
+
+    fn initialize(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<()> {
+        let id = handle
+            .device()
+            .device_descriptor()
+            .and_then(|desc| handle.read_serial_number_string_ascii(&desc))
+            .ok()
+            .map(|mut serial| {
+                serial.insert_str(0, "pa_switch/");
+                serial
+            });
+        
+        self.bundle = DeviceBundle::new(
+            self.engine.clone(),
+            format!("PowerA Wired Pro Controller {}", self.id),
+            id,
+            [controller_info()],
+        )?;
+
+        Ok(())
     }
 
     fn update(&mut self, handle: &mut DeviceHandle<GlobalContext>) -> Result<ControlFlow<()>> {
@@ -80,7 +106,7 @@ impl DeviceDriver for PADriver {
         self.bundle.controller[0].right_stick_x = self.controller.right_stick.x;
         self.bundle.controller[0].right_stick_y = 255 - self.controller.right_stick.y;
 
-        self.bundle.update()?;
+        self.bundle.update();
 
         Ok(ControlFlow::Continue(()))
     }

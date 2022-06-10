@@ -20,51 +20,43 @@ macro_rules! device_bundle {
         crate::device_bundle!($name(EngineArc), $($cname : $ctype $( [ $clen ] )?),*);
     };
 
-    ($name:ident ( $($api_type:tt)+ ), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
+    ($name:ident ( $($engine_type:tt)+ ), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
         use paste::paste;
 
         struct $name<'a> {
             _lifetime: std::marker::PhantomData<&'a ()>,
-            api: $($api_type<'a>)+,
-            device_id: zinput_engine::util::Uuid,
+            handle: zinput_engine::DeviceHandle,
             $($cname: crate::device_bundle!(field $cname : $ctype $( [ $clen ] )?),)*
         }
 
         paste! {
             impl<'a> $name<'a> {
                 fn new(
-                    api: $($api_type<'a>)+,
+                    engine: $($engine_type<'a>)+,
                     name: String,
+                    id: Option<String>,
                     $($cname: crate::device_bundle!(info $cname : $ctype $( [ $clen ] )? ),)*
-                ) -> Self {
+                ) -> std::result::Result<Self, zinput_engine::DeviceAlreadyExists> {
                     let mut device_info = zinput_engine::device::DeviceInfo::new(name);
+                    device_info.id = id;
 
-                    $(let $cname = crate::device_bundle!(init(api, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
+                    $(let $cname = crate::device_bundle!(init(engine, $cname, device_info) $cname : $ctype $( [ $clen ] )?);)*
 
-                    let device_id = api.new_device(device_info);
+                    let handle = engine.new_device(device_info)?;
 
-                    $name {
+                    Ok($name {
                         _lifetime: std::marker::PhantomData,
-                        api,
-                        device_id,
+                        handle,
                         $($cname,)*
-                    }
+                    })
                 }
 
-                fn update(&self) -> Result<(), zinput_engine::ComponentUpdateError> {
+                fn update(&self) {
                     use zinput_engine::device::component::ComponentData;
 
-                    self.api.update(&self.device_id, |dev| {
+                    self.handle.update(|dev| {
                         $(crate::device_bundle!(update(self, dev) $cname : $ctype $( [ $clen ] )?);)*
-                    })?;
-
-                    Ok(())
-                }
-            }
-
-            impl<'a> Drop for $name<'a> {
-                fn drop(&mut self) {
-                    self.api.remove_device(&self.device_id);
+                    });
                 }
             }
         }
@@ -86,11 +78,11 @@ macro_rules! device_bundle {
         [<$ctype as zinput_engine::device::component::ComponentData>::Info; $clen]
     };
 
-    (init ( $api:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(init($api, $info, $dinfo) $cname : $ctype [ 1 ])
+    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(init($engine, $info, $dinfo) $cname : $ctype [ 1 ])
     };
 
-    (init ( $api:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {{
+    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {{
         paste! {
             $dinfo.[< $cname s >] = $info.into();
             [(); $clen].map(|_| $ctype::default())

@@ -537,9 +537,11 @@ fn get_joystick_info(api: Arc<Engine>, handle: *mut c_void) -> Result<Joystick> 
     let bundle = DeviceBundle::new(
         api.clone(),
         format!("Raw Input Device {}", handle as u64),
+        // TODO: ID
+        None,
         [AnalogsInfo::default()],
         [ButtonsInfo::default()],
-    );
+    )?;
 
     Ok(Joystick {
         button_caps,
@@ -640,7 +642,7 @@ fn update_device(state: &mut State, device_id: usize, data: &winuser::RAWHID) ->
         value_index += 1;
     }
 
-    joystick.bundle.update()?;
+    joystick.bundle.update();
 
     Ok(())
 }

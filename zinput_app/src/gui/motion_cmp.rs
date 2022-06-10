@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
-use zinput_engine::{eframe::{egui, epi}, util::Uuid, Engine};
+use zinput_engine::{
+    eframe::{egui, epi},
+    DeviceView, Engine,
+};
 
 pub struct MotionCmp {
     engine: Arc<Engine>,
 
-    dev1: Option<Uuid>,
-    dev2: Option<Uuid>,
+    dev1: Option<DeviceView>,
+    dev2: Option<DeviceView>,
 
     average: Vec<(f32, f32, f32)>,
     index: usize,
@@ -30,48 +33,41 @@ impl MotionCmp {
             egui::ComboBox::from_label("Device 1")
                 .selected_text(
                     self.dev1
-                        .and_then(|id| self.engine.get_device_info(&id))
-                        .map_or("".to_owned(), |dev| dev.name.clone()),
+                        .as_ref()
+                        .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    for device_ref in self.engine.devices() {
-                        ui.selectable_value(
-                            &mut self.dev1,
-                            Some(*device_ref.id()),
-                            &device_ref.name,
-                        );
+                    let mut index = None;
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
+                    self.dev1 = index.and_then(|i| self.engine.get_device(&i));
                 });
             egui::ComboBox::from_label("Device 2")
                 .selected_text(
                     self.dev2
-                        .and_then(|id| self.engine.get_device_info(&id))
-                        .map_or("".to_owned(), |dev| dev.name.clone()),
+                        .as_ref()
+                        .map_or("".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
-                    for device_ref in self.engine.devices() {
-                        ui.selectable_value(
-                            &mut self.dev2,
-                            Some(*device_ref.id()),
-                            &device_ref.name,
-                        );
+                    let mut index = None;
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
+                    self.dev2 = index.and_then(|i| self.engine.get_device(&i));
                 });
 
-            let (motion1, motion2) = if let (Some(dev1), Some(dev2)) = (
-                self.dev1.and_then(|id| self.engine.get_device(&id)),
-                self.dev2.and_then(|id| self.engine.get_device(&id)),
-            ) {
-                if let (Some(motion1), Some(motion2)) = (dev1.motions.get(0), dev2.motions.get(0)) {
-                    let motion1 = motion1.clone();
-                    let motion2 = motion2.clone();
+            let (motion1, motion2) = match (&self.dev1, &self.dev2) {
+                (Some(view1), Some(view2)) => {
+                    let m1 = view1.device().motions.get(0).cloned();
+                    let m2 = view2.device().motions.get(0).cloned();
 
-                    (motion1, motion2)
-                } else {
-                    (Default::default(), Default::default())
+                    match (m1, m2) {
+                        (Some(m1), Some(m2)) => (m1, m2),
+                        _ => return,
+                    }
                 }
-            } else {
-                (Default::default(), Default::default())
+                _ => return,
             };
 
             if self.average.len() >= 30 {
