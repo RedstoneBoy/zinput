@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use zinput_engine::{
     device::component::{controller::Button, touch_pad::TouchPadShape},
-    eframe::{egui, epi},
+    eframe::{self, egui},
     DeviceView, Engine,
 };
 
@@ -21,16 +21,17 @@ impl DeviceViewer {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>) {
+    pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::Window::new("Device View").show(ctx, |ui| {
             egui::ComboBox::from_label("Devices")
                 .selected_text(
                     self.selected_controller
                         .as_ref()
-                        .map_or("".to_owned(), |view| view.info().name.clone()),
+                        .map_or("[None]".to_owned(), |view| view.info().name.clone()),
                 )
                 .show_ui(ui, |ui| {
                     let mut index = None;
+                    ui.selectable_value(&mut index, None, "[None]");
                     for entry in self.engine.devices() {
                         ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
                     }
@@ -47,11 +48,11 @@ impl DeviceViewer {
                 egui::Grid::new("controller_buttons").show(ui, |ui| {
                     let mut col = 0;
                     for button in IntoIterator::into_iter(Button::BUTTONS) {
-                        let mut label = egui::Label::new(format!("{}", button));
+                        let mut label = egui::RichText::new(format!("{}", button));
                         if button.is_pressed(controller_data.buttons) {
                             label = label.underline();
                         }
-                        ui.add(label);
+                        ui.label(label);
                         col += 1;
                         if col >= 4 {
                             ui.end_row();
@@ -75,8 +76,8 @@ impl DeviceViewer {
                         ),
                     ] {
                         ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(format!(
+                            ui.label(
+                                egui::RichText::new(format!(
                                     "{} {:+0.2}, {:+0.2}",
                                     name,
                                     (x as f32) / 127.5 - 1.0,
@@ -107,8 +108,8 @@ impl DeviceViewer {
                     (controller_data.r2_analog, "R2"),
                 ] {
                     ui.horizontal(|ui| {
-                        ui.add(
-                            egui::Label::new(format!(
+                        ui.label(
+                            egui::RichText::new(format!(
                                 "{}: {:+0.2}",
                                 name,
                                 (trigger as f32) / 255.0
@@ -135,29 +136,29 @@ impl DeviceViewer {
 
                 ui.heading("Motion");
 
-                ui.add(
-                    egui::Label::new(format!("Gyro Pitch: {:+0.2}", motion_data.gyro_pitch))
+                ui.label(
+                    egui::RichText::new(format!("Gyro Pitch: {:+0.2}", motion_data.gyro_pitch))
                         .monospace(),
                 );
-                ui.add(
-                    egui::Label::new(format!("Gyro Roll:  {:+0.2}", motion_data.gyro_roll))
+                ui.label(
+                    egui::RichText::new(format!("Gyro Roll:  {:+0.2}", motion_data.gyro_roll))
                         .monospace(),
                 );
-                ui.add(
-                    egui::Label::new(format!("Gyro Yaw:   {:+0.2}", motion_data.gyro_yaw))
+                ui.label(
+                    egui::RichText::new(format!("Gyro Yaw:   {:+0.2}", motion_data.gyro_yaw))
                         .monospace(),
                 );
 
-                ui.add(
-                    egui::Label::new(format!("Accelerometer X: {:+0.2}", motion_data.accel_x))
+                ui.label(
+                    egui::RichText::new(format!("Accelerometer X: {:+0.2}", motion_data.accel_x))
                         .monospace(),
                 );
-                ui.add(
-                    egui::Label::new(format!("Accelerometer Y: {:+0.2}", motion_data.accel_y))
+                ui.label(
+                    egui::RichText::new(format!("Accelerometer Y: {:+0.2}", motion_data.accel_y))
                         .monospace(),
                 );
-                ui.add(
-                    egui::Label::new(format!("Accelerometer Z: {:+0.2}", motion_data.accel_z))
+                ui.label(
+                    egui::RichText::new(format!("Accelerometer Z: {:+0.2}", motion_data.accel_z))
                         .monospace(),
                 );
             }
@@ -172,16 +173,16 @@ impl DeviceViewer {
 
                 ui.heading(format!("Touch Pad #{}", i + 1));
                 ui.horizontal(|ui| {
-                    let mut label = egui::Label::new("Pressed");
+                    let mut label = egui::RichText::new("Pressed");
                     if touch_pad.pressed {
                         label = label.underline();
                     }
-                    ui.add(label);
-                    let mut label = egui::Label::new("Touched");
+                    ui.label(label);
+                    let mut label = egui::RichText::new("Touched");
                     if touch_pad.touched {
                         label = label.underline();
                     }
-                    ui.add(label);
+                    ui.label(label);
 
                     let painter = egui::Painter::new(
                         ui.ctx().clone(),
@@ -214,8 +215,8 @@ impl DeviceViewer {
                 for i in 0..analog.analogs.len() {
                     let value = analog.analogs[i];
                     ui.horizontal(|ui| {
-                        ui.add(
-                            egui::Label::new(format!(
+                        ui.label(
+                            egui::RichText::new(format!(
                                 "Analog {}: {:+0.2}",
                                 i,
                                 (value as f32) / 255.0
@@ -250,11 +251,11 @@ impl DeviceViewer {
                 egui::Grid::new(format!("buttons{}", button_comp_index)).show(ui, |ui| {
                     let mut col = 0;
                     for i in 0..64 {
-                        let mut label = egui::Label::new(format!("{}", i));
+                        let mut label = egui::RichText::new(format!("{}", i));
                         if (buttons.buttons >> i) & 1 == 1 {
                             label = label.underline();
                         }
-                        ui.add(label);
+                        ui.label(label);
                         col += 1;
                         if col >= 8 {
                             ui.end_row();

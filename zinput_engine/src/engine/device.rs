@@ -2,10 +2,10 @@ use std::{sync::{Arc, atomic::{AtomicBool, AtomicUsize, Ordering}}, ops::Deref};
 
 use crossbeam_channel::{Sender, TrySendError};
 use index_map::IndexMap;
-use parking_lot::{RwLock, RwLockReadGuard, Mutex};
+use parking_lot::{RwLock, RwLockReadGuard, Mutex, RwLockWriteGuard};
 use paste::paste;
 use uuid::Uuid;
-use zinput_device::{DeviceInfo, Device, DeviceMut, DeviceConfig};
+use zinput_device::{DeviceInfo, Device, DeviceMut, DeviceConfig, DeviceConfigMut};
 
 pub struct DeviceHandle {
     internal: Arc<InternalDevice>,
@@ -18,13 +18,20 @@ impl DeviceHandle {
             .map(|_| DeviceHandle { internal })
     }
 
-    pub fn update<F>(&self, updater: F)
+    pub fn update<F>(&self, mut updater: F)
     where
-        F: for<'a> FnOnce(DeviceMut<'a>),
+        F: for<'a> FnMut(DeviceMut<'a>),
     {
-        let mut device = self.internal.device.write();
-        updater(device.as_mut());
-        self.internal.config.read().configure(device.as_mut());
+        {
+            let mut device_raw = self.internal.device_raw.write();
+            updater(device_raw.as_mut());
+        }
+
+        {
+            let mut device = self.internal.device.write();
+            updater(device.as_mut());
+            self.internal.config.read().configure(device.as_mut());
+        }
 
         self.internal.channels.lock().retain(|_, channel| {
             match channel.try_send(self.internal.uuid) {
@@ -56,6 +63,18 @@ impl DeviceView {
         DeviceView { internal, channel: None }
     }
 
+    pub fn config(&self) -> ConfigRead {
+        ConfigRead {
+            lock: self.internal.config.read(),
+        }
+    }
+
+    pub fn config_mut(&self) -> ConfigWrite {
+        ConfigWrite {
+            lock: self.internal.config.write(),
+        }
+    }
+
     pub fn info(&self) -> &DeviceInfo {
         &self.internal.info
     }
@@ -63,6 +82,12 @@ impl DeviceView {
     pub fn device(&self) -> DeviceRead {
         DeviceRead {
             lock: self.internal.device.read(),
+        }
+    }
+
+    pub fn device_raw(&self) -> DeviceRead {
+        DeviceRead {
+            lock: self.internal.device_raw.read(),
         }
     }
 
@@ -110,6 +135,28 @@ impl<'a> Deref for DeviceRead<'a> {
     }
 }
 
+pub struct ConfigRead<'a> {
+    lock: RwLockReadGuard<'a, DeviceConfig>,
+}
+
+impl<'a> Deref for ConfigRead<'a> {
+    type Target = DeviceConfig;
+
+    fn deref(&self) -> &DeviceConfig {
+        self.lock.deref()
+    }
+}
+
+pub struct ConfigWrite<'a> {
+    lock: RwLockWriteGuard<'a, DeviceConfig>,
+}
+
+impl<'a> ConfigWrite<'a> {
+    pub fn get(&mut self) -> DeviceConfigMut {
+        self.lock.as_mut()
+    }
+}
+
 pub(super) struct InternalDevice {
     pub(super) uuid: Uuid,
 
@@ -119,6 +166,7 @@ pub(super) struct InternalDevice {
     config: RwLock<DeviceConfig>,
     info: DeviceInfo,
     device: RwLock<Device>,
+    device_raw: RwLock<Device>,
 
     channels: Mutex<IndexMap<Sender<Uuid>>>,
 }
@@ -132,6 +180,11 @@ macro_rules! internal_device_components {
                         $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
                     };
                     let device = RwLock::new(device);
+
+                    let device_raw = Device {
+                        $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
+                    };
+                    let device_raw = RwLock::new(device_raw);
 
                     let config = DeviceConfig {
                         $([< $field_name s >]: vec![Default::default(); info.[< $field_name s >].len()]),*
@@ -147,6 +200,7 @@ macro_rules! internal_device_components {
                         config,
                         info,
                         device,
+                        device_raw,
 
                         channels: Mutex::default(),
                     })

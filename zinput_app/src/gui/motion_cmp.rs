@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use zinput_engine::{
-    eframe::{egui, epi},
+    eframe::{self, egui},
     DeviceView, Engine,
 };
 
@@ -28,7 +28,7 @@ impl MotionCmp {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>) {
+    pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::Window::new("Motion Compare").show(ctx, |ui| {
             egui::ComboBox::from_label("Device 1")
                 .selected_text(
@@ -88,22 +88,22 @@ impl MotionCmp {
                 ));
             }
 
-            ui.add(
-                egui::Label::new(format!(
+            ui.label(
+                egui::RichText::new(format!(
                     "Gyro Pitch: {:+0.02}",
                     self.average.iter().map(|(v, _, _)| v).sum::<f32>() / 30.0
                 ))
                 .monospace(),
             );
-            ui.add(
-                egui::Label::new(format!(
+            ui.label(
+                egui::RichText::new(format!(
                     "Gyro Yaw: {:+0.02}",
                     self.average.iter().map(|(_, v, _)| v).sum::<f32>() / 30.0
                 ))
                 .monospace(),
             );
-            ui.add(
-                egui::Label::new(format!(
+            ui.label(
+                egui::RichText::new(format!(
                     "Gyro Roll: {:+0.02}",
                     self.average.iter().map(|(_, _, v)| v).sum::<f32>() / 30.0
                 ))

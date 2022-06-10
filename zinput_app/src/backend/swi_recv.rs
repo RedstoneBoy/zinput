@@ -16,7 +16,7 @@ use zinput_engine::{
         controller::{Button, ControllerInfo},
         motion::MotionInfo,
     },
-    eframe::{egui, epi},
+    eframe::{self, egui},
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
 };
@@ -72,7 +72,7 @@ impl Plugin for Swi {
         PluginKind::Backend
     }
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+    fn update_gui(&self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         let mut inner = self.inner.lock();
         ui.label(format!("Port: {}", inner.gui().old_port));
         ui.text_edit_singleline(&mut inner.gui().port);

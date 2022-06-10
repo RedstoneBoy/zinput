@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use eframe::{egui, epi};
+use eframe::egui;
 
 use crate::{
     event::{Event, EventKind},
@@ -19,7 +19,7 @@ pub trait Plugin {
         &[]
     }
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {}
+    fn update_gui(&self, _ctx: &egui::Context, _frame: &mut eframe::Frame, _ui: &mut egui::Ui) {}
 
     fn on_event(&self, _event: &Event) {}
 }

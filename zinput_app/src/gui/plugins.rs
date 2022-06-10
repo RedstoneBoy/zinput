@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use zinput_engine::{
-    eframe::{egui, epi},
+    eframe::{self, egui},
     plugin::{Plugin, PluginKind, PluginStatus},
     Engine,
 };
@@ -25,7 +25,7 @@ impl PluginConfig {
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>) {
+    pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::Window::new("Plugins").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 self.plugin_row(ui, |kind| kind == &PluginKind::Backend, "Backend");
@@ -69,12 +69,13 @@ impl PluginConfig {
                 ui.horizontal(|ui| {
                     let plugin = &self.plugins[i];
 
-                    let plugin_button =
-                        egui::Button::new(plugin.name()).text_color(match plugin.status() {
-                            PluginStatus::Running => egui::Color32::GREEN,
-                            PluginStatus::Stopped => egui::Color32::WHITE,
-                            PluginStatus::Error(_) => egui::Color32::RED,
-                        });
+                    let button_text = egui::RichText::new(plugin.name()).color(match plugin.status() {
+                        PluginStatus::Running => egui::Color32::GREEN,
+                        PluginStatus::Stopped => egui::Color32::WHITE,
+                        PluginStatus::Error(_) => egui::Color32::RED,
+                    });
+
+                    let plugin_button = egui::Button::new(button_text);
 
                     let plugin_button = ui.add(plugin_button);
 

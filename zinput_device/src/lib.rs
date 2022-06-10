@@ -36,7 +36,8 @@ macro_rules! components {
 macro_rules! device_config {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste! {
-            pub struct DeviceConfig {    
+            #[derive(Clone)]
+            pub struct DeviceConfig {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
     
@@ -49,6 +50,16 @@ macro_rules! device_config {
                         }
                     )*
                 }
+
+                pub fn as_mut(&mut self) -> DeviceConfigMut {
+                    DeviceConfigMut {
+                        $([< $cname s >]: &mut self.[< $cname s >],)*
+                    }
+                }
+            }
+
+            pub struct DeviceConfigMut<'a> {    
+                $(pub [< $cname s >]: &'a mut [$ctype],)*
             }
         }
     }

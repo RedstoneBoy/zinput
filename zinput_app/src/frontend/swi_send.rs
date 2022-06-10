@@ -20,7 +20,7 @@ use zinput_engine::{
     DeviceView,
 };
 use zinput_engine::{
-    eframe::{egui, epi},
+    eframe::{self, egui},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
     Engine,
@@ -66,7 +66,7 @@ impl Plugin for Swi {
         PluginKind::Frontend
     }
 
-    fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+    fn update_gui(&self, ctx: &egui::Context, frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 }
@@ -183,7 +183,7 @@ impl Inner {
         }
     }
 
-    fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+    fn update_gui(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         match self {
             Inner::Uninit { gui } => {
                 ui.label(format!("Switch Address: {}", gui.old_address));

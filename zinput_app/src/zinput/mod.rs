@@ -31,7 +31,7 @@ impl ZInput {
 
         // TODO: make sure program stops cleanly
 
-        eframe::run_native(Box::new(app), options);
+        eframe::run_native("zinput", options, Box::new(|_| Box::new(app)));
 
         /*
         for frontend in &self.frontends {

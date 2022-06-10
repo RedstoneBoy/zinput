@@ -18,7 +18,7 @@ use input_linux::{
 use parking_lot::Mutex;
 use zinput_engine::device::component::controller::{Button, Controller};
 use zinput_engine::{
-    eframe::{egui, epi},
+    eframe::{self, egui},
     event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
@@ -66,7 +66,7 @@ impl Plugin for UInput {
         &[EventKind::DeviceUpdate]
     }
 
-    fn update_gui(&self, ctx: &egui::CtxRef, frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+    fn update_gui(&self, ctx: &egui::Context, frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
 
@@ -145,7 +145,7 @@ impl Inner {
         }
     }
 
-    fn update_gui(&mut self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, ui: &mut egui::Ui) {
+    fn update_gui(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         if let Some(engine) = self.engine.clone() {
             for i in 0..self.selected_devices.len() {
                 egui::ComboBox::from_label(format!("UInput Controller {}", i + 1))

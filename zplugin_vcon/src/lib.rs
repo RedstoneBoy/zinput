@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use zinput_engine::{plugin::{Plugin, PluginStatus, PluginKind}, Engine, eframe::{egui, epi}, event::{EventKind, Event}};
+use zinput_engine::{plugin::{Plugin, PluginStatus, PluginKind}, Engine, eframe::{self, egui}, event::{EventKind, Event}};
 
 mod device_builder;
 mod vdevice;
@@ -38,7 +38,7 @@ impl Plugin for VConPlugin {
         &[EventKind::DeviceAdded, EventKind::DeviceRemoved, EventKind::DeviceUpdate]
     }
 
-    fn update_gui(&self, _ctx: &egui::CtxRef, _frame: &mut epi::Frame<'_>, _ui: &mut egui::Ui) {
+    fn update_gui(&self, _ctx: &egui::Context, _frame: &mut eframe::Frame, _ui: &mut egui::Ui) {
         
     }
 
