@@ -1,5 +1,7 @@
 use std::ops::BitOr;
 
+use serde::{Deserialize, Serialize};
+
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -49,7 +51,7 @@ impl Default for ControllerInfo {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct ControllerConfig {
     pub left_stick: StickConfig,
     pub right_stick: StickConfig,
@@ -72,7 +74,7 @@ impl Default for ControllerConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct StickConfig {
     pub deadzone: u8,
 

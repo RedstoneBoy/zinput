@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 paste = "1.0.6"
+serde = { version = "1.0.137", features = ["derive"] }
