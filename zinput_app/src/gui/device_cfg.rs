@@ -42,11 +42,15 @@ impl DeviceCfg {
                 )
                 .show_ui(ui, |ui| {
                     let mut index = None;
-                    ui.selectable_value(&mut index, None, "[None]");
+
+                    ui.selectable_value(&mut index, Some(None), "[None]");
                     for entry in self.engine.devices() {
-                        ui.selectable_value(&mut index, Some(*entry.uuid()), &entry.info().name);
+                        ui.selectable_value(&mut index, Some(Some(*entry.uuid())), &entry.info().name);
                     }
-                    self.selected_controller = index.and_then(|i| self.engine.get_device(&i));
+                    
+                    if let Some(index) = index {
+                        self.selected_controller = index.and_then(|i| self.engine.get_device(&i));
+                    }
                 });
 
             let (device, device_raw, cfg) = match &self.selected_controller {
