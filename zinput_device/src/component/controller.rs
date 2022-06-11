@@ -72,32 +72,84 @@ impl Default for ControllerConfig {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct StickConfig {
-    pub deadzone_squared: u16,
-    // TODO: FIXME completely incorrect
-    pub x_range: [u8; 2],
-    pub y_range: [u8; 2],
+    pub deadzone: u8,
+
+    pub samples: Option<[f32; 32]>,
 }
 
 impl StickConfig {
     fn configure(&self, x: u8, y: u8) -> [u8; 2] {
-        let x = configure_analog(x, self.x_range);
-        let y = configure_analog(y, self.y_range);
-        if (x as f32 - 127.5).powi(2) + (y as f32 - 127.5).powi(2) <= (self.deadzone_squared as f32) {
-            return [0, 0];
+        if self.deadzone == 0 && self.samples.is_none() {
+            return [x, y];
         }
 
+        let dzf = self.deadzone as f32 / 255.0;
+        let xf = (x as f32 - 127.5) / 127.5;
+        let yf = (y as f32 - 127.5) / 127.5;
+        let scalar = f32::sqrt(xf.powi(2) + yf.powi(2));
+
+        let max = match &self.samples {
+            Some(samples) => {
+                let mut angle = f32::atan2(yf, xf);
+                if angle < 0.0 {
+                    angle = 2.0 * std::f32::consts::PI + angle;
+                }
+                Self::sample(samples, angle)
+            }
+            None => 1.0,
+        };
+
+        let range = max - dzf;
+
+        if range <= 0.0 {
+            return [128, 128];
+        }
+
+        let new_scalar = (scalar.clamp(dzf, max) - dzf) / range;
+
+        let xf = (xf / scalar) * new_scalar;
+        let yf = (yf / scalar) * new_scalar;
+
+        let x = (xf * 127.5 + 127.5) as u8;
+        let y = (yf * 127.5 + 127.5) as u8;
+
         [x, y]
+    }
+
+    fn sample(samples: &[f32; 32], angle: f32) -> f32 {
+        fn index_to_angle(index: usize) -> f32 {
+            (index as f32) * (std::f32::consts::PI * 2.0 / 32.0)
+        }
+
+        let (mut i1, mut i2) = (0, 0);
+        let mut influence = 0.0;
+
+        for i in 0..32 {
+            let min_angle = index_to_angle(i);
+            let max_angle = index_to_angle(i + 1);
+            if min_angle <= angle && angle < max_angle {
+                i1 = i;
+                i2 = (i + 1) % 32;
+                influence = (angle - min_angle) / (max_angle - min_angle);
+                break;
+            }
+        }
+
+        let v1 = samples[i1] * (1.0 - influence);
+        let v2 = samples[i2] * influence;
+
+        v1 + v2
     }
 }
 
 impl Default for StickConfig {
     fn default() -> Self {
         StickConfig {
-            deadzone_squared: 0,
-            x_range: [0, 255],
-            y_range: [0, 255],
+            deadzone: 0,
+
+            samples: None,
         }
     }
 }
@@ -139,10 +191,14 @@ impl ComponentData for Controller {
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
     }
-    
+
     fn configure(&mut self, config: &Self::Config) {
-        let [lx, ly] = config.left_stick.configure(self.left_stick_x, self.left_stick_y);
-        let [rx, ry] = config.right_stick.configure(self.right_stick_x, self.right_stick_y);
+        let [lx, ly] = config
+            .left_stick
+            .configure(self.left_stick_x, self.left_stick_y);
+        let [rx, ry] = config
+            .right_stick
+            .configure(self.right_stick_x, self.right_stick_y);
         self.left_stick_x = lx;
         self.left_stick_y = ly;
         self.right_stick_x = rx;
@@ -279,5 +335,5 @@ fn configure_analog(analog: u8, range: [u8; 2]) -> u8 {
     let min = range[0] as f32;
     let max = range[1] as f32;
     let range = max - min;
-    ((f32::clamp(analog as f32, min, max) / range) * 255.0) as u8
+    (((f32::clamp(analog as f32, min, max) - min) / range) * 255.0) as u8
 }

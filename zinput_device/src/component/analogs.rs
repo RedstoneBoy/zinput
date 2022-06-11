@@ -49,7 +49,7 @@ impl ComponentData for Analogs {
             let min = config.ranges[i][0] as f32;
             let max = config.ranges[i][1] as f32;
             let range = max - min;
-            self.analogs[i] = ((f32::clamp(self.analogs[i] as f32, min, max) / range) * 255.0) as u8;
+            self.analogs[i] = (((f32::clamp(self.analogs[i] as f32, min, max) - min) / range) * 255.0) as u8;
         }
     }
 }
