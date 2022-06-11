@@ -36,7 +36,9 @@ macro_rules! components {
 macro_rules! device_config {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste! {
-            #[derive(Clone)]
+            use serde::{Deserialize, Serialize};
+            
+            #[derive(Clone, Deserialize, Serialize)]
             pub struct DeviceConfig {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
@@ -72,6 +74,8 @@ macro_rules! device_info {
             pub struct DeviceInfo {
                 pub name: String,
                 pub id: Option<String>,
+                /// If this device has an id, the device config will be loaded without user interaction
+                pub autoload_config: bool,
     
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
@@ -81,6 +85,7 @@ macro_rules! device_info {
                     DeviceInfo {
                         name,
                         id: None,
+                        autoload_config: false,
 
                         $([< $cname s >]: Vec::new(),)*
                     }
@@ -88,6 +93,11 @@ macro_rules! device_info {
 
                 pub fn with_id(mut self, id: String) -> Self {
                     self.id = Some(id);
+                    self
+                }
+
+                pub fn autoload_config(mut self, autoload_config: bool) -> Self {
+                    self.autoload_config = autoload_config;
                     self
                 }
 

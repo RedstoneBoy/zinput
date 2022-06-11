@@ -539,6 +539,7 @@ fn get_joystick_info(api: Arc<Engine>, handle: *mut c_void) -> Result<Joystick> 
         format!("Raw Input Device {}", handle as u64),
         // TODO: ID
         None,
+        false,
         [AnalogsInfo::default()],
         [ButtonsInfo::default()],
     )?;

@@ -274,6 +274,7 @@ impl<'a> SwiConn<'a> {
                             format!("Swi Controller {}", ctrl_num),
                             // TODO: ID
                             None,
+                            false,
                             [controller_info()],
                             [MotionInfo::new(true, true)],
                         )?);

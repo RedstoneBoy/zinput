@@ -58,6 +58,7 @@ impl DeviceDriver for SCDriver {
             engine.clone(),
             format!("Steam Controller {}", adaptor_id),
             None,
+            true,
             [sc_controller_info()],
             [MotionInfo::new(true, true)],
             [
@@ -113,6 +114,7 @@ impl DeviceDriver for SCDriver {
             self.engine.clone(),
             format!("Steam Controller {}", self.adaptor_id),
             id,
+            true,
             [sc_controller_info()],
             [MotionInfo::new(true, true)],
             [

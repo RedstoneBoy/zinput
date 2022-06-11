@@ -209,6 +209,7 @@ impl<'a> Controllers<'a> {
                 format!("XInput Controller {}", index + 1),
                 // TODO: ID
                 None,
+                false,
                 [xinput_controller_info()],
             )?);
         }

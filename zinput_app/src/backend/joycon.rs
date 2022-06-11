@@ -379,6 +379,7 @@ impl<'a> JoyconBundle<'a> {
             format!("{} (id {})", joy_type, id + 1),
             // TODO: ID
             None,
+            true,
             [match joy_type {
                 JoyconType::Left => joycon_l_info(),
                 JoyconType::Right => joycon_r_info(),

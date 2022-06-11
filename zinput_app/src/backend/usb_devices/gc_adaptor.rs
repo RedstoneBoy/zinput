@@ -124,6 +124,7 @@ impl DeviceDriver for GCDriver {
                         self.engine.clone(),
                         format!("Gamecube Adaptor {} Slot {}", self.device_id, i + 1),
                         self.ids[i].clone(),
+                        false,
                         [gc_controller_info()],
                     )?;
 

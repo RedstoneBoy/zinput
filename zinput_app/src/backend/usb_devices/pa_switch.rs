@@ -48,6 +48,7 @@ impl DeviceDriver for PADriver {
             engine.clone(),
             format!("PowerA Wired Pro Controller {}", id),
             None,
+            true,
             [controller_info()],
         )?;
 
@@ -75,6 +76,7 @@ impl DeviceDriver for PADriver {
             self.engine.clone(),
             format!("PowerA Wired Pro Controller {}", self.id),
             id,
+            true,
             [controller_info()],
         )?;
 
