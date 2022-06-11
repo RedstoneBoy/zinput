@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use zinput_engine::{
-    device::component::controller::Controller,
+    device::component::controller::{Controller, ControllerConfig},
     eframe::{self, egui},
     DeviceView, Engine,
 };
@@ -45,9 +45,13 @@ impl DeviceCfg {
 
                     ui.selectable_value(&mut index, Some(None), "[None]");
                     for entry in self.engine.devices() {
-                        ui.selectable_value(&mut index, Some(Some(*entry.uuid())), &entry.info().name);
+                        ui.selectable_value(
+                            &mut index,
+                            Some(Some(*entry.uuid())),
+                            &entry.info().name,
+                        );
                     }
-                    
+
                     if let Some(index) = index {
                         self.selected_controller = index.and_then(|i| self.engine.get_device(&i));
                     }
@@ -79,7 +83,7 @@ impl DeviceCfg {
                         "Unconfigured",
                         controller_raw,
                         &self.sample,
-                        Some((cfg.left_stick.deadzone, cfg.right_stick.deadzone)),
+                        Some(cfg),
                     );
                     ui.expand_to_include_rect(painter_uncfg.clip_rect());
 
@@ -97,7 +101,13 @@ impl DeviceCfg {
                             ) + egui::vec2(300.0, 200.0),
                         },
                     );
-                    Self::draw_controller(&painter_cfg, "Configured", controller, &SampleStick::None, None);
+                    Self::draw_controller(
+                        &painter_cfg,
+                        "Configured",
+                        controller,
+                        &SampleStick::None,
+                        None,
+                    );
                     ui.expand_to_include_rect(painter_cfg.clip_rect());
 
                     egui::Painter::new(
@@ -165,7 +175,7 @@ impl DeviceCfg {
                         {
                             changed = true;
                         }
-                    
+
                         if matches!(&self.sample, SampleStick::None) {
                             if ui.button("Calibrate Left Stick").clicked() {
                                 self.sample = SampleStick::Left(Sampler::new());
@@ -276,7 +286,7 @@ impl DeviceCfg {
         name: &str,
         controller: &Controller,
         sample: &SampleStick,
-        deadzones: Option<(u8, u8)>,
+        cfg: Option<&ControllerConfig>,
     ) {
         let font_id = egui::FontId {
             size: 24.0,
@@ -303,10 +313,10 @@ impl DeviceCfg {
                 clip_rect.top() + 75.0 + 2.0 + 20.0,
             ),
             match sample {
-                SampleStick::Left(s) => Some(s),
-                _ => None,
+                SampleStick::Left(Sampler { samples }) => Some(samples),
+                _ => cfg.and_then(|cfg| cfg.left_stick.samples.as_ref()),
             },
-            deadzones.map(|(l, _)| l),
+            cfg.map(|cfg| cfg.left_stick.deadzone),
         );
 
         Self::draw_stick(
@@ -319,10 +329,10 @@ impl DeviceCfg {
                 clip_rect.top() + 75.0 + 2.0 + 20.0,
             ),
             match sample {
-                SampleStick::Right(s) => Some(s),
-                _ => None,
+                SampleStick::Right(Sampler { samples }) => Some(samples),
+                _ => cfg.and_then(|cfg| cfg.right_stick.samples.as_ref()),
             },
-            deadzones.map(|(_, r)| r),
+            cfg.map(|cfg| cfg.right_stick.deadzone),
         );
 
         Self::draw_trigger(
@@ -331,6 +341,7 @@ impl DeviceCfg {
             controller.l1_analog,
             egui::pos2(clip_rect.left() + 2.0, clip_rect.bottom() - 30.0),
             true,
+            cfg.map(|cfg| cfg.l1_range),
         );
 
         Self::draw_trigger(
@@ -339,6 +350,7 @@ impl DeviceCfg {
             controller.l2_analog,
             egui::pos2(clip_rect.left() + 2.0, clip_rect.bottom() - 10.0),
             true,
+            cfg.map(|cfg| cfg.l2_range),
         );
 
         Self::draw_trigger(
@@ -347,6 +359,7 @@ impl DeviceCfg {
             controller.r1_analog,
             egui::pos2(clip_rect.right() - 2.0, clip_rect.bottom() - 30.0),
             false,
+            cfg.map(|cfg| cfg.r1_range),
         );
 
         Self::draw_trigger(
@@ -355,6 +368,7 @@ impl DeviceCfg {
             controller.r2_analog,
             egui::pos2(clip_rect.right() - 2.0, clip_rect.bottom() - 10.0),
             false,
+            cfg.map(|cfg| cfg.r2_range),
         );
     }
 
@@ -364,7 +378,7 @@ impl DeviceCfg {
         x: u8,
         y: u8,
         pos: egui::Pos2,
-        sampler: Option<&Sampler>,
+        samples: Option<&[f32; 32]>,
         deadzone: Option<u8>,
     ) {
         let font_id = egui::FontId {
@@ -381,7 +395,7 @@ impl DeviceCfg {
 
         let deadzone = match deadzone {
             Some(v) => v as f32 / 255.0,
-            None => 0.0
+            None => 0.0,
         };
 
         let radius = 50.0;
@@ -399,7 +413,7 @@ impl DeviceCfg {
 
         painter.circle_filled(point, 2.0, egui::Rgba::from_rgb(0.1, 0.3, 1.0));
 
-        if let Some(Sampler { samples }) = sampler {
+        if let Some(samples) = samples {
             for i in 0..32 {
                 let angle = index_to_angle(i);
                 let scalar = samples[i];
@@ -436,7 +450,14 @@ impl DeviceCfg {
         );
     }
 
-    fn draw_trigger(painter: &egui::Painter, name: &str, trigger: u8, pos: egui::Pos2, left: bool) {
+    fn draw_trigger(
+        painter: &egui::Painter,
+        name: &str,
+        trigger: u8,
+        pos: egui::Pos2,
+        left: bool,
+        range: Option<[u8; 2]>,
+    ) {
         let font_id = egui::FontId {
             size: 12.0,
             family: egui::FontFamily::Proportional,
@@ -467,7 +488,7 @@ impl DeviceCfg {
                 } else {
                     text_rect.left() - 4.0 - 80.0
                 },
-                pos.y - 5.0,
+                pos.y - 10.0,
             ),
             max: egui::pos2(
                 if left {
@@ -475,7 +496,7 @@ impl DeviceCfg {
                 } else {
                     text_rect.left() - 4.0
                 },
-                pos.y + 5.0,
+                pos.y + 10.0,
             ),
         };
 
@@ -498,13 +519,42 @@ impl DeviceCfg {
             ),
         };
 
+        painter.rect_filled(fill_rect, 0.0, egui::Rgba::from_rgb(0.3, 0.3, 0.3));
+
+        if let Some([min, max]) = range {
+            let min = min as f32 / 255.0;
+            let max = max as f32 / 255.0;
+
+            let begin = if left {
+                outline_rect.min.x
+            } else {
+                outline_rect.max.x
+            };
+            let sign = if left {
+                1.0
+            } else {
+                -1.0
+            };
+
+            let min_rect = egui::Rect {
+                min: egui::pos2(begin + min * sign * outline_rect.width(), outline_rect.min.y),
+                max: egui::pos2(begin + min * sign * outline_rect.width() + 3.0, outline_rect.max.y),
+            };
+
+            let max_rect = egui::Rect {
+                min: egui::pos2(begin + max * sign * outline_rect.width(), outline_rect.min.y),
+                max: egui::pos2(begin + max * sign * outline_rect.width() + 3.0, outline_rect.max.y),
+            };
+
+            painter.rect_filled(min_rect, 0.0, egui::Rgba::from_rgb(1.0, 0.1, 0.1));
+            painter.rect_filled(max_rect, 0.0, egui::Rgba::from_rgb(1.0, 0.1, 0.1));
+        }
+
         painter.rect_stroke(
             outline_rect,
             0.0,
             egui::Stroke::new(1.0, egui::Rgba::from_rgb(1.0, 1.0, 1.0)),
         );
-
-        painter.rect_filled(fill_rect, 0.0, egui::Rgba::from_rgb(0.3, 0.3, 0.3));
 
         painter.text(
             egui::pos2(
