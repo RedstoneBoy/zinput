@@ -17,15 +17,15 @@ impl ZInput {
         }
     }
 
-    pub fn add_plugin(&mut self, plugin: Arc<dyn Plugin + Send + Sync>) {
+    pub fn add_plugin(&mut self, plugin: Arc<dyn Plugin + Send + Sync>, init: bool) {
+        if init {
+            plugin.init(self.engine.clone());
+        }
+
         self.plugins.push(plugin);
     }
 
     pub fn run(&mut self) {
-        for plugin in &self.plugins {
-            plugin.init(self.engine.clone());
-        }
-
         let app = Gui::new(self.engine.clone(), self.plugins.clone());
         let options = eframe::NativeOptions::default();
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use zinput_engine::{Engine, eframe::{self, egui}, plugin::{Plugin, PluginKind}};
+use zinput_engine::{Engine, eframe::{self, egui}, plugin::{Plugin, PluginKind, PluginStatus}};
 
 use super::Screen;
 
@@ -43,6 +43,31 @@ impl OutputTab {
     }
 
     fn show_main_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("output_status").show(ctx, |ui| {
+            let Some(plugin) = self.frontends.get(self.selected)
+            else { return; };
+
+            ui.horizontal_centered(|ui| {
+                ui.label(format!("status: {}", plugin.status()));
+
+                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                    let is_running = plugin.status() == PluginStatus::Running;
+
+                    let button_text = if is_running { "stop" } else { "start" };
+
+                    if ui.button(button_text).clicked() {
+                        if is_running {
+                            plugin.stop();
+                        } else {
+                            plugin.init(self.engine.clone());
+                        }
+                    }
+    
+                    ui.separator();
+                });
+            });
+        });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let Some(plugin) = self.frontends.get(self.selected)
             else { return; };
