@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use zinput_engine::{eframe::{egui, self}, Engine, plugin::Plugin};
 
 mod devices_tab;
+mod drivers_tab;
 mod output_tab;
 
 pub struct MainUi {
@@ -19,6 +20,7 @@ impl MainUi {
             screens: {
                 let mut map = HashMap::new();
                 map.insert(Tab::Devices, Box::new(devices_tab::DevicesTab::new(engine.clone())) as _);
+                map.insert(Tab::Drivers, Box::new(drivers_tab::DriversTab::new(engine.clone(), &plugins)) as _);
                 map.insert(Tab::Output, Box::new(output_tab::OutputTab::new(engine, &plugins)) as _);
                 map
             },
