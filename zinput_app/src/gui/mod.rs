@@ -8,6 +8,7 @@ use zinput_engine::{
 
 mod device_cfg;
 mod device_view;
+mod main;
 mod motion_cmp;
 mod plugins;
 
@@ -16,6 +17,8 @@ pub struct Gui {
     plugins: plugins::PluginConfig,
     cv: device_view::DeviceViewer,
     motion: motion_cmp::MotionCmp,
+
+    main_ui: main::MainUi,
 
     first_update: bool,
 }
@@ -27,6 +30,8 @@ impl Gui {
             plugins: plugins::PluginConfig::new(engine.clone(), plugins),
             cv: device_view::DeviceViewer::new(engine.clone()),
             motion: motion_cmp::MotionCmp::new(engine),
+
+            main_ui: main::MainUi::new(),
 
             first_update: true,
         }
@@ -40,10 +45,13 @@ impl eframe::App for Gui {
             ctx.set_visuals(egui::Visuals::dark());
         }
         
-        self.cfg.update(ctx, frame);
-        self.plugins.update(ctx, frame);
-        self.cv.update(ctx, frame);
-        self.motion.update(ctx, frame);
+        // self.cfg.update(ctx, frame);
+        // self.plugins.update(ctx, frame);
+        // self.cv.update(ctx, frame);
+        // self.motion.update(ctx, frame);
+
+        self.main_ui.update(ctx, frame);
+
         ctx.request_repaint();
     }
 }
