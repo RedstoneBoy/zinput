@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use zinput_engine::eframe::{egui, self};
+use zinput_engine::{eframe::{egui, self}, Engine};
 
-mod tab_devices;
+mod devices_tab;
 
 pub struct MainUi {
     tab: Tab,
@@ -11,13 +11,13 @@ pub struct MainUi {
 }
 
 impl MainUi {
-    pub fn new() -> Self {
+    pub fn new(engine: Arc<Engine>) -> Self {
         MainUi {
             tab: Tab::Devices,
 
             screens: {
                 let mut map = HashMap::new();
-                map.insert(Tab::Devices, Box::new(tab_devices::DevicesTab::new()) as _);
+                map.insert(Tab::Devices, Box::new(devices_tab::DevicesTab::new(engine)) as _);
                 map
             },
         }

@@ -30,6 +30,15 @@ macro_rules! components {
             button:     $crate::component::buttons::ButtonsInfo,
             touch_pad:  $crate::component::touch_pad::TouchPadInfo,
         }
+    };
+    (kind $macro:ident) => {
+        $macro! {
+            controller: $crate::component::ComponentKind::Controller,
+            motion:     $crate::component::ComponentKind::Motion,
+            analog:     $crate::component::ComponentKind::Analogs,
+            button:     $crate::component::ComponentKind::Buttons,
+            touch_pad:  $crate::component::ComponentKind::TouchPad,
+        }
     }
 }
 

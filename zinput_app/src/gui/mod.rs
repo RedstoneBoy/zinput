@@ -29,9 +29,9 @@ impl Gui {
             cfg: device_cfg::DeviceCfg::new(engine.clone()),
             plugins: plugins::PluginConfig::new(engine.clone(), plugins),
             cv: device_view::DeviceViewer::new(engine.clone()),
-            motion: motion_cmp::MotionCmp::new(engine),
+            motion: motion_cmp::MotionCmp::new(engine.clone()),
 
-            main_ui: main::MainUi::new(),
+            main_ui: main::MainUi::new(engine),
 
             first_update: true,
         }
