@@ -10,6 +10,7 @@ mod device_cfg;
 mod device_view;
 mod main;
 mod motion_cmp;
+mod util;
 
 pub struct Gui {
     cfg: device_cfg::DeviceCfg,
