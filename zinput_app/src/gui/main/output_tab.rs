@@ -32,10 +32,18 @@ impl OutputTab {
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
                     for i in 0..self.frontends.len() {
+                        let plugin = &self.frontends[i];
+
+                        let text = egui::RichText::new(plugin.name()).color(match plugin.status() {
+                            PluginStatus::Running => egui::Color32::GREEN,
+                            PluginStatus::Stopped => egui::Color32::WHITE,
+                            PluginStatus::Error(_) => egui::Color32::RED,
+                        });
+
                         ui.selectable_value(
                             &mut self.selected,
                             i,
-                            self.frontends[i].name(),
+                            text,
                         );
                     }
                 });
