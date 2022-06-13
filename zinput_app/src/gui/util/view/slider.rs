@@ -113,9 +113,6 @@ impl<'a> Widget for Slider<'a> {
 
         // TODO: Right to left
 
-        let mut top = full_rect.top();
-        let mut bottom = full_rect.bottom();
-
         let label_rect = painter.text(
             if self.right_to_left { pos2(full_rect.right(), full_rect.top()) } else { full_rect.min },
             if self.right_to_left { Align2::RIGHT_TOP } else { Align2::LEFT_TOP },
@@ -123,8 +120,6 @@ impl<'a> Widget for Slider<'a> {
             font_id.clone(),
             ui.visuals().text_color(),
         );
-
-        top = label_rect.bottom() + 2.0;
 
         if self.show_values {
             let val_rect = painter.text(
@@ -135,8 +130,6 @@ impl<'a> Widget for Slider<'a> {
                 ui.visuals().text_color(),
             );
 
-            top = f32::max(top, val_rect.bottom() + 2.0);
-
             if let Some(min) = &mut self.min_value {
                 let val_rect = painter.text(
                     pos2(if !self.right_to_left { full_rect.left() } else { full_rect.right() }, full_rect.bottom()),
@@ -145,7 +138,6 @@ impl<'a> Widget for Slider<'a> {
                     mono_font_id.clone(),
                     ui.visuals().text_color(),
                 );
-                bottom = val_rect.top() - 2.0;
 
                 let response = ui
                     .allocate_rect(val_rect, Sense::drag())
@@ -172,7 +164,6 @@ impl<'a> Widget for Slider<'a> {
                     mono_font_id,
                     ui.visuals().text_color(),
                 );
-                bottom = f32::min(bottom, val_rect.top() - 2.0);
 
                 let response = ui
                     .allocate_rect(val_rect, Sense::drag())
@@ -194,8 +185,8 @@ impl<'a> Widget for Slider<'a> {
 
         let rect = {
             let mut rect = full_rect;
-            rect.set_top(top);
-            rect.set_bottom(bottom);
+            rect.min.y += font_id.size + 2.0;
+            rect.max.y -= font_id.size + 2.0;
             rect
         };
 

@@ -141,7 +141,7 @@ impl<'a> Widget for StickView<'a> {
 
             let mut points = polygon.iter().enumerate().map(|(i, scalar)| {
                 let angle = i as f32 * std::f32::consts::PI * 2.0 / divisor;
-                let scalar = scalar.clamp(0.0, 1.0) * radius;
+                let scalar = scalar * radius;
                 let x = scalar * angle.cos();
                 let y = scalar * angle.sin();
 
@@ -158,10 +158,17 @@ impl<'a> Widget for StickView<'a> {
                 if let Some((prev_x, prev_y)) = prev {
                     prev = Some((x, y));
                     painter.line_segment(
-                        [pos2(prev_x, prev_y), pos2(x, y)],
-                        Stroke::new(2.0, ui.visuals().text_color()),
+                        [rect.center() + vec2(prev_x, -prev_y), rect.center() + vec2(x, -y)],
+                        Stroke::new(2.0, Color32::LIGHT_RED),
                     );
                 }
+            }
+
+            if let (Some(a), Some(b)) = (first, prev) {
+                painter.line_segment(
+                    [rect.center() + vec2(a.0, -a.1), rect.center() + vec2(b.0, -b.1)],
+                    Stroke::new(2.0, Color32::LIGHT_RED),
+                );
             }
         }
 
