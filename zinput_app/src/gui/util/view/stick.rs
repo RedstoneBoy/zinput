@@ -1,5 +1,8 @@
-use zinput_engine::eframe::{egui::{Widget, Ui, Response, Sense}, emath::{NumExt, vec2, pos2}, epaint::{Stroke, Color32}};
-
+use zinput_engine::eframe::{
+    egui::{Response, Sense, Ui, Widget},
+    emath::{pos2, vec2, NumExt},
+    epaint::{Color32, Stroke},
+};
 
 pub struct StickView<'a> {
     size: Option<f32>,
@@ -14,7 +17,6 @@ pub struct StickView<'a> {
     draw_circle: bool,
     draw_center_dot: bool,
     draw_square: bool,
-    
 }
 
 impl<'a> StickView<'a> {
@@ -73,17 +75,22 @@ impl<'a> StickView<'a> {
 
 impl<'a> Widget for StickView<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let size = self.size
+        let size = self
+            .size
             .unwrap_or_else(|| ui.available_size_before_wrap().min_elem())
             .at_least(self.min_size);
-        
+
         let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
         let painter = ui.painter().with_clip_rect(rect);
 
         let radius = size / 2.0 - 1.0;
 
         if let Some(deadzone) = self.deadzone {
-            painter.circle_filled(rect.center(), deadzone.clamp(0.0, 1.0) * radius, Color32::LIGHT_RED);
+            painter.circle_filled(
+                rect.center(),
+                deadzone.clamp(0.0, 1.0) * radius,
+                Color32::LIGHT_RED,
+            );
         }
 
         if self.draw_center_dot {
@@ -91,27 +98,33 @@ impl<'a> Widget for StickView<'a> {
         }
 
         if self.draw_square {
-            painter.rect_stroke(rect.shrink(1.0), 0.0, Stroke::new(2.0, ui.visuals().text_color()));
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                0.0,
+                Stroke::new(2.0, ui.visuals().text_color()),
+            );
         }
-        
+
         if self.draw_circle {
-            painter.circle_stroke(rect.center(), radius, Stroke::new(2.0, ui.visuals().text_color()));
+            painter.circle_stroke(
+                rect.center(),
+                radius,
+                Stroke::new(2.0, ui.visuals().text_color()),
+            );
         }
 
         if let Some(polygon) = self.polygon {
             let divisor = polygon.len() as f32;
 
-            let mut points = polygon.iter()
-                .enumerate()
-                .map(|(i, scalar)| {
-                    let angle = i as f32 * std::f32::consts::PI * 2.0 / divisor;
-                    let scalar = scalar.clamp(0.0, 1.0) * radius;
-                    let x = scalar * angle.cos();
-                    let y = scalar * angle.sin();
-                    
-                    (x, y)
-                });
-            
+            let mut points = polygon.iter().enumerate().map(|(i, scalar)| {
+                let angle = i as f32 * std::f32::consts::PI * 2.0 / divisor;
+                let scalar = scalar.clamp(0.0, 1.0) * radius;
+                let x = scalar * angle.cos();
+                let y = scalar * angle.sin();
+
+                (x, y)
+            });
+
             let mut first = None;
             let mut prev = points.next();
             for (x, y) in points {
@@ -121,7 +134,10 @@ impl<'a> Widget for StickView<'a> {
 
                 if let Some((prev_x, prev_y)) = prev {
                     prev = Some((x, y));
-                    painter.line_segment([pos2(prev_x, prev_y), pos2(x, y)], Stroke::new(2.0, ui.visuals().text_color()));
+                    painter.line_segment(
+                        [pos2(prev_x, prev_y), pos2(x, y)],
+                        Stroke::new(2.0, ui.visuals().text_color()),
+                    );
                 }
             }
         }
@@ -130,7 +146,7 @@ impl<'a> Widget for StickView<'a> {
         let y = -self.y.clamp(-1.0, 1.0) * radius;
 
         painter.circle_filled(rect.center() + vec2(x, y), 2.0, Color32::LIGHT_BLUE);
-        
+
         response
     }
 }

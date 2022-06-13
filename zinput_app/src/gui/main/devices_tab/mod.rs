@@ -79,12 +79,10 @@ impl DevicesTab {
                 });
         });
         
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let Some(viewer) = &mut self.viewer
-            else { return; };
+        let Some(viewer) = &mut self.viewer
+        else { return; };
 
-            viewer.update(ctx, ui);
-        });
+        viewer.update(ctx);
     }
 
     fn add_components(&mut self, ui: &mut egui::Ui, view: DeviceView) {
@@ -160,5 +158,5 @@ fn get_component_view(kind: ComponentKind, index: usize, device: DeviceView) -> 
 }
 
 trait ComponentView {
-    fn update(&mut self, ctx: &egui::Context, ui: &mut egui::Ui);
+    fn update(&mut self, ctx: &egui::Context);
 }
