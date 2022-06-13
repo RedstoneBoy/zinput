@@ -1,7 +1,7 @@
 use zinput_engine::eframe::{
     egui::{Response, Sense, Ui, Widget},
-    emath::{pos2, vec2, NumExt},
-    epaint::{Color32, Stroke},
+    emath::{pos2, vec2, NumExt, Align2},
+    epaint::{Color32, Stroke, FontId, FontFamily},
 };
 
 pub struct StickView<'a> {
@@ -75,15 +75,38 @@ impl<'a> StickView<'a> {
 
 impl<'a> Widget for StickView<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
+        let font_id = FontId {
+            size: 12.0,
+            family: FontFamily::Monospace,
+        };
+
         let size = self
             .size
             .unwrap_or_else(|| ui.available_size_before_wrap().min_elem())
             .at_least(self.min_size);
 
-        let (rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
+        let (mut rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
         let painter = ui.painter().with_clip_rect(rect);
 
-        let radius = size / 2.0 - 1.0;
+        let text_height = painter.text(
+            pos2(rect.left(), rect.bottom()),
+            Align2::LEFT_BOTTOM,
+            format!("{:+.2}", self.x),
+            font_id.clone(),
+            ui.visuals().text_color(),
+        ).height();
+
+        painter.text(
+            pos2(rect.right(), rect.bottom()),
+            Align2::RIGHT_BOTTOM,
+            format!("{:+.2}", self.y),
+            font_id.clone(),
+            ui.visuals().text_color(),
+        );
+
+        let radius = (size - text_height) / 2.0 - 1.0;
+
+        rect.set_height(rect.height() - text_height);
 
         if let Some(deadzone) = self.deadzone {
             painter.circle_filled(

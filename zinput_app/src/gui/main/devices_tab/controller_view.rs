@@ -42,8 +42,8 @@ impl ComponentView for ControllerView {
             let Some(controller) = device.controllers.get(self.index)
             else { return; };
 
-            let cfg_read = self.view.config();
-            let Some(cfg) = cfg_read.controllers.get(self.index)
+            let mut cfg_write = self.view.config_mut();
+            let Some(cfg) = cfg_write.get().controllers.get_mut(self.index)
             else { return; };
 
             let lx = (controller.left_stick_x as f32 - 127.5) / 127.5;
@@ -54,6 +54,9 @@ impl ComponentView for ControllerView {
             let r1 = controller.r1_analog as f32 / 255.0;
             let l2 = controller.l2_analog as f32 / 255.0;
             let r2 = controller.r2_analog as f32 / 255.0;
+
+            let l_dz = cfg.left_stick.deadzone as f32 / 255.0;
+            let r_dz = cfg.right_stick.deadzone as f32 / 255.0;
 
             let max_rect = ui.available_rect_before_wrap();
             let stick_view_size = max_rect.width() / 4.0;
@@ -69,7 +72,13 @@ impl ComponentView for ControllerView {
                         max_rect.top() + 5.0 + stick_view_size,
                     ),
                 },
-                StickView::new(lx, ly),
+                {
+                    let mut view = StickView::new(lx, ly).deadzone(l_dz);
+                    if let Some(samples) = &cfg.left_stick.samples {
+                        view = view.polygon(samples);
+                    }
+                    view
+                },
             );
 
             ui.put(
@@ -80,7 +89,13 @@ impl ComponentView for ControllerView {
                         max_rect.top() + 5.0 + stick_view_size,
                     ),
                 },
-                StickView::new(rx, ry),
+                {
+                    let mut view = StickView::new(rx, ry).deadzone(r_dz);
+                    if let Some(samples) = &cfg.right_stick.samples {
+                        view = view.polygon(samples);
+                    }
+                    view
+                },
             );
 
             let [mut l1_min, mut l1_max] = cfg.l1_range.map(|v| v as f32 / 255.0);
@@ -141,18 +156,10 @@ impl ComponentView for ControllerView {
                     .right_to_left(),
             );
 
-            drop(cfg);
-            drop(cfg_read);
-
-            let mut cfg = self.view.config_mut();
-            cfg.get().controllers[self.index].l1_range =
-                [l1_min, l1_max].map(|v| (v * 255.0) as u8);
-            cfg.get().controllers[self.index].l2_range =
-                [l2_min, l2_max].map(|v| (v * 255.0) as u8);
-            cfg.get().controllers[self.index].r1_range =
-                [r1_min, r1_max].map(|v| (v * 255.0) as u8);
-            cfg.get().controllers[self.index].r2_range =
-                [r2_min, r2_max].map(|v| (v * 255.0) as u8);
+            cfg.l1_range = [l1_min, l1_max].map(|v| (v * 255.0) as u8);
+            cfg.l2_range = [l2_min, l2_max].map(|v| (v * 255.0) as u8);
+            cfg.r1_range = [r1_min, r1_max].map(|v| (v * 255.0) as u8);
+            cfg.r2_range = [r2_min, r2_max].map(|v| (v * 255.0) as u8);
         });
     }
 }
