@@ -1,6 +1,7 @@
 use std::ops::BitOr;
 
 use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use super::ComponentData;
 
@@ -59,10 +60,17 @@ pub struct ControllerConfig {
     pub r1_range: [u8; 2],
     pub l2_range: [u8; 2],
     pub r2_range: [u8; 2],
+    #[serde(with = "BigArray")]
+    pub remap: [u8; 64],
 }
 
 impl Default for ControllerConfig {
     fn default() -> Self {
+        let mut remap = [0; 64];
+        for i in 0..64 {
+            remap[i] = i as u8;
+        }
+
         ControllerConfig {
             left_stick: Default::default(),
             right_stick: Default::default(),
@@ -70,6 +78,7 @@ impl Default for ControllerConfig {
             r1_range: [0, 255],
             l2_range: [0, 255],
             r2_range: [0, 255],
+            remap,
         }
     }
 }
@@ -209,6 +218,15 @@ impl ComponentData for Controller {
         self.r1_analog = configure_analog(self.r1_analog, config.r1_range);
         self.l2_analog = configure_analog(self.l2_analog, config.l2_range);
         self.r2_analog = configure_analog(self.r2_analog, config.r2_range);
+
+        let mut output_buttons = 0;
+        for i in 0..64 {
+            if self.buttons & (1 << i) != 0 {
+                output_buttons |= 1 << config.remap[i];
+            }
+        }
+
+        self.buttons = output_buttons;
     }
 }
 
