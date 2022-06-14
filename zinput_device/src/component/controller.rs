@@ -292,6 +292,10 @@ impl Button {
         }
     }
 
+    pub fn try_from_bit(bit: u8) -> Option<Self> {
+        Self::BUTTONS.get(bit as usize).copied()
+    }
+
     pub fn set_pressed(&self, buttons: &mut u64) {
         *buttons |= 1 << self.bit();
     }

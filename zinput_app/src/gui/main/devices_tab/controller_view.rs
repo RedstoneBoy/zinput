@@ -1,5 +1,5 @@
 use zinput_engine::{
-    device::component::controller::{Controller, ControllerConfig},
+    device::component::controller::{Button, Controller, ControllerConfig},
     eframe::{
         egui,
         emath::{pos2, Rect},
@@ -185,107 +185,6 @@ impl ControllerView {
 
         let mut cfg = concfg.as_ref().map(|cfg| Configurate::from_cfg(cfg));
 
-        // Sticks
-
-        #[derive(Copy, Clone)]
-        enum CalType {
-            None,
-            Start,
-            Stop,
-        }
-
-        // Left Stick
-
-        let cal_type = if concfg.is_some() {
-            match &sample {
-                SampleStick::Left(_) => CalType::Stop,
-                SampleStick::Right(_) => CalType::None,
-                SampleStick::None => CalType::Start,
-            }
-        } else {
-            CalType::None
-        };
-
-        let response = Self::put_stick(
-            ui,
-            rects.lstick,
-            lx,
-            ly,
-            cfg.as_mut().map(|cfg| &mut cfg.left_stick_deadzone),
-            match sample {
-                SampleStick::Left(Sampler { samples }) => Some(samples),
-                _ => concfg.as_ref().and_then(|cfg| cfg.left_stick.samples.as_ref()),
-            },
-            match cal_type {
-                CalType::Start => Some("Calibrate".into()),
-                CalType::Stop => Some("Finish Calibration".into()),
-                CalType::None => None,
-            },
-        );
-
-        if let Some(response) = response {
-            if response.clicked() {
-                match cal_type {
-                    CalType::Start => { *sample = SampleStick::Left(Sampler::new()); }
-                    CalType::Stop => {
-                        let SampleStick::Left(sampler) = std::mem::replace(sample, SampleStick::None)
-                        else { unreachable!() };
-                        
-                        if let Some(concfg) = &mut concfg {
-                            concfg.left_stick.samples = Some(sampler.samples);
-                        }
-                    }
-                    CalType::None => {},
-                }
-            }
-        }
-
-        // Right Stick
-
-        let cal_type = if concfg.is_some() {
-            match &sample {
-                SampleStick::Left(_) => CalType::None,
-                SampleStick::Right(_) => CalType::Stop,
-                SampleStick::None => CalType::Start,
-            }
-        } else {
-            CalType::None
-        };
-
-        let response = Self::put_stick(
-            ui,
-            rects.rstick,
-            rx,
-            ry,
-            cfg.as_mut().map(|cfg| &mut cfg.right_stick_deadzone),
-            match sample {
-                SampleStick::Right(Sampler { samples }) => Some(samples),
-                _ => concfg.as_ref().and_then(|cfg| cfg.right_stick.samples.as_ref()),
-            },
-            match cal_type {
-                CalType::Start => Some("Calibrate".into()),
-                CalType::Stop => Some("Finish Calibration".into()),
-                CalType::None => None,
-            },
-        );
-
-        if let Some(response) = response {
-            if response.clicked() {
-                match cal_type {
-                    CalType::Start => { *sample = SampleStick::Right(Sampler::new()); }
-                    CalType::Stop => {
-                        let SampleStick::Right(sampler) = std::mem::replace(sample, SampleStick::None)
-                        else { unreachable!() };
-                        
-                        if let Some(concfg) = &mut concfg {
-                            concfg.right_stick.samples = Some(sampler.samples);
-                        }
-                    }
-                    CalType::None => {},
-                }
-            }
-        }
-
         // L1
 
         Self::put_trigger(
@@ -330,9 +229,169 @@ impl ControllerView {
             cfg.as_mut().map(|cfg| &mut cfg.trigger_ranges[3]),
         );
 
-        if let (Some(cfg), Some(concfg)) = (cfg, concfg) {
+        // Sticks
+
+        #[derive(Copy, Clone)]
+        enum CalType {
+            None,
+            Start,
+            Stop,
+        }
+
+        // Left Stick
+
+        let cal_type = if concfg.is_some() {
+            match &sample {
+                SampleStick::Left(_) => CalType::Stop,
+                SampleStick::Right(_) => CalType::None,
+                SampleStick::None => CalType::Start,
+            }
+        } else {
+            CalType::None
+        };
+
+        let response = Self::put_stick(
+            ui,
+            rects.lstick,
+            lx,
+            ly,
+            cfg.as_mut().map(|cfg| &mut cfg.left_stick_deadzone),
+            match sample {
+                SampleStick::Left(Sampler { samples }) => Some(samples),
+                _ => concfg
+                    .as_ref()
+                    .and_then(|cfg| cfg.left_stick.samples.as_ref()),
+            },
+            match cal_type {
+                CalType::Start => Some("Calibrate".into()),
+                CalType::Stop => Some("Finish Calibration".into()),
+                CalType::None => None,
+            },
+        );
+
+        if let Some(response) = response {
+            if response.clicked() {
+                match cal_type {
+                    CalType::Start => {
+                        *sample = SampleStick::Left(Sampler::new());
+                    }
+                    CalType::Stop => {
+                        let SampleStick::Left(sampler) = std::mem::replace(sample, SampleStick::None)
+                        else { unreachable!() };
+
+                        if let Some(concfg) = &mut concfg {
+                            concfg.left_stick.samples = Some(sampler.samples);
+                        }
+                    }
+                    CalType::None => {}
+                }
+            }
+        }
+
+        // Right Stick
+
+        let cal_type = if concfg.is_some() {
+            match &sample {
+                SampleStick::Left(_) => CalType::None,
+                SampleStick::Right(_) => CalType::Stop,
+                SampleStick::None => CalType::Start,
+            }
+        } else {
+            CalType::None
+        };
+
+        let response = Self::put_stick(
+            ui,
+            rects.rstick,
+            rx,
+            ry,
+            cfg.as_mut().map(|cfg| &mut cfg.right_stick_deadzone),
+            match sample {
+                SampleStick::Right(Sampler { samples }) => Some(samples),
+                _ => concfg
+                    .as_ref()
+                    .and_then(|cfg| cfg.right_stick.samples.as_ref()),
+            },
+            match cal_type {
+                CalType::Start => Some("Calibrate".into()),
+                CalType::Stop => Some("Finish Calibration".into()),
+                CalType::None => None,
+            },
+        );
+
+        if let Some(response) = response {
+            if response.clicked() {
+                match cal_type {
+                    CalType::Start => {
+                        *sample = SampleStick::Right(Sampler::new());
+                    }
+                    CalType::Stop => {
+                        let SampleStick::Right(sampler) = std::mem::replace(sample, SampleStick::None)
+                        else { unreachable!() };
+
+                        if let Some(concfg) = &mut concfg {
+                            concfg.right_stick.samples = Some(sampler.samples);
+                        }
+                    }
+                    CalType::None => {}
+                }
+            }
+        }
+
+        if let (Some(cfg), Some(concfg)) = (cfg, &mut concfg) {
             cfg.apply(concfg);
         }
+
+        ui.add_space(10.0);
+
+        ui.separator();
+
+        ui.add_space(10.0);
+
+        egui::Grid::new("devices/controller/grid")
+            .min_col_width(ui.available_width() / 4.0 - ui.spacing().item_spacing.x)
+            .min_row_height(
+                ui.available_height() / ((Button::BUTTONS.len() as f32 / 4.0).ceil())
+                    - ui.spacing().item_spacing.y,
+            )
+            .show(ui, |ui| {
+                let mut i = 0;
+                for button in Button::BUTTONS {
+                    if i == 4 {
+                        ui.end_row();
+                        i = 0;
+                    }
+
+                    ui.vertical(|ui| {
+                        let mut btext = egui::RichText::new(format!("{}", button));
+                        if button.is_pressed(controller.buttons) {
+                            btext = btext.color(egui::Color32::LIGHT_GREEN).strong();
+                        }
+                        ui.label(btext);
+
+                        if let Some(cfg) = &mut concfg {
+                            let selected = cfg.remap[button.bit() as usize];
+
+                            egui::ComboBox::new(
+                                format!("devices/controller/grid/combobox{}", button.bit()),
+                                "",
+                            )
+                            .selected_text(format!("{}", Button::try_from_bit(selected).unwrap()))
+                            .show_ui(ui, |ui| {
+                                for new_button in Button::BUTTONS {
+                                    ui.selectable_value(
+                                        &mut cfg.remap[button.bit() as usize],
+                                        new_button.bit() as u8,
+                                        format!("{new_button}"),
+                                    );
+                                }
+                            });
+                        }
+                    });
+
+                    i += 1;
+                }
+            });
     }
 }
 
@@ -359,13 +418,7 @@ impl ComponentView for ControllerView {
                 let Some(cfg) = cfg_write.get().controllers.get_mut(self.index)
                 else { return; };
 
-                Self::draw_view(
-                    ui,
-                    rects,
-                    controller,
-                    &mut self.sample_stick,
-                    Some(cfg),
-                );
+                Self::draw_view(ui, rects, controller, &mut self.sample_stick, Some(cfg));
             } else {
                 let device = self.view.device();
                 let Some(controller) = device.controllers.get(self.index)
