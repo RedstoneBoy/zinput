@@ -26,3 +26,15 @@ pub enum ComponentKind {
     Motion,
     TouchPad,
 }
+
+impl std::fmt::Display for ComponentKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComponentKind::Analogs => write!(f, "Analogs"),
+            ComponentKind::Buttons => write!(f, "Buttons"),
+            ComponentKind::Controller => write!(f, "Controller"),
+            ComponentKind::Motion => write!(f, "Motion"),
+            ComponentKind::TouchPad => write!(f, "Touch Pad"),
+        }
+    }
+}

@@ -109,7 +109,7 @@ impl DeviceDriver for SCDriver {
                 serial.insert_str(0, "pa_switch/");
                 serial
             });
-        
+
         self.bundle = DeviceBundle::new(
             self.engine.clone(),
             format!("Steam Controller {}", self.adaptor_id),

@@ -21,7 +21,7 @@ pub struct AnalogsConfig {
 impl Default for AnalogsConfig {
     fn default() -> Self {
         AnalogsConfig {
-            ranges: [[0, 255]; 8]
+            ranges: [[0, 255]; 8],
         }
     }
 }
@@ -45,13 +45,14 @@ impl ComponentData for Analogs {
     fn update(&mut self, from: &Self) {
         self.clone_from(from);
     }
-    
+
     fn configure(&mut self, config: &AnalogsConfig) {
         for i in 0..8 {
             let min = config.ranges[i][0] as f32;
             let max = config.ranges[i][1] as f32;
             let range = max - min;
-            self.analogs[i] = (((f32::clamp(self.analogs[i] as f32, min, max) - min) / range) * 255.0) as u8;
+            self.analogs[i] =
+                (((f32::clamp(self.analogs[i] as f32, min, max) - min) / range) * 255.0) as u8;
         }
     }
 }

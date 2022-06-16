@@ -1,4 +1,4 @@
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{atomic::Ordering, Arc};
 
 use dashmap::DashMap;
 use uuid::Uuid;
@@ -6,8 +6,8 @@ use zinput_device::DeviceInfo;
 
 mod device;
 
-pub use self::device::{DeviceHandle, DeviceView};
 use self::device::InternalDevice;
+pub use self::device::{DeviceHandle, DeviceView};
 
 pub struct Engine {
     devices: DashMap<Uuid, Arc<InternalDevice>>,
@@ -28,16 +28,15 @@ impl Engine {
         match self.reclaim_device(&info) {
             Ok(handle) => return Ok(handle),
             Err(ReclaimError::InUse) => return Err(DeviceAlreadyExists),
-            Err(ReclaimError::NoId) => {},
+            Err(ReclaimError::NoId) => {}
         }
 
         let id = Uuid::new_v4();
         let internal = InternalDevice::new(info, id);
-        let handle = DeviceHandle::new(internal.clone())
-            .ok_or(DeviceAlreadyExists)?;
-        
+        let handle = DeviceHandle::new(internal.clone()).ok_or(DeviceAlreadyExists)?;
+
         self.devices.insert(id, internal);
-        
+
         Ok(handle)
     }
 
@@ -45,19 +44,15 @@ impl Engine {
         let id = info.id.as_ref().ok_or(ReclaimError::NoId)?;
 
         let device = match self.ids.get(id) {
-            Some(uuid) => {
-                match self.devices.get(uuid.value()) {
-                    Some(device) => {
-                        device.value().clone()
-                    }
-                    None => {
-                        let device = InternalDevice::new(info.clone(), *uuid.value());
-                        self.devices.insert(*uuid.value(), device.clone());
+            Some(uuid) => match self.devices.get(uuid.value()) {
+                Some(device) => device.value().clone(),
+                None => {
+                    let device = InternalDevice::new(info.clone(), *uuid.value());
+                    self.devices.insert(*uuid.value(), device.clone());
 
-                        device
-                    }
+                    device
                 }
-            }
+            },
             None => {
                 let uuid = Uuid::new_v4();
                 self.ids.insert(id.to_owned(), uuid);
@@ -69,19 +64,20 @@ impl Engine {
             }
         };
 
-        DeviceHandle::new(device)
-            .ok_or(ReclaimError::InUse)
+        DeviceHandle::new(device).ok_or(ReclaimError::InUse)
     }
 
     pub fn devices(&self) -> Devices {
         self.release_devices();
 
-        Devices { iter: self.devices.iter() }
+        Devices {
+            iter: self.devices.iter(),
+        }
     }
 
     pub fn get_device(&self, uuid: &Uuid) -> Option<DeviceView> {
         self.release_devices();
-        
+
         self.devices
             .get(uuid)
             .map(|int| DeviceView::new(int.value().clone()))
@@ -121,7 +117,7 @@ impl<'a> Iterator for Devices<'a> {
                 return Some(DeviceEntry { entry });
             }
         }
-        
+
         None
     }
 }
