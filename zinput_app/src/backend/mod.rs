@@ -1,17 +1,57 @@
 pub mod joycon;
 #[cfg(target_os = "windows")]
 pub mod raw_input;
+pub mod sdl2;
 pub mod swi_recv;
 pub mod usb_devices;
 #[cfg(target_os = "windows")]
 pub mod xinput;
 
+type EngineRef<'a> = &'a zinput_engine::Engine;
+
 #[macro_export]
 macro_rules! device_bundle {
-    ($name:ident, $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
-        type EngineRef<'a> = &'a zinput_engine::Engine;
+    (field $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(field $cname : $ctype [ 1 ])
+    };
 
-        crate::device_bundle!($name(EngineRef), $($cname : $ctype $( [ $clen ] )?),*);
+    (field $cname:ident : $ctype:ty [ $clen:expr ]) => {
+        [$ctype; $clen]
+    };
+
+    (info $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(info $cname : $ctype [ 1 ])
+    };
+
+    (info $cname:ident : $ctype:ty [ $clen:expr ]) => {
+        [<$ctype as zinput_engine::device::component::ComponentData>::Info; $clen]
+    };
+
+    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(init($engine, $info, $dinfo) $cname : $ctype [ 1 ])
+    };
+
+    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {{
+        paste::paste! {
+            $dinfo.[< $cname s >] = $info.into();
+            [(); $clen].map(|_| $ctype::default())
+        }
+    }};
+
+    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty) => {
+        crate::device_bundle!(update($this, $dev) $cname : $ctype [ 1 ])
+    };
+
+    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {
+        paste::paste! {
+            for i in 0..$clen {
+                $dev.[< $cname s >][i].update(&$this.$cname[i]);
+            }
+        }
+    };
+
+    ($name:ident, $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
+        crate::device_bundle!($name(crate::backend::EngineRef), $($cname : $ctype $( [ $clen ] )?),*);
     };
 
     ($name:ident (owned), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
@@ -20,19 +60,17 @@ macro_rules! device_bundle {
         crate::device_bundle!($name(EngineArc), $($cname : $ctype $( [ $clen ] )?),*);
     };
 
-    ($name:ident ( $($engine_type:tt)+ ), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
-        use paste::paste;
-
+    ($name:ident ( $engine_type:path ), $($cname:ident : $ctype:ty $( [ $clen:expr ] )?),* $(,)?) => {
         struct $name<'a> {
             _lifetime: std::marker::PhantomData<&'a ()>,
             handle: zinput_engine::DeviceHandle,
             $($cname: crate::device_bundle!(field $cname : $ctype $( [ $clen ] )?),)*
         }
 
-        paste! {
+        paste::paste! {
             impl<'a> $name<'a> {
                 fn new(
-                    engine: $($engine_type<'a>)+,
+                    engine: $engine_type<'a>,
                     name: String,
                     id: Option<String>,
                     autoload_config: bool,
@@ -60,45 +98,6 @@ macro_rules! device_bundle {
                         $(crate::device_bundle!(update(self, dev) $cname : $ctype $( [ $clen ] )?);)*
                     });
                 }
-            }
-        }
-    };
-
-    (field $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(field $cname : $ctype [ 1 ])
-    };
-
-    (field $cname:ident : $ctype:ty [ $clen:expr ]) => {
-        [$ctype; $clen]
-    };
-
-    (info $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(info $cname : $ctype [ 1 ])
-    };
-
-    (info $cname:ident : $ctype:ty [ $clen:expr ]) => {
-        [<$ctype as zinput_engine::device::component::ComponentData>::Info; $clen]
-    };
-
-    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(init($engine, $info, $dinfo) $cname : $ctype [ 1 ])
-    };
-
-    (init ( $engine:expr, $info:expr, $dinfo:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {{
-        paste! {
-            $dinfo.[< $cname s >] = $info.into();
-            [(); $clen].map(|_| $ctype::default())
-        }
-    }};
-
-    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty) => {
-        crate::device_bundle!(update($this, $dev) $cname : $ctype [ 1 ])
-    };
-
-    (update ( $this:expr, $dev:ident ) $cname:ident : $ctype:ty [ $clen:expr ]) => {
-        paste! {
-            for i in 0..$clen {
-                $dev.[< $cname s >][i].update(&$this.$cname[i]);
             }
         }
     };

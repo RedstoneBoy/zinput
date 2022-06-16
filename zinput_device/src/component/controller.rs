@@ -300,6 +300,10 @@ impl Button {
         *buttons |= 1 << self.bit();
     }
 
+    pub fn set_clear(&self, buttons: &mut u64) {
+        *buttons &= !(1 << self.bit());
+    }
+
     pub fn is_pressed(&self, buttons: u64) -> bool {
         buttons & (1 << self.bit()) != 0
     }

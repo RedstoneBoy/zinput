@@ -7,6 +7,7 @@ use std::sync::Arc;
 mod backend;
 mod frontend;
 mod gui;
+mod util;
 mod zinput;
 
 fn main() {
@@ -26,6 +27,7 @@ fn main() {
         zinput.add_plugin(Arc::new(frontend::uinput::UInput::new()), false);
     }
 
+    zinput.add_plugin(Arc::new(backend::sdl2::Sdl2::new()), false);
     zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()), true);
     zinput.add_plugin(Arc::new(backend::swi_recv::Swi::new()), false);
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
