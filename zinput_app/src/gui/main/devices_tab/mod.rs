@@ -5,7 +5,7 @@ use zinput_engine::{
     device::{component::ComponentKind, components},
     eframe::{self, egui},
     util::Uuid,
-    Engine, DeviceView,
+    DeviceView, Engine,
 };
 
 use self::controller_view::ControllerView;
@@ -21,6 +21,9 @@ pub struct DevicesTab {
 
     component: Option<ComponentSelection>,
     viewer: Option<Box<dyn ComponentView>>,
+
+    configs: Vec<String>,
+    config_save: Option<String>,
 }
 
 impl DevicesTab {
@@ -32,6 +35,9 @@ impl DevicesTab {
 
             component: None,
             viewer: None,
+
+            configs: Vec::new(),
+            config_save: None,
         }
     }
 
@@ -43,11 +49,14 @@ impl DevicesTab {
                     let last_selected = self.selected;
 
                     for entry in self.engine.devices() {
-                        if ui.selectable_value(
-                            &mut self.selected,
-                            Some(*entry.uuid()),
-                            &entry.info().name,
-                        ).clicked() {
+                        if ui
+                            .selectable_value(
+                                &mut self.selected,
+                                Some(*entry.uuid()),
+                                &entry.info().name,
+                            )
+                            .clicked()
+                        {
                             if last_selected != Some(*entry.uuid()) {
                                 self.component = None;
                                 self.viewer = None;
@@ -65,6 +74,8 @@ impl DevicesTab {
         let Some(view) = self.engine.get_device(&selected)
         else { return; };
 
+        Self::show_save_window(ctx, &mut self.config_save, &view);
+
         if self.component.is_none() && view.info().controllers.len() > 0 {
             self.component = Some(Default::default());
             self.viewer = get_component_view(ComponentKind::Controller, 0, view);
@@ -72,13 +83,106 @@ impl DevicesTab {
         }
 
         egui::TopBottomPanel::top("component_select").show(ctx, |ui| {
-            egui::ComboBox::from_label("Component")
-                .selected_text(self.component.map_or(String::new(), |c| format!("{c}")))
-                .show_ui(ui, |ui| {
-                    self.add_components(ui, view);
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_label("Component")
+                    .selected_text(self.component.map_or(String::new(), |c| format!("{c}")))
+                    .show_ui(ui, |ui| {
+                        self.add_components(ui, view.clone());
+                    });
+
+                ui.separator();
+
+                ui.label("Configs");
+
+                Self::config_button(ui, "Load", &view, &mut self.configs, |ui, configs| {
+                    for config in configs {
+                        let text = egui::WidgetText::from(config);
+                        let galley = text.into_galley(
+                            ui,
+                            Some(false),
+                            f32::INFINITY,
+                            egui::TextStyle::Button,
+                        );
+                        let new_width = galley.size().x + ui.spacing().item_spacing.x * 2.0;
+                        if new_width > ui.min_size().x {
+                            ui.set_min_width(new_width);
+                        }
+
+                        if ui.selectable_label(false, config).clicked() {
+                            match view.load_config(config) {
+                                Ok(()) => {}
+                                Err(err) => {
+                                    log::error!("failed to load config: {err:?}");
+                                }
+                            }
+                        }
+                    }
                 });
+
+                Self::config_button(ui, "Save", &view, &mut self.configs, |ui, configs| {
+                    ui.set_min_width(50.0);
+
+                    if ui.selectable_label(false, "New...").clicked() {
+                        self.config_save = Some(String::new());
+                    }
+
+                    ui.separator();
+
+                    for config in configs {
+                        let text = egui::WidgetText::from(config);
+                        let galley = text.into_galley(
+                            ui,
+                            Some(false),
+                            f32::INFINITY,
+                            egui::TextStyle::Button,
+                        );
+                        let new_width = galley.size().x + ui.spacing().item_spacing.x * 2.0;
+                        if new_width > ui.min_size().x {
+                            ui.set_min_width(new_width);
+                        }
+
+                        if ui.selectable_label(false, config).clicked() {
+                            match view.save_config(config) {
+                                Ok(()) => {}
+                                Err(err) => {
+                                    log::error!("failed to save config: {err:?}");
+                                }
+                            }
+                        }
+                    }
+                });
+
+                Self::config_button(ui, "Delete", &view, &mut self.configs, |ui, configs| {
+                    for config in configs {
+                        let text = egui::WidgetText::from(config);
+                        let galley = text.into_galley(
+                            ui,
+                            Some(false),
+                            f32::INFINITY,
+                            egui::TextStyle::Button,
+                        );
+                        let new_width = galley.size().x + ui.spacing().item_spacing.x * 2.0;
+                        if new_width > ui.min_size().x {
+                            ui.set_min_width(new_width);
+                        }
+
+                        if ui.selectable_label(false, config).clicked() {
+                            match view.delete_config(config) {
+                                Ok(()) => {}
+                                Err(err) => {
+                                    log::error!("failed to delete config: {err:?}");
+                                }
+                            }
+                        }
+                    }
+                });
+
+                if ui.button("Reset").clicked() {
+                    view.reset_config();
+                }
+            });
         });
-        
+
         let Some(viewer) = &mut self.viewer
         else { return; };
 
@@ -115,6 +219,69 @@ impl DevicesTab {
 
         components!(kind add_comps);
     }
+
+    fn show_save_window(ctx: &egui::Context, save_file: &mut Option<String>, view: &DeviceView) {
+        if save_file.is_none() {
+            return;
+        }
+
+        egui::Window::new("Save")
+            .resizable(false)
+            .collapsible(false)
+            .auto_sized()
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(save_file.as_mut().unwrap());
+
+                    if ui.button("Save").clicked() {
+                        match view.save_config(save_file.as_ref().unwrap()) {
+                            Ok(()) => {}
+                            Err(err) => {
+                                log::error!("failed to save config file: {err:?}");
+                            }
+                        }
+
+                        save_file.as_mut().unwrap().clear();
+
+                        *save_file = None;
+                    }
+
+                    if ui.button("Cancel").clicked() {
+                        *save_file = None;
+                    }
+                });
+            });
+    }
+
+    fn config_button(
+        ui: &mut egui::Ui,
+        name: impl Into<String>,
+        view: &DeviceView,
+        configs: &mut Vec<String>,
+        add_contents: impl FnOnce(&mut egui::Ui, &[String]),
+    ) {
+        let name = name.into();
+
+        let response = ui.button(&name);
+        let popup_id = ui.make_persistent_id(format!("devices/configs/{name}"));
+        if response.clicked() {
+            ui.memory().toggle_popup(popup_id);
+            if ui.memory().is_popup_open(popup_id) {
+                match view.saved_configs() {
+                    Ok(cfgs) => {
+                        *configs = cfgs;
+                    }
+                    Err(err) => {
+                        log::warn!("failed to get config list: {err:?}");
+                    }
+                }
+            }
+        }
+
+        egui::popup_below_widget(ui, popup_id, &response, |ui| {
+            add_contents(ui, configs);
+        });
+    }
 }
 
 impl Screen for DevicesTab {
@@ -150,7 +317,11 @@ impl std::fmt::Display for ComponentSelection {
     }
 }
 
-fn get_component_view(kind: ComponentKind, index: usize, device: DeviceView) -> Option<Box<dyn ComponentView>> {
+fn get_component_view(
+    kind: ComponentKind,
+    index: usize,
+    device: DeviceView,
+) -> Option<Box<dyn ComponentView>> {
     match kind {
         ComponentKind::Controller => Some(Box::new(ControllerView::new(device, index))),
         _ => None,

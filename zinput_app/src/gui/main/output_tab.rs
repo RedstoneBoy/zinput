@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use zinput_engine::{Engine, eframe::{self, egui}, plugin::{Plugin, PluginKind, PluginStatus}};
+use zinput_engine::{
+    eframe::{self, egui},
+    plugin::{Plugin, PluginKind, PluginStatus},
+    Engine,
+};
 
 use super::Screen;
 
@@ -13,11 +17,12 @@ pub struct OutputTab {
 
 impl OutputTab {
     pub fn new(engine: Arc<Engine>, plugins: &[Arc<dyn Plugin + Send + Sync>]) -> Self {
-        let frontends = plugins.iter()
+        let frontends = plugins
+            .iter()
             .filter(|p| p.kind() == PluginKind::Frontend)
             .cloned()
             .collect();
-        
+
         OutputTab {
             engine,
             frontends,
@@ -34,17 +39,14 @@ impl OutputTab {
                     for i in 0..self.frontends.len() {
                         let plugin = &self.frontends[i];
 
-                        let text = egui::RichText::new(plugin.name()).color(match plugin.status() {
-                            PluginStatus::Running => egui::Color32::GREEN,
-                            PluginStatus::Stopped => egui::Color32::WHITE,
-                            PluginStatus::Error(_) => egui::Color32::RED,
-                        });
+                        let text =
+                            egui::RichText::new(plugin.name()).color(match plugin.status() {
+                                PluginStatus::Running => egui::Color32::GREEN,
+                                PluginStatus::Stopped => egui::Color32::WHITE,
+                                PluginStatus::Error(_) => egui::Color32::RED,
+                            });
 
-                        ui.selectable_value(
-                            &mut self.selected,
-                            i,
-                            text,
-                        );
+                        ui.selectable_value(&mut self.selected, i, text);
                     }
                 });
         });
@@ -70,7 +72,7 @@ impl OutputTab {
                             plugin.init(self.engine.clone());
                         }
                     }
-    
+
                     ui.separator();
                 });
             });

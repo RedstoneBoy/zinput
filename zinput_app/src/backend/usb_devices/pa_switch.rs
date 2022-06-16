@@ -71,7 +71,7 @@ impl DeviceDriver for PADriver {
                 serial.insert_str(0, "pa_switch/");
                 serial
             });
-        
+
         self.bundle = DeviceBundle::new(
             self.engine.clone(),
             format!("PowerA Wired Pro Controller {}", self.id),

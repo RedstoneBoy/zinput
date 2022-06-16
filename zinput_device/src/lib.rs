@@ -39,19 +39,19 @@ macro_rules! components {
             button:     $crate::component::ComponentKind::Buttons,
             touch_pad:  $crate::component::ComponentKind::TouchPad,
         }
-    }
+    };
 }
 
 macro_rules! device_config {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste! {
             use serde::{Deserialize, Serialize};
-            
+
             #[derive(Clone, Deserialize, Serialize)]
             pub struct DeviceConfig {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
-    
+
             impl DeviceConfig {
                 pub fn configure(&self, device: DeviceMut) {
                     use component::ComponentData;
@@ -69,7 +69,7 @@ macro_rules! device_config {
                 }
             }
 
-            pub struct DeviceConfigMut<'a> {    
+            pub struct DeviceConfigMut<'a> {
                 $(pub [< $cname s >]: &'a mut [$ctype],)*
             }
         }
@@ -85,10 +85,10 @@ macro_rules! device_info {
                 pub id: Option<String>,
                 /// If this device has an id, the device config will be loaded without user interaction
                 pub autoload_config: bool,
-    
+
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
-    
+
             impl DeviceInfo {
                 pub fn new(name: String) -> Self {
                     DeviceInfo {
@@ -135,7 +135,7 @@ macro_rules! device {
                     }
                 }
             }
-    
+
             pub struct DeviceMut<'a> {
                 $(pub [< $cname s >]: &'a mut [$ctype],)*
             }

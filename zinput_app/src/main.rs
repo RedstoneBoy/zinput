@@ -31,7 +31,7 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()), false);
-    zinput.add_plugin(Arc::new(frontend::swi_send::Swi::new()), false);    
+    zinput.add_plugin(Arc::new(frontend::swi_send::Swi::new()), false);
 
     zinput.run();
 }

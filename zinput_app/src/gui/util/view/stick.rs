@@ -1,7 +1,7 @@
 use zinput_engine::eframe::{
     egui::{Response, Sense, Ui, Widget},
-    emath::{pos2, vec2, NumExt, Align2},
-    epaint::{Color32, Stroke, FontId, FontFamily},
+    emath::{pos2, vec2, Align2, NumExt},
+    epaint::{Color32, FontFamily, FontId, Stroke},
 };
 
 pub struct StickView<'a> {
@@ -88,13 +88,15 @@ impl<'a> Widget for StickView<'a> {
         let (mut rect, response) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
         let painter = ui.painter().with_clip_rect(rect);
 
-        let text_height = painter.text(
-            pos2(rect.left(), rect.bottom()),
-            Align2::LEFT_BOTTOM,
-            format!("{:+.2}", self.x),
-            font_id.clone(),
-            ui.visuals().text_color(),
-        ).height();
+        let text_height = painter
+            .text(
+                pos2(rect.left(), rect.bottom()),
+                Align2::LEFT_BOTTOM,
+                format!("{:+.2}", self.x),
+                font_id.clone(),
+                ui.visuals().text_color(),
+            )
+            .height();
 
         painter.text(
             pos2(rect.right(), rect.bottom()),
@@ -158,7 +160,10 @@ impl<'a> Widget for StickView<'a> {
                 if let Some((prev_x, prev_y)) = prev {
                     prev = Some((x, y));
                     painter.line_segment(
-                        [rect.center() + vec2(prev_x, -prev_y), rect.center() + vec2(x, -y)],
+                        [
+                            rect.center() + vec2(prev_x, -prev_y),
+                            rect.center() + vec2(x, -y),
+                        ],
                         Stroke::new(2.0, Color32::LIGHT_RED),
                     );
                 }
@@ -166,7 +171,10 @@ impl<'a> Widget for StickView<'a> {
 
             if let (Some(a), Some(b)) = (first, prev) {
                 painter.line_segment(
-                    [rect.center() + vec2(a.0, -a.1), rect.center() + vec2(b.0, -b.1)],
+                    [
+                        rect.center() + vec2(a.0, -a.1),
+                        rect.center() + vec2(b.0, -b.1),
+                    ],
                     Stroke::new(2.0, Color32::LIGHT_RED),
                 );
             }

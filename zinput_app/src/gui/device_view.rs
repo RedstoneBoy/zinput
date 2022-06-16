@@ -34,9 +34,13 @@ impl DeviceViewer {
 
                     ui.selectable_value(&mut index, Some(None), "[None]");
                     for entry in self.engine.devices() {
-                        ui.selectable_value(&mut index, Some(Some(*entry.uuid())), &entry.info().name);
+                        ui.selectable_value(
+                            &mut index,
+                            Some(Some(*entry.uuid())),
+                            &entry.info().name,
+                        );
                     }
-                    
+
                     if let Some(index) = index {
                         self.selected_controller = index.and_then(|i| self.engine.get_device(&i));
                     }

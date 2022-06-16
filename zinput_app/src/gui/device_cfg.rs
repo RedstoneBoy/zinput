@@ -530,20 +530,28 @@ impl DeviceCfg {
             } else {
                 outline_rect.max.x
             };
-            let sign = if left {
-                1.0
-            } else {
-                -1.0
-            };
+            let sign = if left { 1.0 } else { -1.0 };
 
             let min_rect = egui::Rect {
-                min: egui::pos2(begin + min * sign * outline_rect.width(), outline_rect.min.y),
-                max: egui::pos2(begin + min * sign * outline_rect.width() + 3.0, outline_rect.max.y),
+                min: egui::pos2(
+                    begin + min * sign * outline_rect.width(),
+                    outline_rect.min.y,
+                ),
+                max: egui::pos2(
+                    begin + min * sign * outline_rect.width() + 3.0,
+                    outline_rect.max.y,
+                ),
             };
 
             let max_rect = egui::Rect {
-                min: egui::pos2(begin + max * sign * outline_rect.width(), outline_rect.min.y),
-                max: egui::pos2(begin + max * sign * outline_rect.width() + 3.0, outline_rect.max.y),
+                min: egui::pos2(
+                    begin + max * sign * outline_rect.width(),
+                    outline_rect.min.y,
+                ),
+                max: egui::pos2(
+                    begin + max * sign * outline_rect.width() + 3.0,
+                    outline_rect.max.y,
+                ),
             };
 
             painter.rect_filled(min_rect, 0.0, egui::Rgba::from_rgb(1.0, 0.1, 0.1));

@@ -137,8 +137,10 @@ impl DeviceDriver for GCDriver {
             if let Some(controller) = &self.device.controllers[i] {
                 bundle.controller[0].buttons = convert_buttons(controller.buttons);
                 // TODO: Change back
-                bundle.controller[0].left_stick_x = ((((controller.left_stick.x as f32) - 127.0) * 1.25) + 127.0) as u8;
-                bundle.controller[0].left_stick_y = ((((controller.left_stick.y as f32) - 127.0) * 1.25) + 127.0) as u8;
+                bundle.controller[0].left_stick_x =
+                    ((((controller.left_stick.x as f32) - 127.0) * 1.25) + 127.0) as u8;
+                bundle.controller[0].left_stick_y =
+                    ((((controller.left_stick.y as f32) - 127.0) * 1.25) + 127.0) as u8;
                 bundle.controller[0].right_stick_x = controller.right_stick.x;
                 bundle.controller[0].right_stick_y = controller.right_stick.y;
                 bundle.controller[0].l2_analog = controller.left_trigger;

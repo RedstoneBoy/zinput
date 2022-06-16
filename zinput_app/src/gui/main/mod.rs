@@ -1,6 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
-use zinput_engine::{eframe::{egui, self}, Engine, plugin::Plugin};
+use zinput_engine::{
+    eframe::{self, egui},
+    plugin::Plugin,
+    Engine,
+};
 
 mod devices_tab;
 mod drivers_tab;
@@ -19,14 +23,23 @@ impl MainUi {
 
             screens: {
                 let mut map = HashMap::new();
-                map.insert(Tab::Devices, Box::new(devices_tab::DevicesTab::new(engine.clone())) as _);
-                map.insert(Tab::Drivers, Box::new(drivers_tab::DriversTab::new(engine.clone(), &plugins)) as _);
-                map.insert(Tab::Output, Box::new(output_tab::OutputTab::new(engine, &plugins)) as _);
+                map.insert(
+                    Tab::Devices,
+                    Box::new(devices_tab::DevicesTab::new(engine.clone())) as _,
+                );
+                map.insert(
+                    Tab::Drivers,
+                    Box::new(drivers_tab::DriversTab::new(engine.clone(), &plugins)) as _,
+                );
+                map.insert(
+                    Tab::Output,
+                    Box::new(output_tab::OutputTab::new(engine, &plugins)) as _,
+                );
                 map
             },
         }
     }
-    
+
     pub fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -56,12 +69,7 @@ enum Tab {
 }
 
 impl Tab {
-    const ALL: [Tab; 4] = [
-        Tab::Drivers,
-        Tab::Devices,
-        Tab::VirtualDevices,
-        Tab::Output,
-    ];
+    const ALL: [Tab; 4] = [Tab::Drivers, Tab::Devices, Tab::VirtualDevices, Tab::Output];
 
     fn name(&self) -> &str {
         match self {

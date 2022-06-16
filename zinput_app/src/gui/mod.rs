@@ -42,7 +42,7 @@ impl eframe::App for Gui {
             self.first_update = false;
             ctx.set_visuals(egui::Visuals::dark());
         }
-        
+
         // self.cfg.update(ctx, frame);
         // self.cv.update(ctx, frame);
         // self.motion.update(ctx, frame);

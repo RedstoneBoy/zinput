@@ -114,8 +114,16 @@ impl<'a> Widget for Slider<'a> {
         // TODO: Right to left
 
         let label_rect = painter.text(
-            if self.right_to_left { pos2(full_rect.right(), full_rect.top()) } else { full_rect.min },
-            if self.right_to_left { Align2::RIGHT_TOP } else { Align2::LEFT_TOP },
+            if self.right_to_left {
+                pos2(full_rect.right(), full_rect.top())
+            } else {
+                full_rect.min
+            },
+            if self.right_to_left {
+                Align2::RIGHT_TOP
+            } else {
+                Align2::LEFT_TOP
+            },
             self.label,
             font_id.clone(),
             ui.visuals().text_color(),
@@ -123,8 +131,16 @@ impl<'a> Widget for Slider<'a> {
 
         if self.show_values {
             let val_rect = painter.text(
-                if !self.right_to_left { pos2(full_rect.right(), full_rect.top()) } else { full_rect.min },
-                if !self.right_to_left { Align2::RIGHT_TOP } else { Align2::LEFT_TOP },
+                if !self.right_to_left {
+                    pos2(full_rect.right(), full_rect.top())
+                } else {
+                    full_rect.min
+                },
+                if !self.right_to_left {
+                    Align2::RIGHT_TOP
+                } else {
+                    Align2::LEFT_TOP
+                },
                 format!("{:.2}", self.value),
                 mono_font_id.clone(),
                 ui.visuals().text_color(),
@@ -132,8 +148,19 @@ impl<'a> Widget for Slider<'a> {
 
             if let Some(min) = &mut self.min_value {
                 let val_rect = painter.text(
-                    pos2(if !self.right_to_left { full_rect.left() } else { full_rect.right() }, full_rect.bottom()),
-                    if !self.right_to_left { Align2::LEFT_BOTTOM } else { Align2::RIGHT_BOTTOM },
+                    pos2(
+                        if !self.right_to_left {
+                            full_rect.left()
+                        } else {
+                            full_rect.right()
+                        },
+                        full_rect.bottom(),
+                    ),
+                    if !self.right_to_left {
+                        Align2::LEFT_BOTTOM
+                    } else {
+                        Align2::RIGHT_BOTTOM
+                    },
                     format!("{:.2}", min),
                     mono_font_id.clone(),
                     ui.visuals().text_color(),
@@ -158,8 +185,19 @@ impl<'a> Widget for Slider<'a> {
 
             if let Some(max) = &mut self.max_value {
                 let val_rect = painter.text(
-                    pos2(if self.right_to_left { full_rect.left() } else { full_rect.right() }, full_rect.bottom()),
-                    if self.right_to_left { Align2::LEFT_BOTTOM } else { Align2::RIGHT_BOTTOM },
+                    pos2(
+                        if self.right_to_left {
+                            full_rect.left()
+                        } else {
+                            full_rect.right()
+                        },
+                        full_rect.bottom(),
+                    ),
+                    if self.right_to_left {
+                        Align2::LEFT_BOTTOM
+                    } else {
+                        Align2::RIGHT_BOTTOM
+                    },
                     format!("{:.2}", max),
                     mono_font_id,
                     ui.visuals().text_color(),
@@ -265,11 +303,7 @@ impl<'a> Widget for Slider<'a> {
                 }
             };
 
-            painter.rect_filled(
-                line_rect,
-                0.0,
-                Color32::LIGHT_RED,
-            );
+            painter.rect_filled(line_rect, 0.0, Color32::LIGHT_RED);
         }
 
         painter.rect_stroke(
