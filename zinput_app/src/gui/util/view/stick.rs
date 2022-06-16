@@ -37,11 +37,13 @@ impl<'a> StickView<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn min_size(mut self, min_size: f32) -> Self {
         self.min_size = min_size;
         self
     }
 
+    #[allow(dead_code)]
     pub fn size(mut self, size: f32) -> Self {
         self.size = Some(size);
         self
@@ -57,16 +59,19 @@ impl<'a> StickView<'a> {
         self
     }
 
+    #[allow(dead_code)]
     pub fn draw_circle(mut self, draw_circle: bool) -> Self {
         self.draw_circle = draw_circle;
         self
     }
 
+    #[allow(dead_code)]
     pub fn draw_center_dot(mut self, draw_center_dot: bool) -> Self {
         self.draw_center_dot = draw_center_dot;
         self
     }
 
+    #[allow(dead_code)]
     pub fn draw_square(mut self, draw_square: bool) -> Self {
         self.draw_square = draw_square;
         self

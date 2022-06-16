@@ -1,5 +1,5 @@
 use zinput_engine::eframe::{
-    egui::{CursorIcon, Response, Sense, Ui, Widget, WidgetText},
+    egui::{CursorIcon, Response, Sense, Ui, Widget},
     emath::{pos2, vec2, Align2, NumExt, Rect},
     epaint::{Color32, FontFamily, FontId, Stroke},
 };
@@ -41,21 +41,25 @@ impl<'a> Slider<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
     }
 
+    #[allow(dead_code)]
     pub fn height(mut self, height: f32) -> Self {
         self.height = Some(height);
         self
     }
 
+    #[allow(dead_code)]
     pub fn min_width(mut self, min_width: f32) -> Self {
         self.min_width = min_width;
         self
     }
 
+    #[allow(dead_code)]
     pub fn min_height(mut self, min_height: f32) -> Self {
         self.min_height = min_height;
         self
@@ -108,12 +112,12 @@ impl<'a> Widget for Slider<'a> {
             .unwrap_or_else(|| ui.available_size_before_wrap().y)
             .at_least(self.min_height);
 
-        let (full_rect, mut response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        let (full_rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
         let painter = ui.painter().with_clip_rect(full_rect);
 
         // TODO: Right to left
 
-        let label_rect = painter.text(
+        painter.text(
             if self.right_to_left {
                 pos2(full_rect.right(), full_rect.top())
             } else {
@@ -130,7 +134,7 @@ impl<'a> Widget for Slider<'a> {
         );
 
         if self.show_values {
-            let val_rect = painter.text(
+            painter.text(
                 if !self.right_to_left {
                     pos2(full_rect.right(), full_rect.top())
                 } else {
@@ -170,7 +174,7 @@ impl<'a> Widget for Slider<'a> {
                     .allocate_rect(val_rect, Sense::drag())
                     .on_hover_cursor(CursorIcon::ResizeHorizontal);
 
-                if let Some(pos) = response.interact_pointer_pos() {
+                if let Some(_) = response.interact_pointer_pos() {
                     let delta = response.drag_delta();
                     let max = match &self.max_value {
                         Some(v) => **v,
@@ -207,7 +211,7 @@ impl<'a> Widget for Slider<'a> {
                     .allocate_rect(val_rect, Sense::drag())
                     .on_hover_cursor(CursorIcon::ResizeHorizontal);
 
-                if let Some(pos) = response.interact_pointer_pos() {
+                if let Some(_) = response.interact_pointer_pos() {
                     let delta = response.drag_delta();
                     let min = match &self.min_value {
                         Some(v) => **v,
