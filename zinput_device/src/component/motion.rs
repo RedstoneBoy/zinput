@@ -15,6 +15,15 @@ impl MotionInfo {
     }
 }
 
+impl Default for MotionInfo {
+    fn default() -> Self {
+        MotionInfo {
+            has_gyro: true,
+            has_accel: true,
+        }
+    }
+}
+
 pub type MotionConfig = ();
 
 /// Gyro values are degrees per second

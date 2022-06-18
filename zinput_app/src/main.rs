@@ -7,6 +7,7 @@ use std::sync::Arc;
 mod backend;
 mod frontend;
 mod gui;
+mod virt;
 mod zinput;
 
 fn main() {

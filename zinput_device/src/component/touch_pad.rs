@@ -18,6 +18,15 @@ impl TouchPadInfo {
     }
 }
 
+impl Default for TouchPadInfo {
+    fn default() -> Self {
+        TouchPadInfo {
+            shape: TouchPadShape::Circle,
+            is_button: true,
+        }
+    }
+}
+
 pub type TouchPadConfig = ();
 
 #[repr(C)]

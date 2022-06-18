@@ -9,6 +9,7 @@ use zinput_engine::{
 mod devices_tab;
 mod drivers_tab;
 mod output_tab;
+mod virtual_tab;
 
 pub struct MainUi {
     tab: Tab,
