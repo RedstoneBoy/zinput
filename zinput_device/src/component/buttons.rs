@@ -1,3 +1,5 @@
+use bindlang::ty::{ToType, Type, IntWidth, BitNames};
+
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -17,6 +19,12 @@ pub type ButtonsConfig = ();
 #[derive(Copy, Clone)]
 pub struct Buttons {
     pub buttons: u64,
+}
+
+impl ToType for Buttons {
+    fn to_type() -> Type {
+        Type::Bitfield(IntWidth::W64, BitNames::default())
+    }
 }
 
 impl Default for Buttons {

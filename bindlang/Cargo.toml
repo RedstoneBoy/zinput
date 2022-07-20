@@ -10,4 +10,3 @@ name = "lex"
 path = "src/main_lex.rs"
 
 [dependencies]
-zinput_device = { path = "../zinput_device" }

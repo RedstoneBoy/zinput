@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use bindlang::ty::{ToType, Type, Struct};
 use serde::{Deserialize, Serialize};
 
 use super::ComponentData;
@@ -30,6 +33,17 @@ impl Default for AnalogsConfig {
 #[derive(Copy, Clone)]
 pub struct Analogs {
     pub analogs: [u8; 8],
+}
+
+impl ToType for Analogs {
+    fn to_type() -> Type {
+        // TODO
+        Type::Struct(Struct {
+            name: "Analogs",
+            fields: HashMap::new(),
+            size: std::mem::size_of::<Analogs>(),
+        })
+    }
 }
 
 impl Default for Analogs {

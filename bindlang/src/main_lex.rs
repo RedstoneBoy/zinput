@@ -1,5 +1,3 @@
-
-
 fn main() {
     let source = std::fs::read_to_string("example.bind").unwrap();
     let res = bindlang::parse(&source);

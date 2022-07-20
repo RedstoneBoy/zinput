@@ -374,7 +374,9 @@ fn saved_configs() -> anyhow::Result<Vec<String>> {
         let Some("json") = path.extension().and_then(|e| e.to_str())
         else { continue; };
 
-        let Some(file_name) = entry.file_name().to_str()
+        let file_name = entry.file_name();
+
+        let Some(file_name) = file_name.to_str()
         else { continue; };
 
         configs.push(file_name[..(file_name.len() - 5)].to_owned());

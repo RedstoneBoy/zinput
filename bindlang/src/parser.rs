@@ -1,7 +1,10 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{Devices, Module, Event, Block, Stmt, StmtKind, AssignKind, Expr, BinOp, ExprKind, UnOp, Literal},
+    ast::{
+        AssignKind, BinOp, Block, Devices, Event, Expr, ExprKind, Literal, Module, Stmt, StmtKind,
+        UnOp,
+    },
     span::Span,
     token::{Token, TokenKind},
 };
@@ -38,16 +41,13 @@ impl<'a> Parser<'a> {
         let devices = self.parse_device_struct()?;
 
         let mut events = Vec::new();
-        
+
         while self.tokens.peek().is_some() {
             let event = self.parse_event()?;
             events.push(event);
         }
 
-        Some(Module {
-            devices,
-            events,
-        })
+        Some(Module { devices, events })
     }
 
     fn parse_event(&mut self) -> Option<Event> {
@@ -89,10 +89,7 @@ impl<'a> Parser<'a> {
         let end = self.eat_token(TokenKind::RBrace)?.span.end;
         let span = Span { start, end };
 
-        Some(Block {
-            stmts,
-            span,
-        })
+        Some(Block { stmts, span })
     }
 
     fn parse_stmt(&mut self) -> Option<Stmt> {
@@ -108,28 +105,30 @@ impl<'a> Parser<'a> {
 
         let start = lval.span.start;
 
-        let assign_kind = self.tokens.peek().and_then(|tok| Some(match &tok.kind {
-            TokenKind::Assign =>   AssignKind::Normal,
-            TokenKind::BitOrAssign => AssignKind::BitOr,
-            TokenKind::BitAndAssign => AssignKind::BitAnd,
-            TokenKind::XorAssign => AssignKind::Xor,
-            TokenKind::AddAssign => AssignKind::Add,
-            TokenKind::SubAssign => AssignKind::Sub,
-            TokenKind::MulAssign => AssignKind::Mul,
-            TokenKind::DivAssign => AssignKind::Div,
-            _ => return None
-        }));
+        let assign_kind = self.tokens.peek().and_then(|tok| {
+            Some(match &tok.kind {
+                TokenKind::Assign => AssignKind::Normal,
+                TokenKind::BitOrAssign => AssignKind::BitOr,
+                TokenKind::BitAndAssign => AssignKind::BitAnd,
+                TokenKind::XorAssign => AssignKind::Xor,
+                TokenKind::AddAssign => AssignKind::Add,
+                TokenKind::SubAssign => AssignKind::Sub,
+                TokenKind::MulAssign => AssignKind::Mul,
+                TokenKind::DivAssign => AssignKind::Div,
+                _ => return None,
+            })
+        });
 
         if let Some(kind) = assign_kind {
             self.eat_any_token().unwrap();
 
             let expr = self.parse_expr()?;
-            
+
             let end = self.eat_token(TokenKind::Semicolon)?.span.end;
 
-            Some(Stmt { 
+            Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::Assign { lval, kind, expr }
+                kind: StmtKind::Assign { lval, kind, expr },
             })
         } else {
             let end = self.eat_token(TokenKind::Semicolon)?.span.end;
@@ -170,7 +169,11 @@ impl<'a> Parser<'a> {
 
             return Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: None },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: None,
+                },
             });
         }
 
@@ -182,12 +185,19 @@ impl<'a> Parser<'a> {
 
             let no = Block {
                 stmts: vec![else_if],
-                span: Span { start: no_start, end },
+                span: Span {
+                    start: no_start,
+                    end,
+                },
             };
 
             Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: Some(no) },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: Some(no),
+                },
             })
         } else if self.peek_token(TokenKind::LBrace) {
             let no = self.parse_block()?;
@@ -195,16 +205,17 @@ impl<'a> Parser<'a> {
 
             Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: Some(no) },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: Some(no),
+                },
             })
         } else {
             let got = self.eat_any_token()?;
             self.errors.push(ParserError::UnexpectedToken {
                 got,
-                expected: vec![
-                    TokenKind::KIf,
-                    TokenKind::LBrace,
-                ],
+                expected: vec![TokenKind::KIf, TokenKind::LBrace],
             });
 
             None
@@ -218,10 +229,12 @@ impl<'a> Parser<'a> {
     // parse bool or
     fn parse_expr_l1(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Or => BinOp::Or,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Or => BinOp::Or,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l2,
             true,
         )
@@ -230,10 +243,12 @@ impl<'a> Parser<'a> {
     // parse bool or
     fn parse_expr_l2(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::And => BinOp::And,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::And => BinOp::And,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l3,
             true,
         )
@@ -242,15 +257,17 @@ impl<'a> Parser<'a> {
     // parse comparison
     fn parse_expr_l3(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Equals => BinOp::Equals,
-                TokenKind::NotEquals => BinOp::NotEquals,
-                TokenKind::Greater => BinOp::Greater,
-                TokenKind::GreaterEq => BinOp::GreaterEq,
-                TokenKind::Less => BinOp::Less,
-                TokenKind::LessEq => BinOp::LessEq,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Equals => BinOp::Equals,
+                    TokenKind::NotEquals => BinOp::NotEquals,
+                    TokenKind::Greater => BinOp::Greater,
+                    TokenKind::GreaterEq => BinOp::GreaterEq,
+                    TokenKind::Less => BinOp::Less,
+                    TokenKind::LessEq => BinOp::LessEq,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l4,
             false,
         )
@@ -259,10 +276,12 @@ impl<'a> Parser<'a> {
     // parse bit or
     fn parse_expr_l4(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::BitOr => BinOp::BitOr,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::BitOr => BinOp::BitOr,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l5,
             true,
         )
@@ -271,10 +290,12 @@ impl<'a> Parser<'a> {
     // parse xor
     fn parse_expr_l5(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Xor => BinOp::Xor,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Xor => BinOp::BitXor,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l6,
             true,
         )
@@ -283,10 +304,12 @@ impl<'a> Parser<'a> {
     // parse bit and
     fn parse_expr_l6(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::BitAnd => BinOp::BitAnd,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::BitAnd => BinOp::BitAnd,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l7,
             true,
         )
@@ -295,11 +318,13 @@ impl<'a> Parser<'a> {
     // parse shift
     fn parse_expr_l7(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::ShiftLeft => BinOp::ShiftLeft,
-                TokenKind::ShiftRight => BinOp::ShiftRight,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::ShiftLeft => BinOp::ShiftLeft,
+                    TokenKind::ShiftRight => BinOp::ShiftRight,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l8,
             true,
         )
@@ -308,11 +333,13 @@ impl<'a> Parser<'a> {
     // parse add sub
     fn parse_expr_l8(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Plus => BinOp::Add,
-                TokenKind::Minus => BinOp::Sub,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Plus => BinOp::Add,
+                    TokenKind::Minus => BinOp::Sub,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l9,
             true,
         )
@@ -321,11 +348,13 @@ impl<'a> Parser<'a> {
     // parse mul
     fn parse_expr_l9(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Star => BinOp::Mul,
-                TokenKind::Slash => BinOp::Div,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Star => BinOp::Mul,
+                    TokenKind::Slash => BinOp::Div,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l10,
             true,
         )
@@ -334,11 +363,13 @@ impl<'a> Parser<'a> {
     // parse shift
     fn parse_expr_l10(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::ShiftLeft => BinOp::ShiftLeft,
-                TokenKind::ShiftRight => BinOp::ShiftRight,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::ShiftLeft => BinOp::ShiftLeft,
+                    TokenKind::ShiftRight => BinOp::ShiftRight,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l11,
             true,
         )
@@ -351,41 +382,29 @@ impl<'a> Parser<'a> {
             Some(Expr {
                 span: Span {
                     start: tok.span.start,
-                    end:  expr.span.end,
+                    end: expr.span.end,
                 },
-                kind: ExprKind::Unary(UnOp::Negate, Box::new(expr))
+                kind: ExprKind::Unary(UnOp::Negate, Box::new(expr)),
             })
-        } else  if let Some(tok) = self.maybe_eat_token(TokenKind::Not) {
+        } else if let Some(tok) = self.maybe_eat_token(TokenKind::Not) {
             let expr = self.parse_expr_l12()?;
             Some(Expr {
                 span: Span {
                     start: tok.span.start,
-                    end:  expr.span.end,
+                    end: expr.span.end,
                 },
-                kind: ExprKind::Unary(UnOp::Not, Box::new(expr))
+                kind: ExprKind::Unary(UnOp::Not, Box::new(expr)),
             })
         } else {
             self.parse_expr_l12()
         }
     }
 
-    // parse bit
+    // parse placeholder
     fn parse_expr_l12(&mut self) -> Option<Expr> {
         let expr = self.parse_expr_l13()?;
 
-        if let Some(_) = self.maybe_eat_token(TokenKind::Hash) {
-            let bit = self.eat_token(TokenKind::Ident)?;
-
-            Some(Expr {
-                span: Span {
-                    start: expr.span.start,
-                    end: bit.span.end,
-                },
-                kind: ExprKind::Bit(Box::new(expr), bit.span)
-            })
-        } else {
-            Some(expr)
-        }
+        Some(expr)
     }
 
     // parse index
@@ -401,7 +420,7 @@ impl<'a> Parser<'a> {
                     start: expr.span.start,
                     end,
                 },
-                kind: ExprKind::Index(Box::new(expr), Box::new(index))
+                kind: ExprKind::Index(Box::new(expr), Box::new(index)),
             })
         } else {
             Some(expr)
@@ -427,27 +446,42 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr_l15(&mut self) -> Option<Expr> {
-        let tok =  self.eat_any_token()?;
+        let tok = self.eat_any_token()?;
         Some(match &tok.kind {
             TokenKind::KTrue => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Bool(true)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Bool(true)),
+                }
             }
             TokenKind::KFalse => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Bool(false)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Bool(false)),
+                }
             }
             TokenKind::Int(val) => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Int(*val)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Int(*val)),
+                }
             }
             TokenKind::Float(val) => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Float(*val)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Float(*val)),
+                }
             }
             TokenKind::Ident => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Var(span) }
+                Expr {
+                    span,
+                    kind: ExprKind::Var(span),
+                }
             }
             TokenKind::LParen => {
                 let expr = self.parse_expr()?;
@@ -458,7 +492,10 @@ impl<'a> Parser<'a> {
                 self.errors.push(ParserError::UnexpectedToken {
                     got: tok,
                     expected: vec![
-                        TokenKind::KTrue, TokenKind::KFalse, TokenKind::Int(0), TokenKind::Float(0.0),
+                        TokenKind::KTrue,
+                        TokenKind::KFalse,
+                        TokenKind::Int(0),
+                        TokenKind::Float(0.0),
                     ],
                 });
                 return None;
@@ -466,7 +503,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_bin_op<T, F>(&mut self, mut token_to_op: T, mut next_level: F, multiple: bool) -> Option<Expr>
+    fn parse_bin_op<T, F>(
+        &mut self,
+        mut token_to_op: T,
+        mut next_level: F,
+        multiple: bool,
+    ) -> Option<Expr>
     where
         T: FnMut(&TokenKind) -> Option<BinOp>,
         F: FnMut(&mut Self) -> Option<Expr>,
@@ -595,7 +637,13 @@ impl<'a> Parser<'a> {
 
 #[derive(Clone, Debug)]
 pub enum ParserError {
-    UnexpectedToken { got: Token, expected: Vec<TokenKind> },
-    ExpectedIdentKeyWord { got: Token, expected: &'static str },
+    UnexpectedToken {
+        got: Token,
+        expected: Vec<TokenKind>,
+    },
+    ExpectedIdentKeyWord {
+        got: Token,
+        expected: &'static str,
+    },
     UnexpectedEof,
 }

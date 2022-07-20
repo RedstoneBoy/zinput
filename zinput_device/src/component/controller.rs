@@ -1,5 +1,6 @@
-use std::ops::BitOr;
+use std::{ops::BitOr, collections::HashMap, sync::LazyLock};
 
+use bindlang::{ty::{ToType, Type, Struct, Field}, to_struct};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -177,6 +178,27 @@ pub struct Controller {
     pub r1_analog: u8,
     pub l2_analog: u8,
     pub r2_analog: u8,
+}
+
+impl ToType for Controller {
+    fn to_type() -> Type {
+        static TYPE: LazyLock<Type> = LazyLock::new(|| {
+            to_struct! {
+                name = Controller;
+                0:  buttons:       u64;
+                8:  left_stick_x:  u8;
+                9:  left_stick_y:  u8;
+                10: right_stick_x: u8;
+                11: right_stick_y: u8;
+                12: l1_analog:     u8;
+                13: r1_analog:     u8;
+                14: l2_analog:     u8;
+                15: r2_analog:     u8;
+            }
+        });
+        
+        TYPE.clone()
+    }
 }
 
 impl Default for Controller {

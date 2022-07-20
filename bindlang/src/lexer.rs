@@ -85,12 +85,16 @@ impl<'a> Lexer<'a> {
                             let end = self.pos;
                             return Ok(Token {
                                 span: Span { start, end },
-                                kind: TokenKind::Int(self.src[start.index..end.index].parse().expect("internal lexer error: error parsing int")),
+                                kind: TokenKind::Int(
+                                    self.src[start.index..end.index]
+                                        .parse()
+                                        .expect("internal lexer error: error parsing int"),
+                                ),
                             });
                         }
                     }
                 }
-                
+
                 // float match
 
                 loop {
@@ -103,10 +107,14 @@ impl<'a> Lexer<'a> {
                 }
 
                 let end = self.pos;
-                
+
                 Token {
                     span: Span { start, end },
-                    kind: TokenKind::Float(self.src[start.index..end.index].parse().expect("internal lexer error: error parsing float")),
+                    kind: TokenKind::Float(
+                        self.src[start.index..end.index]
+                            .parse()
+                            .expect("internal lexer error: error parsing float"),
+                    ),
                 }
             }
 
@@ -203,7 +211,7 @@ impl<'a> Lexer<'a> {
             '<' => self.double(
                 TokenKind::Less,
                 |ch| match ch {
-                    '<'  => Some(TokenKind::ShiftLeft),
+                    '<' => Some(TokenKind::ShiftLeft),
                     '=' => Some(TokenKind::LessEq),
                     _ => None,
                 },
@@ -220,7 +228,10 @@ impl<'a> Lexer<'a> {
 
             other => {
                 self.errors.push(LexerError {
-                    span: Span { start, end: self.pos },
+                    span: Span {
+                        start,
+                        end: self.pos,
+                    },
                     kind: LexerErrorKind::InvalidCharacter(other),
                 });
                 return Err(NextError::Skip);

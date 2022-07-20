@@ -5,7 +5,8 @@ use std::{
 
 use crate::{
     lexer::{LexerError, LexerErrorKind},
-    span::{Span, Pos}, parser::ParserError,
+    parser::ParserError,
+    span::{Pos, Span},
 };
 
 #[derive(Clone, Debug)]
@@ -16,8 +17,16 @@ pub struct Errors<'a> {
 }
 
 impl<'a> Errors<'a> {
-    pub(crate) fn new(src: &'a str, lexer_errors: Vec<LexerError>, parser_errors: Vec<ParserError>) -> Self {
-        Errors { src, lexer_errors, parser_errors }
+    pub(crate) fn new(
+        src: &'a str,
+        lexer_errors: Vec<LexerError>,
+        parser_errors: Vec<ParserError>,
+    ) -> Self {
+        Errors {
+            src,
+            lexer_errors,
+            parser_errors,
+        }
     }
 
     fn num_errors(&self) -> usize {
@@ -90,7 +99,11 @@ impl<'a> Display for Errors<'a> {
 
             match err {
                 ParserError::UnexpectedToken { got, expected } => {
-                    write!(f, "unexpected token '{}'", &self.src[got.span.start.index..got.span.end.index])?;
+                    write!(
+                        f,
+                        "unexpected token '{}'",
+                        &self.src[got.span.start.index..got.span.end.index]
+                    )?;
                     if expected.len() == 1 {
                         write!(f, ", expected '{}'", expected.last().unwrap())?;
                     } else if expected.len() > 1 {
@@ -105,7 +118,12 @@ impl<'a> Display for Errors<'a> {
                     Self::write_context(f, self.src, got.span)?;
                 }
                 ParserError::ExpectedIdentKeyWord { got, expected } => {
-                    write!(f, "unexpected token '{}', expected '{}'", &self.src[got.span.start.index..got.span.end.index], expected)?;
+                    write!(
+                        f,
+                        "unexpected token '{}', expected '{}'",
+                        &self.src[got.span.start.index..got.span.end.index],
+                        expected
+                    )?;
 
                     writeln!(f)?;
 
@@ -122,12 +140,20 @@ impl<'a> Display for Errors<'a> {
                         last_line = line;
                         last_line_num += 1;
                     }
-                    let start = Pos { index: self.src.len() - 1, line: last_line_num, col: last_line.len() - 1 };
-                    let end = Pos { index: self.src.len(), line: last_line_num, col: last_line.len() };
+                    let start = Pos {
+                        index: self.src.len() - 1,
+                        line: last_line_num,
+                        col: last_line.len() - 1,
+                    };
+                    let end = Pos {
+                        index: self.src.len(),
+                        line: last_line_num,
+                        col: last_line.len(),
+                    };
 
                     Self::write_context(f, self.src, Span { start, end })?;
                 }
-            }            
+            }
 
             write!(f, "\n")?;
         }

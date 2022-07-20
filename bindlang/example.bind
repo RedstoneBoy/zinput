@@ -7,17 +7,17 @@ ljoy:update {
     let o = out.controller[0];
     let l = ljoy.controller[0];
 
-    o.buttons#up      = l.buttons#up;
-    o.buttons#down    = l.buttons#down;
-    o.buttons#left    = l.buttons#left;
-    o.buttons#right   = l.buttons#right;    
-    o.buttons#select  = l.buttons#select;
-    o.buttons#l1      = l.buttons#l1;
-    o.buttons#l2      = l.buttons#l2;
-    o.buttons#l3      = l.buttons#l3;
-    o.buttons#l4      = l.buttons#l4;
-    o.buttons#lstick  = l.buttons#lstick;
-    o.buttons#capture = l.buttons#capture;
+    o.buttons.up      = l.buttons.up;
+    o.buttons.down    = l.buttons.down;
+    o.buttons.left    = l.buttons.left;
+    o.buttons.right   = l.buttons.right;    
+    o.buttons.select  = l.buttons.select;
+    o.buttons.l1      = l.buttons.l1;
+    o.buttons.l2      = l.buttons.l2;
+    o.buttons.l3      = l.buttons.l3;
+    o.buttons.l4      = l.buttons.l4;
+    o.buttons.lstick  = l.buttons.lstick;
+    o.buttons.capture = l.buttons.capture;
 
     o.left_stick_x  = l.left_stick_x;
     o.left_stick_y  = l.left_stick_y;

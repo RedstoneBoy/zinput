@@ -45,7 +45,7 @@ pub enum TokenKind {
     LessEq,
     Equals,
     NotEquals,
-    
+
     ShiftLeft,
     ShiftRight,
 
@@ -68,12 +68,12 @@ pub enum TokenKind {
 impl TokenKind {
     pub fn ident(ident: &str) -> TokenKind {
         match ident {
-            "else"  => TokenKind::KElse,
+            "else" => TokenKind::KElse,
             "false" => TokenKind::KFalse,
-            "if"    => TokenKind::KIf,
-            "let"   => TokenKind::KLet,
-            "true"  => TokenKind::KTrue,
-            _       => TokenKind::Ident,
+            "if" => TokenKind::KIf,
+            "let" => TokenKind::KLet,
+            "true" => TokenKind::KTrue,
+            _ => TokenKind::Ident,
         }
     }
 }
@@ -117,7 +117,7 @@ impl Display for TokenKind {
             LessEq => write!(f, "<="),
             Equals => write!(f, "=="),
             NotEquals => write!(f, "!="),
-            
+
             ShiftLeft => write!(f, "<<"),
             ShiftRight => write!(f, ">>"),
 

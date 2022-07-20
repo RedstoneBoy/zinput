@@ -1,3 +1,7 @@
+use std::{sync::LazyLock, collections::HashMap};
+
+use bindlang::{ty::{Field, Type, ToType, Struct}, to_struct};
+
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -37,6 +41,24 @@ pub struct Motion {
     /// -1.0 = Controller is placed triggers down
     /// 1.0  = Controller is placed grips down
     pub accel_z: f32,
+}
+
+impl ToType for Motion {
+    fn to_type() -> Type {
+        static TYPE: LazyLock<Type> = LazyLock::new(|| {
+            to_struct! {
+                name = Motion;
+                0:   pitch:   f32;
+                4:   roll:    f32;
+                8:   yaw:     f32;
+                12:  accel_x: f32;
+                16:  accel_y: f32;
+                20:  accel_z: f32;
+            }
+        });
+        
+        TYPE.clone()
+    }
 }
 
 impl ComponentData for Motion {

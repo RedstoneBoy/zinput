@@ -12,7 +12,10 @@ pub struct Module {
 
 impl Module {
     pub fn display<'a, 'b>(&'a self, source: &'b str) -> AstDisplay<'a, 'b> {
-        AstDisplay { source, module: self }
+        AstDisplay {
+            source,
+            module: self,
+        }
     }
 }
 
@@ -79,25 +82,24 @@ pub enum ExprKind {
     Var(Ident),
     Dot(Box<Expr>, Ident),
     Index(Box<Expr>, Box<Expr>),
-    Bit(Box<Expr>, Ident),
 
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum UnOp {
     Negate,
     Not,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum BinOp {
     BitOr,
     BitAnd,
+    BitXor,
     Or,
     And,
-    Xor,
 
     Add,
     Sub,
@@ -162,7 +164,7 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                 StmtKind::Assign { lval, kind, expr } => {
                     self.write_tabs(f, tabs)?;
                     self.write_expr(f, lval)?;
-                    
+
                     let assign = match kind {
                         AssignKind::Normal => "=",
                         AssignKind::BitOr => "|=",
@@ -205,13 +207,11 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
 
     fn write_expr(&self, f: &mut Formatter, expr: &Expr) -> Result {
         match &expr.kind {
-            ExprKind::Literal(literal) => {
-                match literal {
-                    Literal::Bool(val) => write!(f, "{val}")?,
-                    Literal::Int(val) => write!(f, "{val}")?,
-                    Literal::Float(val) => write!(f, "{val}")?,
-                }
-            }
+            ExprKind::Literal(literal) => match literal {
+                Literal::Bool(val) => write!(f, "{val}")?,
+                Literal::Int(val) => write!(f, "{val}")?,
+                Literal::Float(val) => write!(f, "{val}")?,
+            },
             ExprKind::Var(ident) => write!(f, "{}", ident.index_src(&self.source))?,
             ExprKind::Dot(left, ident) => {
                 self.write_expr(f, left)?;
@@ -222,10 +222,6 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                 write!(f, "[")?;
                 self.write_expr(f, index)?;
                 write!(f, "]")?;
-            }
-            ExprKind::Bit(left, bit) => {
-                self.write_expr(f, left)?;
-                write!(f, "#{}", bit.index_src(&self.source))?;
             }
             ExprKind::Unary(op, expr) => {
                 match op {
@@ -244,7 +240,7 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                     BinOp::BitAnd => "&",
                     BinOp::Or => "||",
                     BinOp::And => "&&",
-                    BinOp::Xor => "^",
+                    BinOp::BitXor => "^",
 
                     BinOp::Add => "+",
                     BinOp::Sub => "-",
@@ -284,10 +280,20 @@ impl<'a, 'b> Display for AstDisplay<'a, 'b> {
 
             comma = true;
         }
-        write!(f, "],\n\tout: {},\n}}\n\n", &self.source[self.module.devices.d_out.start.index..self.module.devices.d_out.end.index])?;
+        write!(
+            f,
+            "],\n\tout: {},\n}}\n\n",
+            &self.source
+                [self.module.devices.d_out.start.index..self.module.devices.d_out.end.index]
+        )?;
 
         for event in &self.module.events {
-            write!(f, "{}:{} ", event.source.index_src(&self.source), event.kind.index_src(&self.source))?;
+            write!(
+                f,
+                "{}:{} ",
+                event.source.index_src(&self.source),
+                event.kind.index_src(&self.source)
+            )?;
 
             self.write_block(f, &event.body, 1)?;
 
