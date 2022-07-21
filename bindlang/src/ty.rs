@@ -179,7 +179,7 @@ impl_to_type! {
 #[macro_export]
 macro_rules! to_struct {
     ( name = $name:ident; $( $offset:literal : $fname:ident : $typ:ty ;)* ) => {{
-        let mut fields = HashMap::new();
+        let mut fields = std::collections::HashMap::new();
 
         $({
             fields.insert(stringify!($fname), $crate::ty::Field {
@@ -199,12 +199,12 @@ macro_rules! to_struct {
 #[macro_export]
 macro_rules! to_bitfield {
     ( name = $name:ident; size = $size:expr; $( $bname:ident = $bit:literal ;)* ) => {{
-        let mut names = HashMap::new();
+        let mut names = std::collections::HashMap::new();
 
         $(
             names.insert(stringify!($bname), $bit);
         )*
 
-        $crate::ty::Type::Bitfield(stringify!(name), $size, BitNames(names))
+        $crate::ty::Type::Bitfield(stringify!(name), $size, $crate::ty::BitNames(names))
     }};
 }

@@ -1,14 +1,16 @@
 devices {
-    in: [ljoy],
+    in: [ljoy, rjoy],
     out: out,
 }
 
 ljoy:update {
-    let a = 5;
-    a += 1;
-    if a {
-        let a = 20.0;
-        a = false;
-    }
-    a = 15;
+    let lmask = 2447088;
+    let rmask = !lmask;
+    out.buttons = out.buttons & !lmask | ljoy.buttons;
+}
+
+rjoy:update {
+    let lmask = 2447088;
+    let rmask = !lmask;
+    out.buttons = out.buttons & !rmask | rjoy.buttons;
 }
