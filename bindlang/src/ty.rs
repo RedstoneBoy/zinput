@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Reference(Box<Type>),
     Int(IntWidth, Signed),
@@ -74,7 +74,7 @@ impl Type {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IntWidth {
     W8,
     W16,
@@ -82,31 +82,31 @@ pub enum IntWidth {
     W64,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Signed {
     Yes,
     No,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Mutable {
     Yes,
     No,
 }
 
-#[derive(Clone, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct BitNames {
     pub names: HashMap<&'static str, u8>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Struct {
     pub name: &'static str,
     pub fields: HashMap<&'static str, Field>,
     pub size: usize,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Field {
     pub ty: Type,
     pub byte_offset: usize,

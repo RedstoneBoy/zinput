@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::span::Span;
+use crate::{span::Span, ty::Type};
 
 pub type Ident = Span;
 
@@ -74,6 +74,8 @@ pub struct Expr {
     pub kind: ExprKind,
 
     pub span: Span,
+
+    pub ty: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
@@ -124,7 +126,7 @@ pub enum Literal {
     Bool(bool),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssignKind {
     Normal,
     BitOr,

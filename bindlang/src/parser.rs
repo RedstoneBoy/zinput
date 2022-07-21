@@ -385,6 +385,7 @@ impl<'a> Parser<'a> {
                     end: expr.span.end,
                 },
                 kind: ExprKind::Unary(UnOp::Negate, Box::new(expr)),
+                ty: None,
             })
         } else if let Some(tok) = self.maybe_eat_token(TokenKind::Not) {
             let expr = self.parse_expr_l12()?;
@@ -394,6 +395,7 @@ impl<'a> Parser<'a> {
                     end: expr.span.end,
                 },
                 kind: ExprKind::Unary(UnOp::Not, Box::new(expr)),
+                ty: None,
             })
         } else {
             self.parse_expr_l12()
@@ -421,6 +423,7 @@ impl<'a> Parser<'a> {
                     end,
                 },
                 kind: ExprKind::Index(Box::new(expr), Box::new(index)),
+                ty: None,
             })
         } else {
             Some(expr)
@@ -439,6 +442,7 @@ impl<'a> Parser<'a> {
                     end: ident.span.end,
                 },
                 kind: ExprKind::Dot(Box::new(expr), ident.span),
+                ty: None,
             };
         }
 
@@ -453,6 +457,7 @@ impl<'a> Parser<'a> {
                 Expr {
                     span,
                     kind: ExprKind::Literal(Literal::Bool(true)),
+                    ty: None,
                 }
             }
             TokenKind::KFalse => {
@@ -460,6 +465,7 @@ impl<'a> Parser<'a> {
                 Expr {
                     span,
                     kind: ExprKind::Literal(Literal::Bool(false)),
+                    ty: None,
                 }
             }
             TokenKind::Int(val) => {
@@ -467,6 +473,7 @@ impl<'a> Parser<'a> {
                 Expr {
                     span,
                     kind: ExprKind::Literal(Literal::Int(*val)),
+                    ty: None,
                 }
             }
             TokenKind::Float(val) => {
@@ -474,6 +481,7 @@ impl<'a> Parser<'a> {
                 Expr {
                     span,
                     kind: ExprKind::Literal(Literal::Float(*val)),
+                    ty: None,
                 }
             }
             TokenKind::Ident => {
@@ -481,6 +489,7 @@ impl<'a> Parser<'a> {
                 Expr {
                     span,
                     kind: ExprKind::Var(span),
+                    ty: None,
                 }
             }
             TokenKind::LParen => {
@@ -526,6 +535,7 @@ impl<'a> Parser<'a> {
                         end: right.span.end,
                     },
                     kind: ExprKind::Binary(Box::new(left), bin_op, Box::new(right)),
+                    ty: None,
                 };
             } else {
                 break;

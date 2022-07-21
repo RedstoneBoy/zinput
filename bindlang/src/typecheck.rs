@@ -23,25 +23,56 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn check(mut self, module: &Module) -> Result<()> {
-        for event in &module.events {
+    pub fn check(mut self, module: &mut Module) -> Result<()> {
+        for event in &mut module.events {
             self.vars = self.globals.clone();
-            self.check_block(&event.body)?;
+            self.check_block(&mut event.body)?;
         }
 
         Ok(())
     }
 
-    fn check_block(&mut self, body: &Block) -> Result<()> {
-        for stmt in &body.stmts {
+    fn check_block(&mut self, body: &mut Block) -> Result<()> {
+        for stmt in &mut body.stmts {
             self.check_stmt(stmt)?;
         }
 
         Ok(())
     }
 
-    fn check_stmt(&mut self, stmt: &Stmt) -> Result<()> {
-        let stmt = &stmt.kind;
+    fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
+        let stmt_span = stmt.span;
+        let stmt = &mut stmt.kind;
+        let temp_stmt = std::mem::replace(stmt, StmtKind::Expr(Expr {
+            kind: ExprKind::Literal(Literal::Bool(false)),
+            span: stmt_span,
+            ty: None,
+        }));
+
+        *stmt = match temp_stmt {
+            stmt @ StmtKind::Assign { kind: AssignKind::Normal, .. } => stmt,
+            StmtKind::Assign { lval, kind, expr } => {
+                let op = match kind {
+                    AssignKind::BitOr => BinOp::BitOr,
+                    AssignKind::BitAnd => BinOp::BitAnd,
+                    AssignKind::Xor => BinOp::BitXor,
+                    AssignKind::Add => BinOp::Add,
+                    AssignKind::Sub => BinOp::Sub,
+                    AssignKind::Mul => BinOp::Mul,
+                    AssignKind::Div => BinOp::Div,
+                    AssignKind::Normal => unreachable!(),
+                };
+                let expr_span = expr.span;
+                let expr = Expr {
+                    kind: ExprKind::Binary(lval.clone().into(), op, expr.into()),
+                    span: expr_span,
+                    ty: None,
+                };
+
+                StmtKind::Assign { lval, kind: AssignKind::Normal, expr }
+            }
+            stmt => stmt,
+        };
 
         match stmt {
             StmtKind::Let { name, expr } => {
@@ -60,25 +91,7 @@ impl<'a> TypeChecker<'a> {
 
                 let rty = match kind {
                     AssignKind::Normal => self.check_expr(expr)?.dereferenced(),
-                    other => self
-                        .check_expr(&Expr {
-                            span: expr.span,
-                            kind: ExprKind::Binary(
-                                lval.clone().into(),
-                                match other {
-                                    AssignKind::BitOr => BinOp::BitOr,
-                                    AssignKind::BitAnd => BinOp::BitAnd,
-                                    AssignKind::Xor => BinOp::BitXor,
-                                    AssignKind::Add => BinOp::Add,
-                                    AssignKind::Sub => BinOp::Sub,
-                                    AssignKind::Mul => BinOp::Mul,
-                                    AssignKind::Div => BinOp::Div,
-                                    AssignKind::Normal => unreachable!(),
-                                },
-                                expr.clone().into(),
-                            ),
-                        })?
-                        .dereferenced(),
+                    _ => panic!("ICE: typechecker encountered non-normal AssignKind"),
                 };
 
                 if !lty.assignable_from(&rty) {
@@ -113,8 +126,8 @@ impl<'a> TypeChecker<'a> {
         Ok(())
     }
 
-    fn check_expr(&mut self, expr: &Expr) -> Result<Type> {
-        Ok(match &expr.kind {
+    fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
+        let ty = match &mut expr.kind {
             ExprKind::Literal(lit) => match lit {
                 Literal::Int(i) if *i <= u8::MAX as u64 => Type::Int(IntWidth::W8, Signed::No),
                 Literal::Int(i) if *i <= u16::MAX as u64 => Type::Int(IntWidth::W16, Signed::No),
@@ -337,7 +350,11 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
-        })
+        };
+
+        expr.ty = Some(ty.clone());
+
+        Ok(ty)
     }
 }
 
