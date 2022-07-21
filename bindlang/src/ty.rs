@@ -126,12 +126,6 @@ pub enum Signed {
     No,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Mutable {
-    Yes,
-    No,
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BitNames(pub HashMap<&'static str, u8>);
 

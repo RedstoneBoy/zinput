@@ -214,6 +214,13 @@ impl<'a> Display for Errors<'a> {
 
                     Self::write_context(f, self.src, *expr)?;
                 }
+                TypeError::DeviceAlreadyExists { old, new } => {
+                    writeln!(f, "device '{}' already exists\n", old.index_src(self.src))?;
+                    writeln!(f, "device was first defined here")?;
+                    Self::write_context(f, self.src, *old)?;
+                    writeln!(f, "\nbut then redefined here")?;
+                    Self::write_context(f, self.src, *new)?;
+                }
             }
 
             write!(f, "\n")?;

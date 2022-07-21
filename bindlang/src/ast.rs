@@ -6,8 +6,8 @@ pub type Ident = Span;
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub devices: Devices,
-    pub events: Vec<Event>,
+    pub output: Ident,
+    pub inputs: Vec<DeviceIn>,
 }
 
 impl Module {
@@ -20,17 +20,8 @@ impl Module {
 }
 
 #[derive(Clone, Debug)]
-pub struct Devices {
-    pub d_in: Vec<Ident>,
-    pub d_out: Ident,
-
-    pub span: Span,
-}
-
-#[derive(Clone, Debug)]
-pub struct Event {
-    pub source: Ident,
-    pub kind: Ident,
+pub struct DeviceIn {
+    pub device: Ident,
     pub body: Block,
 
     pub span: Span,
@@ -308,32 +299,16 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
 
 impl<'a, 'b> Display for AstDisplay<'a, 'b> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "devices {{\n\tin: [")?;
-        let mut comma = false;
-        for d in &self.module.devices.d_in {
-            if comma {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", &self.source[d.start.index..d.end.index])?;
+        write!(f, "device {}", self.module.output.index_src(self.source))?;
 
-            comma = true;
-        }
-        write!(
-            f,
-            "],\n\tout: {},\n}}\n\n",
-            &self.source
-                [self.module.devices.d_out.start.index..self.module.devices.d_out.end.index]
-        )?;
-
-        for event in &self.module.events {
+        for d_in in &self.module.inputs {
             write!(
                 f,
-                "{}:{} ",
-                event.source.index_src(&self.source),
-                event.kind.index_src(&self.source)
+                "{} ",
+                d_in.device.index_src(&self.source),
             )?;
 
-            self.write_block(f, &event.body, 1)?;
+            self.write_block(f, &d_in.body, 1)?;
 
             write!(f, "\n\n")?;
         }

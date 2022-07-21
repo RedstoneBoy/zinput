@@ -2,8 +2,8 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
     ast::{
-        AssignKind, BinOp, Block, Devices, Event, Expr, ExprKind, Literal, Module, Stmt, StmtKind,
-        UnOp,
+        AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind,
+        UnOp, DeviceIn,
     },
     span::Span,
     token::{Token, TokenKind},
@@ -38,34 +38,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_module(&mut self) -> Option<Module> {
-        let devices = self.parse_device_struct()?;
+        self.eat_ident_kw("device")?;
+        let output = self.eat_token(TokenKind::Ident)?.span;
 
-        let mut events = Vec::new();
+        let mut inputs = Vec::new();
 
         while self.tokens.peek().is_some() {
-            let event = self.parse_event()?;
-            events.push(event);
+            let input = self.parse_input()?;
+            inputs.push(input);
         }
 
-        Some(Module { devices, events })
+        Some(Module { output, inputs })
     }
 
-    fn parse_event(&mut self) -> Option<Event> {
-        let source = self.eat_token(TokenKind::Ident)?.span;
-        let start = source.start;
-
-        self.eat_token(TokenKind::Colon)?;
-
-        let kind = self.eat_token(TokenKind::Ident)?.span;
+    fn parse_input(&mut self) -> Option<DeviceIn> {
+        let device = self.eat_token(TokenKind::Ident)?.span;
+        let start = device.start;
 
         let body = self.parse_block()?;
         let end = body.span.end;
 
         let span = Span { start, end };
 
-        Some(Event {
-            source,
-            kind,
+        Some(DeviceIn {
+            device,
             body,
 
             span,
@@ -547,38 +543,6 @@ impl<'a> Parser<'a> {
         }
 
         Some(left)
-    }
-
-    fn parse_device_struct(&mut self) -> Option<Devices> {
-        let start = self.eat_ident_kw(KW_DEVICES)?.span.start;
-        self.eat_token(TokenKind::LBrace)?;
-        self.eat_ident_kw(KW_IN)?;
-        self.eat_token(TokenKind::Colon)?;
-        self.eat_token(TokenKind::LBrack)?;
-
-        let mut d_in = Vec::new();
-        while self.peek_token(TokenKind::Ident) {
-            let token = self.eat_token(TokenKind::Ident).unwrap();
-            d_in.push(token.span);
-
-            if self.maybe_eat_token(TokenKind::Comma).is_none() {
-                break;
-            }
-        }
-
-        self.eat_token(TokenKind::RBrack)?;
-        self.eat_token(TokenKind::Comma)?;
-        self.eat_ident_kw(KW_OUT)?;
-        self.eat_token(TokenKind::Colon)?;
-
-        let d_out = self.eat_token(TokenKind::Ident)?.span;
-
-        self.maybe_eat_token(TokenKind::Comma);
-        let end = self.eat_token(TokenKind::RBrace)?.span.end;
-
-        let span = Span { start, end };
-
-        Some(Devices { d_in, d_out, span })
     }
 
     fn eat_ident_kw(&mut self, kw: &'static str) -> Option<Token> {

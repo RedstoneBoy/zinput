@@ -66,8 +66,17 @@ impl<'a> TypeChecker<'a> {
             self.env.insert(key, ty);
         }
 
-        for event in &mut module.events {
-            self.check_block(&mut event.body);
+        let mut input_names = HashMap::new();
+
+        for input in &mut module.inputs {
+            let name = input.device.index_src(self.src);
+            if let Some(old) = input_names.get(name) {
+                self.errors.push(TypeError::DeviceAlreadyExists { old: *old, new: input.device });
+            } else {
+                input_names.insert(name, input.device);
+            }
+
+            self.check_block(&mut input.body);
         }
 
         if self.errors.is_empty() {
@@ -462,5 +471,10 @@ pub enum TypeError {
         op: BinOp,
         right: Type,
         expr: Span,
+    },
+    /// Device already exists
+    DeviceAlreadyExists {
+        old: Span,
+        new: Span,
     },
 }

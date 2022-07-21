@@ -1,15 +1,12 @@
-devices {
-    in: [ljoy, rjoy],
-    out: out,
-}
+device out;
 
-ljoy:update {
+ljoy {
     let lmask = 2447088;
     let rmask = !lmask;
     out.buttons = out.buttons & !lmask | ljoy.buttons;
 }
 
-rjoy:update {
+rjoy {
     let lmask = 2447088;
     let rmask = !lmask;
     out.buttons = out.buttons & !rmask | rjoy.buttons;

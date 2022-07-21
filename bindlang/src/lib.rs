@@ -1,6 +1,7 @@
 pub mod ast;
 mod error;
 mod ir;
+mod ir_compiler;
 mod lexer;
 mod parser;
 pub mod span;
@@ -24,9 +25,9 @@ pub fn compile(source: &str, device_type: Type) -> Result<ast::Module, Errors> {
     };
 
     let mut globals = HashMap::new();
-    globals.insert(module.devices.d_out.index_src(source), device_type.clone());
-    for d_in in &module.devices.d_in {
-        globals.insert(d_in.index_src(source), device_type.clone());
+    globals.insert(module.output.index_src(source), device_type.clone());
+    for input in &module.inputs {
+        globals.insert(input.device.index_src(source), device_type.clone());
     }
     match typecheck::TypeChecker::new(source).check(&mut module, globals) {
         Ok(()) => {},
