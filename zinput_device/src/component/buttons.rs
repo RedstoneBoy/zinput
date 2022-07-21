@@ -23,7 +23,7 @@ pub struct Buttons {
 
 impl ToType for Buttons {
     fn to_type() -> Type {
-        Type::Bitfield(IntWidth::W64, BitNames::default())
+        Type::Bitfield("Buttons", IntWidth::W64, BitNames::default())
     }
 }
 

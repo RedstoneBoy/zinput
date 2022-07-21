@@ -3,41 +3,94 @@ use std::collections::HashMap;
 use crate::{
     ast::{AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp},
     span::Span,
-    ty::{Field, IntWidth, Mutable, Signed, Type},
+    ty::{IntWidth, Signed, Type},
 };
 
 type Result<T> = std::result::Result<T, TypeError>;
 
+struct Env<'a> {
+    vars: Vec<HashMap<&'a str, Type>>,
+}
+
+impl<'a> Env<'a> {
+    fn new() -> Self {
+        Env {
+            vars: vec![HashMap::new()],
+        }
+    }
+
+    fn push(&mut self) {
+        self.vars.push(HashMap::new());
+    }
+
+    fn pop(&mut self) {
+        self.vars.pop();
+    }
+
+    fn get(&self, key: &'_ str) -> Option<&Type> {
+        for vars in self.vars.iter().rev() {
+            if let Some(ty) = vars.get(key) {
+                return Some(ty);
+            }
+        }
+        
+        None
+    }
+
+    fn insert(&mut self, key: &'a str, ty: Type) {
+        self.vars.last_mut()
+            .expect("ICE: null environment insert")
+            .insert(key, ty);
+    }
+}
+
 pub struct TypeChecker<'a> {
     src: &'a str,
-    globals: HashMap<&'a str, Type>,
-    vars: HashMap<&'a str, Type>,
+    env: Env<'a>,
+
+    errors: Vec<TypeError>,
 }
 
 impl<'a> TypeChecker<'a> {
-    pub fn new(src: &'a str, globals: HashMap<&'a str, Type>) -> Self {
+    pub fn new(src: &'a str) -> Self {
         TypeChecker {
             src,
-            globals,
-            vars: HashMap::new(),
+            env: Env::new(),
+            
+            errors: Vec::new(),
         }
     }
 
-    pub fn check(mut self, module: &mut Module) -> Result<()> {
+    pub fn check(mut self, module: &mut Module, globals: HashMap<&'a str, Type>) -> std::result::Result<(), Vec<TypeError>> {
+        for (key, ty) in globals {
+            self.env.insert(key, ty);
+        }
+
         for event in &mut module.events {
-            self.vars = self.globals.clone();
-            self.check_block(&mut event.body)?;
+            self.check_block(&mut event.body);
         }
 
-        Ok(())
+        if self.errors.is_empty() {
+            Ok(())
+        } else {
+            Err(self.errors)
+        }
     }
 
-    fn check_block(&mut self, body: &mut Block) -> Result<()> {
+    fn check_block(&mut self, body: &mut Block) {
+        self.env.push();
+
         for stmt in &mut body.stmts {
-            self.check_stmt(stmt)?;
+            match self.check_stmt(stmt) {
+                Ok(()) => {},
+                Err(e) => {
+                    self.errors.push(e);
+                    break;
+                }
+            }
         }
 
-        Ok(())
+        self.env.pop();
     }
 
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
@@ -79,12 +132,20 @@ impl<'a> TypeChecker<'a> {
                 let name = name.index_src(&self.src);
                 let ty = self.check_expr(expr)?.dereferenced();
 
-                self.vars.insert(name, ty);
+                self.env.insert(name, ty);
             }
             StmtKind::Assign { lval, kind, expr } => {
-                let lty = self.check_expr(lval)?;
+                let lty = match self.check_expr(lval) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        self.errors.push(e);
+                        return Ok(());
+                    }
+                };
+
                 if !matches!(lty, Type::Reference(_)) {
-                    return Err(TypeError::NotLVal(lval.span));
+                    self.errors.push(TypeError::NotLVal(lval.span));
+                    return Ok(());
                 }
 
                 let lty = lty.dereferenced();
@@ -95,31 +156,41 @@ impl<'a> TypeChecker<'a> {
                 };
 
                 if !lty.assignable_from(&rty) {
-                    return Err(TypeError::NotAssignable {
+                    self.errors.push(TypeError::NotAssignable {
                         left: lval.span,
                         left_ty: lty,
                         right: expr.span,
                         right_ty: rty,
                     });
+                    return Ok(())
                 }
             }
             StmtKind::If { cond, yes, no } => {
-                let condtype = self.check_expr(cond)?.dereferenced();
+                let condtype = match self.check_expr(cond) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        self.errors.push(e);
+                        Type::Bool
+                    }
+                }.dereferenced();
                 if !matches!(condtype, Type::Bool) {
-                    return Err(TypeError::TypeMismatch {
+                    self.errors.push(TypeError::TypeMismatch {
                         expected: Type::Bool,
                         got: condtype,
                         span: cond.span,
                     });
                 }
 
-                self.check_block(yes)?;
+                self.check_block(yes);
                 if let Some(no) = no {
-                    self.check_block(no)?;
+                    self.check_block(no);
                 }
             }
             StmtKind::Expr(expr) => {
-                self.check_expr(expr)?;
+                match self.check_expr(expr) {
+                    Ok(_) => {}
+                    Err(e) => { self.errors.push(e); }
+                }
             }
         }
 
@@ -140,7 +211,7 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Var(name) => {
                 let name_str = name.index_src(&self.src);
                 let ty = self
-                    .vars
+                    .env
                     .get(name_str)
                     .ok_or(TypeError::InvalidVariable(*name))?;
 
@@ -163,8 +234,8 @@ impl<'a> TypeChecker<'a> {
                             })
                         }
                     },
-                    Type::Bitfield(_, names) => names
-                        .names
+                    Type::Bitfield(_, _, names) => names
+                        .0
                         .get(name)
                         .map(|_| {
                             if is_ref {
@@ -207,7 +278,7 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 match left_ty {
-                    Type::Int(_, _) | Type::Bitfield(_, _) => {
+                    Type::Int(_, _) | Type::Bitfield(_, _, _) => {
                         if is_ref {
                             Type::Reference(Type::Bool.into())
                         } else {
@@ -241,7 +312,7 @@ impl<'a> TypeChecker<'a> {
                     UnOp::Not => match ty {
                         Type::Bool => Type::Bool,
                         Type::Int(_, _) => ty,
-                        Type::Bitfield(_, _) => ty,
+                        Type::Bitfield(_, _, _) => ty,
                         ty => {
                             return Err(TypeError::InvalidUnOp {
                                 op: *op,
@@ -335,7 +406,7 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                     BinOp::ShiftLeft | BinOp::ShiftRight => {
-                        if matches!(&lty, Type::Int(_, _) | Type::Bitfield(_, _))
+                        if matches!(&lty, Type::Int(_, _) | Type::Bitfield(_, _, _))
                             && matches!(&rty, Type::Int(_, _))
                         {
                             lty
@@ -358,9 +429,8 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum TypeError {
-    /// This expression cannot be stored in a variable
-    NotStorable(Span),
     /// This expression cannot be assigned a value
     NotLVal(Span),
     /// Expression `right` cannot be assigned to expression `left`

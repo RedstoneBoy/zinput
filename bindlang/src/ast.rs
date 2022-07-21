@@ -95,6 +95,15 @@ pub enum UnOp {
     Not,
 }
 
+impl std::fmt::Display for UnOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            UnOp::Negate => write!(f, "-"),
+            UnOp::Not => write!(f, "!"),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub enum BinOp {
     BitOr,
@@ -117,6 +126,33 @@ pub enum BinOp {
 
     ShiftLeft,
     ShiftRight,
+}
+
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            BinOp::BitOr => write!(f, "|"),
+            BinOp::BitAnd => write!(f, "&"),
+            BinOp::BitXor => write!(f, "^"),
+            BinOp::Or => write!(f, "||"),
+            BinOp::And => write!(f, "&&"),
+
+            BinOp::Add => write!(f, "+"),
+            BinOp::Sub => write!(f, "-"),
+            BinOp::Mul => write!(f, "*"),
+            BinOp::Div => write!(f, "/"),
+
+            BinOp::Greater => write!(f, ">"),
+            BinOp::GreaterEq => write!(f, ">="),
+            BinOp::Less => write!(f, "<"),
+            BinOp::LessEq => write!(f, "<="),
+            BinOp::Equals => write!(f, "=="),
+            BinOp::NotEquals => write!(f, "!="),
+
+            BinOp::ShiftLeft => write!(f, "<<"),
+            BinOp::ShiftRight => write!(f, ">>"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,6 @@
 use std::{sync::LazyLock, collections::HashMap};
 
-use bindlang::{ty::{IntWidth, Signed, ToType, Type, Field, Struct}, to_struct};
+use bindlang::{ty::{ToType, Type}, to_struct};
 
 use super::ComponentData;
 

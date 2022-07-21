@@ -8,7 +8,7 @@ pub enum Type {
     F64,
     Bool,
     Slice(Box<Type>),
-    Bitfield(IntWidth, BitNames),
+    Bitfield(&'static str, IntWidth, BitNames),
     Struct(Struct),
 }
 
@@ -28,7 +28,7 @@ impl Type {
             Type::F32 => Some(IntWidth::W32),
             Type::F64 => Some(IntWidth::W64),
             Type::Bool => Some(IntWidth::W8),
-            Type::Bitfield(width, _) => Some(*width),
+            Type::Bitfield(_, width, _) => Some(*width),
             _ => None,
         }
     }
@@ -56,7 +56,7 @@ impl Type {
                 }
                 Type::Int(owidth, Signed::Yes) => signed == &Signed::Yes && owidth <= width,
                 Type::Bool => true,
-                Type::Bitfield(owidth, _) => owidth <= width,
+                Type::Bitfield(_, owidth, _) => owidth <= width,
                 _ => false,
             },
             Type::F32 => {
@@ -66,10 +66,48 @@ impl Type {
             Type::F64 => matches!(from, Type::F32 | Type::F64 | Type::Int(_, _)),
             Type::Bool => matches!(from, Type::Bool),
             Type::Slice(inner) => matches!(from, Type::Slice(oinner) if inner == oinner),
-            Type::Bitfield(width, _) => {
-                matches!(from, Type::Int(owidth, _) | Type::Bitfield(owidth, _) if owidth == width)
+            Type::Bitfield(_, width, _) => {
+                matches!(from, Type::Int(owidth, _) | Type::Bitfield(_, owidth, _) if owidth == width)
             }
             Type::Struct(s) => matches!(from, Type::Struct(os) if s == os),
+        }
+    }
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Reference(ty) => write!(f, "{ty}"),
+            Type::Int(w, s) => {
+                match s {
+                    Signed::No => write!(f, "u")?,
+                    Signed::Yes => write!(f, "i")?,
+                }
+
+                match w {
+                    IntWidth::W8 => write!(f, "8")?,
+                    IntWidth::W16 => write!(f, "16")?,
+                    IntWidth::W32 => write!(f, "32")?,
+                    IntWidth::W64 => write!(f, "64")?,
+                }
+
+                Ok(())
+            },
+            Type::F32 => write!(f, "f32"),
+            Type::F64 => write!(f, "f64"),
+            Type::Bool => write!(f, "bool"),
+            Type::Slice(ty) => write!(f, "&[{ty}]"),
+            Type::Bitfield(name, w, _) => {
+                write!(f, "bitfield(u")?;
+                match w {
+                    IntWidth::W8 => write!(f, "8")?,
+                    IntWidth::W16 => write!(f, "16")?,
+                    IntWidth::W32 => write!(f, "32")?,
+                    IntWidth::W64 => write!(f, "64")?,
+                }
+                write!(f, ") {name}")
+            }
+            Type::Struct(s) => write!(f, "{}", s.name),
         }
     }
 }
@@ -95,9 +133,7 @@ pub enum Mutable {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct BitNames {
-    pub names: HashMap<&'static str, u8>,
-}
+pub struct BitNames(pub HashMap<&'static str, u8>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Struct {
@@ -157,5 +193,18 @@ macro_rules! to_struct {
             fields,
             size: std::mem::size_of::<$name>(),
         })
+    }};
+}
+
+#[macro_export]
+macro_rules! to_bitfield {
+    ( name = $name:ident; size = $size:expr; $( $bname:ident = $bit:literal ;)* ) => {{
+        let mut names = HashMap::new();
+
+        $(
+            names.insert(stringify!($bname), $bit);
+        )*
+
+        $crate::ty::Type::Bitfield(stringify!(name), $size, BitNames(names))
     }};
 }
