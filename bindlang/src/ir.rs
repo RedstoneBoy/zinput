@@ -36,9 +36,6 @@ pub enum Instruction {
     /// Pops value from stack and stores it at VarIndex
     VarPut(usize, VarIndex),
 
-    /// Pushes address of variable on to stack
-    VarAddr(usize, VarIndex),
-
     /// Pops pointer from stack, and loads value at pointer on to stack
     Load(usize),
 
@@ -136,6 +133,7 @@ pub enum Instruction {
 
     /// Swap bytes on stack
     Swap(usize),
+    Error(u8),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
