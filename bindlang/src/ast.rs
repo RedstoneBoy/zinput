@@ -299,7 +299,7 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
 
 impl<'a, 'b> Display for AstDisplay<'a, 'b> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "device {}", self.module.output.index_src(self.source))?;
+        writeln!(f, "device {};\n", self.module.output.index_src(self.source))?;
 
         for d_in in &self.module.inputs {
             write!(

@@ -1,3 +1,5 @@
+#![feature(let_else)]
+
 pub mod ast;
 mod error;
 mod ir;

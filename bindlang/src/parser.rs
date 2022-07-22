@@ -40,6 +40,7 @@ impl<'a> Parser<'a> {
     fn parse_module(&mut self) -> Option<Module> {
         self.eat_ident_kw("device")?;
         let output = self.eat_token(TokenKind::Ident)?.span;
+        self.eat_token(TokenKind::Semicolon)?;
 
         let mut inputs = Vec::new();
 

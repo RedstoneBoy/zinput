@@ -1,13 +1,18 @@
+use std::collections::HashMap;
+
+use crate::ty::IntWidth;
+
 pub struct Module {
     pub inputs: Vec<Body>,
 }
 
-pub type VarIndex = u8;
+pub type VarIndex = u32;
 pub type PtrOffset = i8;
 
 pub struct Body {
     pub block: Block,
-    pub max_var_index: VarIndex,
+    pub num_vars: u32,
+    pub var_sizes: HashMap<u32, usize>,
 }
 
 pub struct Block(pub Vec<Instruction>);
@@ -23,28 +28,27 @@ pub enum Instruction {
     Push64(u64),
 
     /// Discards value from stack
-    Pop(Width),
+    Pop(usize),
 
     /// Pushes value from var index on to stack
-    VarGet(Width, VarIndex),
+    VarGet(usize, VarIndex),
 
     /// Pops value from stack and stores it at VarIndex
-    VarPut(Width, VarIndex),
+    VarPut(usize, VarIndex),
 
-    /// Pops pointer from stack, adds constant to pointer, and loads value at pointer on to stack
-    Load(Width, PtrOffset),
+    /// Pushes address of variable on to stack
+    VarAddr(usize, VarIndex),
+
+    /// Pops pointer from stack, and loads value at pointer on to stack
+    Load(usize),
 
     /// Pops pointer from stack, then value from stack, and stores value at pointer
-    Store(Width, PtrOffset),
+    Store(usize),
 
     // Booleans
 
     /// Not the boolean on the stack
     BoolNot,
-    /// Or two booleans on the stack
-    BoolOr,
-    /// And two booleans on the stack
-    BoolAnd,
     
     // Integers and bits
 
@@ -77,7 +81,11 @@ pub enum Instruction {
     ShiftRight(Width),
 
     /// Pops left, than right from stack, and pushes result to stack
-    IntCompare(Width, Cmp),
+    IntCompare {
+        width: Width,
+        cmp: Cmp,
+        signed: bool,
+    },
 
     // Floats
 
@@ -95,6 +103,10 @@ pub enum Instruction {
         from: Width,
         to: Width,
         signed: bool,
+    },
+    Shorten {
+        from: Width,
+        to: Width,
     },
 
     F32To64,
@@ -118,7 +130,12 @@ pub enum Instruction {
     If {
         yes: Block,
         no: Block,
-    }
+    },
+
+    // Misc
+
+    /// Swap bytes on stack
+    Swap(usize),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -129,7 +146,18 @@ pub enum Width {
     W64,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+impl From<IntWidth> for Width {
+    fn from(w: IntWidth) -> Self {
+        match w {
+            IntWidth::W8 => Width::W8,
+            IntWidth::W16 => Width::W16,
+            IntWidth::W32 => Width::W32,
+            IntWidth::W64 => Width::W64,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Float {
     F32,
     F64,

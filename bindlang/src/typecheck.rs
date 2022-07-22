@@ -141,7 +141,7 @@ impl<'a> TypeChecker<'a> {
                 let name = name.index_src(&self.src);
                 let ty = self.check_expr(expr)?.dereferenced();
 
-                self.env.insert(name, ty);
+                self.env.insert(name, ty.clone());
             }
             StmtKind::Assign { lval, kind, expr } => {
                 let lty = match self.check_expr(lval) {
@@ -294,7 +294,7 @@ impl<'a> TypeChecker<'a> {
                             Type::Bool
                         }
                     }
-                    Type::Slice(ty) => *ty,
+                    Type::Slice(ty) => Type::Reference(ty),
                     other => {
                         return Err(TypeError::NotIndexable {
                             ty: other,
@@ -339,7 +339,7 @@ impl<'a> TypeChecker<'a> {
 
                 match op {
                     BinOp::BitOr | BinOp::BitAnd | BinOp::BitXor => {
-                        if let (Some(lw), Some(rw)) = (lty.is_bits(), rty.is_bits()) {
+                        if let (Some(lw), Some(rw)) = (lty.width(), rty.width()) {
                             Type::Int(lw.max(rw), Signed::No)
                         } else {
                             return Err(TypeError::InvalidBinOp {
@@ -362,34 +362,18 @@ impl<'a> TypeChecker<'a> {
                             });
                         }
                     }
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => match (lty, rty) {
-                        (Type::Int(w1, s1), Type::Int(w2, s2)) => {
-                            if w1 >= w2 {
-                                Type::Int(w1, s1)
-                            } else {
-                                Type::Int(w2, s2)
-                            }
-                        }
-                        (Type::Int(w, _), Type::F32) | (Type::F32, Type::Int(w, _))
-                            if w <= IntWidth::W32 =>
-                        {
-                            Type::F32
-                        }
-                        (Type::Int(_, _), Type::F64) | (Type::F64, Type::Int(_, _)) => Type::F64,
-                        (Type::F32, Type::F32) => Type::F32,
-                        (Type::F64, Type::F64) => Type::F64,
-                        (Type::F32, Type::F64) | (Type::F64, Type::F32) => Type::F64,
-                        (lty, rty) => {
-                            return Err(TypeError::InvalidBinOp {
-                                left: lty,
-                                op: *op,
-                                right: rty,
-                                expr: expr_span,
-                            })
-                        }
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => if lty.is_num() && rty.is_num() && lty == rty {
+                        lty
+                    } else {
+                        return Err(TypeError::InvalidBinOp {
+                            left: lty,
+                            op: *op,
+                            right: rty,
+                            expr: expr_span,
+                        });
                     },
                     BinOp::Greater | BinOp::GreaterEq | BinOp::Less | BinOp::LessEq => {
-                        if lty.is_num() && rty.is_num() {
+                        if lty.is_num() && rty.is_num() && lty == rty {
                             Type::Bool
                         } else {
                             return Err(TypeError::InvalidBinOp {
@@ -401,9 +385,7 @@ impl<'a> TypeChecker<'a> {
                         }
                     }
                     BinOp::Equals | BinOp::NotEquals => {
-                        if lty.is_num() && rty.is_num() {
-                            Type::Bool
-                        } else if lty == rty {
+                        if lty == rty && lty.width().is_some() {
                             Type::Bool
                         } else {
                             return Err(TypeError::InvalidBinOp {
@@ -416,7 +398,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     BinOp::ShiftLeft | BinOp::ShiftRight => {
                         if matches!(&lty, Type::Int(_, _) | Type::Bitfield(_, _, _))
-                            && matches!(&rty, Type::Int(_, _))
+                            && matches!(&rty, Type::Int(_, Signed::No))
                         {
                             lty
                         } else {

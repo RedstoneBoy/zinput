@@ -13,6 +13,19 @@ pub enum Type {
 }
 
 impl Type {
+    pub fn stack_size(&self) -> usize {
+        match self {
+            Type::Reference(_) => std::mem::size_of::<usize>(),
+            Type::Int(w, _) => w.size(),
+            Type::F32 => 4,
+            Type::F64 => 8,
+            Type::Bool => 1,
+            Type::Slice(_) => std::mem::size_of::<usize>() * 2,
+            Type::Bitfield(_, w, _) => w.size(),
+            Type::Struct(_) => std::mem::size_of::<usize>(),
+        }
+    }
+
     pub fn is_num(&self) -> bool {
         match self {
             Type::Int(_, _) => true,
@@ -22,7 +35,7 @@ impl Type {
         }
     }
 
-    pub fn is_bits(&self) -> Option<IntWidth> {
+    pub fn width(&self) -> Option<IntWidth> {
         match self {
             Type::Int(width, _) => Some(*width),
             Type::F32 => Some(IntWidth::W32),
@@ -118,6 +131,17 @@ pub enum IntWidth {
     W16,
     W32,
     W64,
+}
+
+impl IntWidth {
+    pub fn size(&self) -> usize {
+        match self {
+            IntWidth::W8 => 1,
+            IntWidth::W16 => 2,
+            IntWidth::W32 => 4,
+            IntWidth::W64 => 8,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
