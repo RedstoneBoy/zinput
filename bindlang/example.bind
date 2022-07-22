@@ -3,11 +3,11 @@ device out;
 ljoy {
     let lmask = 2447088;
     let rmask = !lmask;
-    out.buttons = out.buttons & !lmask | ljoy.buttons;
+    out.buttons = out.buttons & !lmask | (ljoy.buttons & lmask);
 }
 
 rjoy {
     let lmask = 2447088;
     let rmask = !lmask;
-    out.buttons = out.buttons & !rmask | rjoy.buttons;
+    out.buttons = out.buttons & !rmask | (rjoy.buttons & rmask);
 }

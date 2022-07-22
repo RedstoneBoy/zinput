@@ -731,6 +731,44 @@ impl<'a> IrCompiler<'a> {
     }
 
     fn compile_assign_convert(&mut self, from: Type, to: Type) {
-        todo!()
+        if from == to { return; }
+
+        match to {
+            Type::Int(width, signed) => match from {
+                Type::Int(owidth, Signed::No) => {
+                    self.instrs.push(Instruction::Extend { from: owidth.into(), to: width.into(), signed: false });
+                }
+                Type::Int(owidth, Signed::Yes) if signed == Signed::Yes => {
+                    self.instrs.push(Instruction::Extend { from: owidth.into(), to: width.into(), signed: true });
+                }
+                Type::Bool => {
+                    self.instrs.push(Instruction::Extend { from: Width::W8, to: width.into(), signed: false });
+                }
+                Type::Bitfield(_, owidth, _) => {
+                    self.instrs.push(Instruction::Extend { from: owidth.into(), to: width.into(), signed: false });
+                }
+                _ => panic!("ICE: ir_compiler: invalid assign conversion"),
+            }
+            Type::F32 => match from {
+                Type::Int(width, signed) => {
+                    self.instrs.push(Instruction::IntToFloat { width: width.into(), signed: signed == Signed::Yes, float: Float::F32 });
+                }
+                _ => panic!("ICE: ir_compiler: invalid assign conversion"),
+            }
+            Type::F64 => match from {
+                Type::F32 => {
+                    self.instrs.push(Instruction::F32To64);
+                }
+                Type::Int(width, signed) => {
+                    self.instrs.push(Instruction::IntToFloat { width: width.into(), signed: signed == Signed::Yes, float: Float::F64 });
+                }
+                _ => panic!("ICE: ir_compiler: invalid assign conversion"),
+            }
+            Type::Bitfield(_, _, _) => match from {
+                Type::Int(_, _) => {}
+                _ => panic!("ICE: ir_compiler: invalid assign conversion"),
+            }
+            _ => panic!("ICE: ir_compiler: invalid assign conversion"),
+        }
     }
 }
