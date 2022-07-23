@@ -1,6 +1,8 @@
 #![feature(let_else)]
 
 pub mod ast;
+pub mod backend_vm;
+pub mod backend_x86_64;
 mod error;
 mod ir;
 mod ir_compiler;
