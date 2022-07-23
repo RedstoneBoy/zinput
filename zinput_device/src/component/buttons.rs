@@ -1,4 +1,4 @@
-use bindlang::ty::{ToType, Type, IntWidth, BitNames};
+use bindlang::{ty::{ToType, Type, BitNames}, util::Width};
 
 use super::ComponentData;
 
@@ -23,7 +23,7 @@ pub struct Buttons {
 
 impl ToType for Buttons {
     fn to_type() -> Type {
-        Type::Bitfield("Buttons", IntWidth::W64, BitNames::default())
+        Type::Bitfield("Buttons", Width::W64, BitNames::default())
     }
 }
 

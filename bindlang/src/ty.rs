@@ -1,14 +1,16 @@
 use std::collections::HashMap;
 
+use crate::util::{Width, Signed};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Reference(Box<Type>),
-    Int(IntWidth, Signed),
+    Int(Width, Signed),
     F32,
     F64,
     Bool,
     Slice(Box<Type>),
-    Bitfield(&'static str, IntWidth, BitNames),
+    Bitfield(&'static str, Width, BitNames),
     Struct(Struct),
 }
 
@@ -35,12 +37,12 @@ impl Type {
         }
     }
 
-    pub fn width(&self) -> Option<IntWidth> {
+    pub fn width(&self) -> Option<Width> {
         match self {
             Type::Int(width, _) => Some(*width),
-            Type::F32 => Some(IntWidth::W32),
-            Type::F64 => Some(IntWidth::W64),
-            Type::Bool => Some(IntWidth::W8),
+            Type::F32 => Some(Width::W32),
+            Type::F64 => Some(Width::W64),
+            Type::Bool => Some(Width::W8),
             Type::Bitfield(_, width, _) => Some(*width),
             _ => None,
         }
@@ -74,7 +76,7 @@ impl Type {
             },
             Type::F32 => {
                 matches!(from, Type::F32)
-                    || matches!(from, Type::Int(width, _) if width <= &IntWidth::W32)
+                    || matches!(from, Type::Int(width, _) if width <= &Width::W32)
             }
             Type::F64 => matches!(from, Type::F32 | Type::F64 | Type::Int(_, _)),
             Type::Bool => matches!(from, Type::Bool),
@@ -98,10 +100,10 @@ impl std::fmt::Display for Type {
                 }
 
                 match w {
-                    IntWidth::W8 => write!(f, "8")?,
-                    IntWidth::W16 => write!(f, "16")?,
-                    IntWidth::W32 => write!(f, "32")?,
-                    IntWidth::W64 => write!(f, "64")?,
+                    Width::W8 => write!(f, "8")?,
+                    Width::W16 => write!(f, "16")?,
+                    Width::W32 => write!(f, "32")?,
+                    Width::W64 => write!(f, "64")?,
                 }
 
                 Ok(())
@@ -113,41 +115,16 @@ impl std::fmt::Display for Type {
             Type::Bitfield(name, w, _) => {
                 write!(f, "bitfield(u")?;
                 match w {
-                    IntWidth::W8 => write!(f, "8")?,
-                    IntWidth::W16 => write!(f, "16")?,
-                    IntWidth::W32 => write!(f, "32")?,
-                    IntWidth::W64 => write!(f, "64")?,
+                    Width::W8 => write!(f, "8")?,
+                    Width::W16 => write!(f, "16")?,
+                    Width::W32 => write!(f, "32")?,
+                    Width::W64 => write!(f, "64")?,
                 }
                 write!(f, ") {name}")
             }
             Type::Struct(s) => write!(f, "{}", s.name),
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum IntWidth {
-    W8,
-    W16,
-    W32,
-    W64,
-}
-
-impl IntWidth {
-    pub fn size(&self) -> usize {
-        match self {
-            IntWidth::W8 => 1,
-            IntWidth::W16 => 2,
-            IntWidth::W32 => 4,
-            IntWidth::W64 => 8,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Signed {
-    Yes,
-    No,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -181,14 +158,14 @@ macro_rules! impl_to_type {
 }
 
 impl_to_type! {
-    u8  = Type::Int(IntWidth::W8,  Signed::No);
-    u16 = Type::Int(IntWidth::W16, Signed::No);
-    u32 = Type::Int(IntWidth::W32, Signed::No);
-    u64 = Type::Int(IntWidth::W64, Signed::No);
-    i8  = Type::Int(IntWidth::W8,  Signed::Yes);
-    i16 = Type::Int(IntWidth::W16, Signed::Yes);
-    i32 = Type::Int(IntWidth::W32, Signed::Yes);
-    i64 = Type::Int(IntWidth::W64, Signed::Yes);
+    u8  = Type::Int(Width::W8,  Signed::No);
+    u16 = Type::Int(Width::W16, Signed::No);
+    u32 = Type::Int(Width::W32, Signed::No);
+    u64 = Type::Int(Width::W64, Signed::No);
+    i8  = Type::Int(Width::W8,  Signed::Yes);
+    i16 = Type::Int(Width::W16, Signed::Yes);
+    i32 = Type::Int(Width::W32, Signed::Yes);
+    i64 = Type::Int(Width::W64, Signed::Yes);
     f32 = Type::F32;
     f64 = Type::F64;
     bool = Type::Bool;
@@ -223,6 +200,6 @@ macro_rules! to_bitfield {
             names.insert(stringify!($bname), $bit);
         )*
 
-        $crate::ty::Type::Bitfield(stringify!(name), $size, $crate::ty::BitNames(names))
+        $crate::ty::Type::Bitfield(stringify!($name), $size, $crate::ty::BitNames(names))
     }};
 }

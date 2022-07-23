@@ -1,6 +1,6 @@
 use std::{ops::BitOr, collections::HashMap, sync::LazyLock};
 
-use bindlang::{ty::{ToType, Type, BitNames, IntWidth}, to_struct, to_bitfield};
+use bindlang::{ty::{ToType, Type, BitNames}, to_struct, to_bitfield, util::Width};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -188,7 +188,7 @@ impl ToType for Controller {
                 fn to_type() -> Type {
                     to_bitfield! {
                         name = ControllerButtons;
-                        size = IntWidth::W64;
+                        size = Width::W64;
                         a = 0;
                         b = 1;
                         x = 2;

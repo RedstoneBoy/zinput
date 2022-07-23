@@ -10,13 +10,14 @@ pub mod span;
 mod token;
 pub mod ty;
 mod typecheck;
+pub mod util;
 
 use std::collections::HashMap;
 
 pub use error::Errors;
 use ty::Type;
 
-pub fn compile(source: &str, device_type: Type) -> Result<ast::Module, Errors> {
+pub fn compile(source: &str, device_type: Type) -> Result<ir::Module, Errors> {
     let lexer = lexer::Lexer::new(source);
     let (tokens, lexer_errors) = lexer.scan();
     let parser = parser::Parser::new(source, tokens);
@@ -40,5 +41,7 @@ pub fn compile(source: &str, device_type: Type) -> Result<ast::Module, Errors> {
         return Err(Errors::new(source, lexer_errors, Vec::new(), Vec::new()));
     }
 
-    Ok(module)
+    let ir = ir_compiler::IrCompiler::new(source).compile(module);
+
+    Ok(ir)
 }

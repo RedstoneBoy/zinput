@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::{span::Span, ty::Type};
+use crate::{span::Span, ty::Type, util::{Int, Signed}};
 
 pub type Ident = Span;
 
@@ -148,7 +148,7 @@ impl std::fmt::Display for BinOp {
 
 #[derive(Clone, Debug)]
 pub enum Literal {
-    Int(u64),
+    Int(Int, Signed),
     Float(f64),
     Bool(bool),
 }
@@ -238,7 +238,7 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
         match &expr.kind {
             ExprKind::Literal(literal) => match literal {
                 Literal::Bool(val) => write!(f, "{val}")?,
-                Literal::Int(val) => write!(f, "{val}")?,
+                Literal::Int(val, _) => write!(f, "{val}")?,
                 Literal::Float(val) => write!(f, "{val}")?,
             },
             ExprKind::Var(ident) => write!(f, "{}", ident.index_src(&self.source))?,

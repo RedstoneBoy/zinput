@@ -1,31 +1,28 @@
 use std::collections::HashMap;
 
-use crate::ty::IntWidth;
+use crate::util::{Width, Int};
 
+#[derive(Debug)]
 pub struct Module {
     pub inputs: Vec<Body>,
 }
 
 pub type VarIndex = u32;
-pub type PtrOffset = i8;
 
+#[derive(Debug)]
 pub struct Body {
     pub block: Block,
     pub num_vars: u32,
     pub var_sizes: HashMap<u32, usize>,
 }
 
+#[derive(Debug)]
 pub struct Block(pub Vec<Instruction>);
 
+#[derive(Debug)]
 pub enum Instruction {
     /// Push constant on to stack
-    Push8(u8),
-    /// Push constant on to stack
-    Push16(u16),
-    /// Push constant on to stack
-    Push32(u32),
-    /// Push constant on to stack
-    Push64(u64),
+    PushInt(Int),
 
     /// Discards value from stack
     Pop(usize),
@@ -134,25 +131,6 @@ pub enum Instruction {
     /// Swap bytes on stack
     Swap(usize),
     Error(u8),
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Width {
-    W8,
-    W16,
-    W32,
-    W64,
-}
-
-impl From<IntWidth> for Width {
-    fn from(w: IntWidth) -> Self {
-        match w {
-            IntWidth::W8 => Width::W8,
-            IntWidth::W16 => Width::W16,
-            IntWidth::W32 => Width::W32,
-            IntWidth::W64 => Width::W64,
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -6,7 +6,7 @@ use crate::{
         UnOp, DeviceIn,
     },
     span::Span,
-    token::{Token, TokenKind},
+    token::{Token, TokenKind}, util::{Int, Signed, Width},
 };
 
 const KW_DEVICES: &'static str = "devices";
@@ -448,7 +448,7 @@ impl<'a> Parser<'a> {
 
     fn parse_expr_l15(&mut self) -> Option<Expr> {
         let tok = self.eat_any_token()?;
-        Some(match &tok.kind {
+        Some(match tok.kind {
             TokenKind::KTrue => {
                 let span = tok.span;
                 Expr {
@@ -466,10 +466,27 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Int(val) => {
-                let span = tok.span;
+                let mut span = tok.span;
+
+                let (width, signed) = if let Some(Token { kind: TokenKind::IntType(width, signed), span: tspan }) = self.tokens.peek() {
+                    span.end = tspan.end;
+                    let ret = (*width, *signed);
+                    let _ = self.eat_any_token();
+                    ret
+                } else {
+                    (Width::W32, Signed::No)
+                };
+
+                let int = match width {
+                    Width::W8 => Int::W8(val as _),
+                    Width::W16 => Int::W16(val as _),
+                    Width::W32 => Int::W32(val as _),
+                    Width::W64 => Int::W64(val),
+                };
+
                 Expr {
                     span,
-                    kind: ExprKind::Literal(Literal::Int(*val)),
+                    kind: ExprKind::Literal(Literal::Int(int, signed)),
                     ty: None,
                 }
             }
@@ -477,7 +494,7 @@ impl<'a> Parser<'a> {
                 let span = tok.span;
                 Expr {
                     span,
-                    kind: ExprKind::Literal(Literal::Float(*val)),
+                    kind: ExprKind::Literal(Literal::Float(val)),
                     ty: None,
                 }
             }

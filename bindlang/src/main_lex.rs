@@ -1,11 +1,11 @@
-use bindlang::{to_struct, ty::{ToType, Type, IntWidth}, to_bitfield};
+use bindlang::{to_struct, ty::{ToType, Type}, to_bitfield, util::Width};
 
 struct ButtonType;
 impl ToType for ButtonType {
     fn to_type() -> Type {
         to_bitfield! {
             name = ControllerButtons;
-            size = IntWidth::W64;
+            size = Width::W64;
             a = 0;
             b = 1;
             x = 2;
@@ -63,7 +63,7 @@ fn main() {
     ));
 
     match res {
-        Ok(module) => println!("{}", module.display(&source)),
+        Ok(ir) => println!("{:#?}", ir),
         Err(err) => println!("{}", err),
     }
 }

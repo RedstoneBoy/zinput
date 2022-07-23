@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ast::{AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp},
     span::Span,
-    ty::{IntWidth, Signed, Type},
+    ty::Type, util::{Width, Signed},
 };
 
 type Result<T> = std::result::Result<T, TypeError>;
@@ -209,10 +209,7 @@ impl<'a> TypeChecker<'a> {
     fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let ty = match &mut expr.kind {
             ExprKind::Literal(lit) => match lit {
-                Literal::Int(i) if *i <= u8::MAX as u64 => Type::Int(IntWidth::W8, Signed::No),
-                Literal::Int(i) if *i <= u16::MAX as u64 => Type::Int(IntWidth::W16, Signed::No),
-                Literal::Int(i) if *i <= u32::MAX as u64 => Type::Int(IntWidth::W32, Signed::No),
-                Literal::Int(_) => Type::Int(IntWidth::W64, Signed::No),
+                Literal::Int(int, signed) => Type::Int(int.width(), *signed),
                 Literal::Float(f) if *f <= f32::MAX as f64 => Type::F32,
                 Literal::Float(_) => Type::F64,
                 Literal::Bool(_) => Type::Bool,
@@ -235,7 +232,7 @@ impl<'a> TypeChecker<'a> {
 
                 match &left_ty {
                     Type::Slice(_) => match name {
-                        "len" => Type::Int(IntWidth::W32, Signed::No),
+                        "len" => Type::Int(Width::W32, Signed::No),
                         _ => {
                             return Err(TypeError::InvalidField {
                                 ty: left_ty.clone(),
@@ -339,8 +336,8 @@ impl<'a> TypeChecker<'a> {
 
                 match op {
                     BinOp::BitOr | BinOp::BitAnd | BinOp::BitXor => {
-                        if let (Some(lw), Some(rw)) = (lty.width(), rty.width()) {
-                            Type::Int(lw.max(rw), Signed::No)
+                        if lty.width().is_some() && lty.width() == rty.width() {
+                            Type::Int(lty.width().unwrap(), Signed::No)
                         } else {
                             return Err(TypeError::InvalidBinOp {
                                 left: lty,
