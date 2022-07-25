@@ -43,7 +43,7 @@ pub enum Instruction {
 
     /// Not the boolean on the stack
     BoolNot,
-    
+
     // Integers and bits
 
     /// Negate signed integer on stack

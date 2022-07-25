@@ -1,3 +1,7 @@
+#![feature(maybe_uninit_uninit_array)]
+
+use std::{mem::MaybeUninit, time::{Duration, Instant}};
+
 use bindlang::{to_struct, ty::{ToType, Type}, to_bitfield, util::Width};
 
 struct ButtonType;
@@ -33,6 +37,7 @@ impl ToType for ButtonType {
 }
 
 #[repr(C)]
+#[derive(Default, Debug)]
 struct Device {
     buttons: u64,
     lx: f32,
@@ -62,8 +67,35 @@ fn main() {
         48: yaw: f64;
     ));
 
-    match res {
-        Ok(ir) => println!("{:#?}", ir),
-        Err(err) => println!("{}", err),
+    let module = match res {
+        Ok(ir) => ir,
+        Err(err) => {
+            println!("{}", err);
+            return;
+        }
+    };
+
+    let mut out = Device::default();
+    let mut input1 = Device::default();
+
+    let mut vm = bindlang::backend_vm::Vm::new();
+
+    let mut times = MaybeUninit::<Duration>::uninit_array::<60>();
+
+    for i in 0..60 {
+        let start = Instant::now();
+        vm.run(&module, 0, &mut out as *mut _ as _, &[&mut input1 as *mut _ as _]);
+        let end = Instant::now();
+        times[i].write(end - start);
     }
+
+    let times = unsafe { times.map(|t| t.assume_init()) };
+
+    let mut avg = 0.0;
+    for time in times {
+        avg += time.as_secs_f64();
+    }
+    avg = avg / 60.0;
+
+    println!("{avg}s\n{}ms\n{}micros", avg * 10.0f64.powi(3), avg * 10.0f64.powi(6));
 }
