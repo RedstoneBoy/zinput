@@ -1,6 +1,10 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::{span::Span, ty::Type, util::{Int, Signed}};
+use crate::{
+    span::Span,
+    ty::Type,
+    util::{Int, Signed},
+};
 
 pub type Ident = Span;
 
@@ -186,7 +190,8 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
             match &stmt.kind {
                 StmtKind::Let { name, expr } => {
                     self.write_tabs(f, tabs)?;
-                    write!(f, "let {} = ", name.index_src(&self.source))?;
+                    write!(f, "let")?;
+                    write!(f, " {} = ", name.index_src(&self.source))?;
                     self.write_expr(f, expr)?;
                     write!(f, ";\n")?;
                 }
@@ -302,11 +307,7 @@ impl<'a, 'b> Display for AstDisplay<'a, 'b> {
         writeln!(f, "device {};\n", self.module.output.index_src(self.source))?;
 
         for d_in in &self.module.inputs {
-            write!(
-                f,
-                "{} ",
-                d_in.device.index_src(&self.source),
-            )?;
+            write!(f, "{} ", d_in.device.index_src(&self.source),)?;
 
             self.write_block(f, &d_in.body, 1)?;
 

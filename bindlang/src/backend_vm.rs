@@ -1,7 +1,9 @@
-use std::{ffi::c_void, collections::HashMap};
+use std::{collections::HashMap, ffi::c_void};
 
-use crate::{ir::{Instruction as Ins, Module, Body, Block, Float, Cmp}, util::{Int, Width}};
-
+use crate::{
+    ir::{Block, Body, Cmp, Float, Instruction as Ins, Module},
+    util::{Int, Width},
+};
 
 pub struct Vm {
     stack: Vec<u8>,
@@ -19,13 +21,18 @@ impl Vm {
         }
     }
 
-
-    pub fn run(&mut self, module: &Module, dev_in_id: usize, dev_out: *mut c_void, dev_ins: &[*mut c_void]) -> u8 {
+    pub fn run(
+        &mut self,
+        module: &Module,
+        dev_in_id: usize,
+        dev_out: *mut c_void,
+        dev_ins: &[*mut c_void],
+    ) -> u8 {
         self.stack.clear();
         self.var_space.clear();
         self.var_map.clear();
 
-        self.run_body(&module.inputs[dev_in_id], dev_out, dev_ins)        
+        self.run_body(&module.inputs[dev_in_id], dev_out, dev_ins)
     }
 
     fn run_body(&mut self, body: &Body, dev_out: *mut c_void, dev_ins: &[*mut c_void]) -> u8 {
@@ -64,7 +71,11 @@ impl Vm {
             Ins::PushInt(Int::W32(int)) => self.stack.extend(&int.to_le_bytes()),
             Ins::PushInt(Int::W64(int)) => self.stack.extend(&int.to_le_bytes()),
 
-            Ins::Pop(size) => for _ in 0..*size { self.stack.pop(); },
+            Ins::Pop(size) => {
+                for _ in 0..*size {
+                    self.stack.pop();
+                }
+            }
 
             Ins::VarGet(size, var_id) => {
                 let var_ptr = self.var_map[var_id];
@@ -77,7 +88,7 @@ impl Vm {
             Ins::VarPut(size, var_id) => {
                 let start = self.var_map[var_id];
                 let end = start + *size;
-                
+
                 for i in start..end {
                     let byte = self.stack.pop().unwrap();
                     self.var_space[i] = byte;
@@ -103,7 +114,9 @@ impl Vm {
 
                 for i in (0..*size).rev() {
                     let byte = self.stack.pop().unwrap();
-                    unsafe { *ptr.offset(i as _) = byte; }
+                    unsafe {
+                        *ptr.offset(i as _) = byte;
+                    }
                 }
             }
 
@@ -111,20 +124,32 @@ impl Vm {
                 let val = self.pop_u8() != 0;
                 self.stack.push(!val as _);
             }
-            
+
             Ins::Neg(w) => self.int_op_unary(w, Int::neg),
             Ins::Not(w) => self.int_op_unary(w, Int::not),
 
             Ins::Or(w) => self.int_op_binary(w, Int::or),
             Ins::And(w) => self.int_op_binary(w, Int::and),
             Ins::Xor(w) => self.int_op_binary(w, Int::xor),
-            
+
             Ins::Add(w) => self.int_op_binary(w, Int::add),
             Ins::Sub(w) => self.int_op_binary(w, Int::sub),
-            Ins::Mul { width: w, signed: false } => self.int_op_binary(w, Int::mul_unsigned),
-            Ins::Mul { width: w, signed: true } => self.int_op_binary(w, Int::mul_signed),
-            Ins::Div { width: w, signed: false } => self.int_op_binary(w, Int::div_unsigned),
-            Ins::Div { width: w, signed: true } => self.int_op_binary(w, Int::div_signed),
+            Ins::Mul {
+                width: w,
+                signed: false,
+            } => self.int_op_binary(w, Int::mul_unsigned),
+            Ins::Mul {
+                width: w,
+                signed: true,
+            } => self.int_op_binary(w, Int::mul_signed),
+            Ins::Div {
+                width: w,
+                signed: false,
+            } => self.int_op_binary(w, Int::div_unsigned),
+            Ins::Div {
+                width: w,
+                signed: true,
+            } => self.int_op_binary(w, Int::div_signed),
 
             Ins::ShiftLeft(w) => {
                 let bit = self.pop_u8();
@@ -135,10 +160,16 @@ impl Vm {
                 self.int_op_unary(w, |i| Int::shift_right(i, bit))
             }
 
-            Ins::IntCompare { width: w, cmp, signed: false }
-                => self.int_op_binary(w, |l, r| Int::cmp_unsigned(l, r, *cmp)),
-            Ins::IntCompare { width: w, cmp, signed: true }
-                => self.int_op_binary(w, |l, r| Int::cmp_signed(l, r, *cmp)),
+            Ins::IntCompare {
+                width: w,
+                cmp,
+                signed: false,
+            } => self.int_op_binary(w, |l, r| Int::cmp_unsigned(l, r, *cmp)),
+            Ins::IntCompare {
+                width: w,
+                cmp,
+                signed: true,
+            } => self.int_op_binary(w, |l, r| Int::cmp_signed(l, r, *cmp)),
 
             Ins::FloatNeg(Float::F32) => {
                 let val = self.pop_f32();
@@ -214,14 +245,23 @@ impl Vm {
                 };
                 self.push_u8(b as _);
             }
-            
-            Ins::Extend { from, to, signed: false } | Ins::Shorten { from, to } => {
+
+            Ins::Extend {
+                from,
+                to,
+                signed: false,
+            }
+            | Ins::Shorten { from, to } => {
                 let int = self.pop_int(*from);
                 let val: u64 = int.into();
                 let int = to.int_truncate(val);
                 self.push_int(int);
             }
-            Ins::Extend { from, to, signed: true } => self.int_op_unary(from, |i| Int::sign_extend(i, *to)),
+            Ins::Extend {
+                from,
+                to,
+                signed: true,
+            } => self.int_op_unary(from, |i| Int::sign_extend(i, *to)),
 
             Ins::F32To64 => {
                 let val = self.pop_f32();
@@ -232,16 +272,40 @@ impl Vm {
                 self.push_f32(val as _);
             }
 
-            Ins::IntToFloat { width, signed: false, float: Float::F32 } => self.int_op_unary(width, Int::to_f32_unsigned),
-            Ins::IntToFloat { width, signed: false, float: Float::F64 } => self.int_op_unary(width, Int::to_f64_unsigned),
-            Ins::IntToFloat { width, signed: true, float: Float::F32 } => self.int_op_unary(width, Int::to_f32_signed),
-            Ins::IntToFloat { width, signed: true, float: Float::F64 } => self.int_op_unary(width, Int::to_f64_signed),
+            Ins::IntToFloat {
+                width,
+                signed: false,
+                float: Float::F32,
+            } => self.int_op_unary(width, Int::to_f32_unsigned),
+            Ins::IntToFloat {
+                width,
+                signed: false,
+                float: Float::F64,
+            } => self.int_op_unary(width, Int::to_f64_unsigned),
+            Ins::IntToFloat {
+                width,
+                signed: true,
+                float: Float::F32,
+            } => self.int_op_unary(width, Int::to_f32_signed),
+            Ins::IntToFloat {
+                width,
+                signed: true,
+                float: Float::F64,
+            } => self.int_op_unary(width, Int::to_f64_signed),
 
-            Ins::FloatToInt { width, signed, float: Float::F32 } => {
+            Ins::FloatToInt {
+                width,
+                signed,
+                float: Float::F32,
+            } => {
                 let val = self.pop_f32();
                 self.push_int(Int::from_f32(val, *width, *signed));
             }
-            Ins::FloatToInt { width, signed, float: Float::F64 } => {
+            Ins::FloatToInt {
+                width,
+                signed,
+                float: Float::F64,
+            } => {
                 let val = self.pop_f64();
                 self.push_int(Int::from_f64(val, *width, *signed));
             }
@@ -318,7 +382,9 @@ impl Vm {
     }
 
     fn pop_usize(&mut self) -> usize {
-        if std::mem::size_of::<usize>() != 8 { panic!("32-bit not supported"); }
+        if std::mem::size_of::<usize>() != 8 {
+            panic!("32-bit not supported");
+        }
 
         self.pop_u64() as usize
     }

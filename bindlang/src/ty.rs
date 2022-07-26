@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::util::{Width, Signed};
+use crate::util::{Signed, Width};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
@@ -75,7 +75,7 @@ impl Type {
                 _ => false,
             },
             Type::F32 => {
-                matches!(from, Type::F32)
+                matches!(from, Type::F32 | Type::F64)
                     || matches!(from, Type::Int(width, _) if width <= &Width::W32)
             }
             Type::F64 => matches!(from, Type::F32 | Type::F64 | Type::Int(_, _)),
@@ -107,7 +107,7 @@ impl std::fmt::Display for Type {
                 }
 
                 Ok(())
-            },
+            }
             Type::F32 => write!(f, "f32"),
             Type::F64 => write!(f, "f64"),
             Type::Bool => write!(f, "bool"),

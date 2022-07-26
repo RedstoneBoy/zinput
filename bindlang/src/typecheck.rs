@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::{
     ast::{AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp},
     span::Span,
-    ty::Type, util::{Width, Signed},
+    ty::Type,
+    util::{Signed, Width},
 };
 
 type Result<T> = std::result::Result<T, TypeError>;
@@ -33,12 +34,13 @@ impl<'a> Env<'a> {
                 return Some(ty);
             }
         }
-        
+
         None
     }
 
     fn insert(&mut self, key: &'a str, ty: Type) {
-        self.vars.last_mut()
+        self.vars
+            .last_mut()
             .expect("ICE: null environment insert")
             .insert(key, ty);
     }
@@ -56,12 +58,16 @@ impl<'a> TypeChecker<'a> {
         TypeChecker {
             src,
             env: Env::new(),
-            
+
             errors: Vec::new(),
         }
     }
 
-    pub fn check(mut self, module: &mut Module, globals: HashMap<&'a str, Type>) -> std::result::Result<(), Vec<TypeError>> {
+    pub fn check(
+        mut self,
+        module: &mut Module,
+        globals: HashMap<&'a str, Type>,
+    ) -> std::result::Result<(), Vec<TypeError>> {
         for (key, ty) in globals {
             self.env.insert(key, ty);
         }
@@ -71,7 +77,10 @@ impl<'a> TypeChecker<'a> {
         for input in &mut module.inputs {
             let name = input.device.index_src(self.src);
             if let Some(old) = input_names.get(name) {
-                self.errors.push(TypeError::DeviceAlreadyExists { old: *old, new: input.device });
+                self.errors.push(TypeError::DeviceAlreadyExists {
+                    old: *old,
+                    new: input.device,
+                });
             } else {
                 input_names.insert(name, input.device);
             }
@@ -91,7 +100,7 @@ impl<'a> TypeChecker<'a> {
 
         for stmt in &mut body.stmts {
             match self.check_stmt(stmt) {
-                Ok(()) => {},
+                Ok(()) => {}
                 Err(e) => {
                     self.errors.push(e);
                     break;
@@ -105,14 +114,20 @@ impl<'a> TypeChecker<'a> {
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let stmt_span = stmt.span;
         let stmt = &mut stmt.kind;
-        let temp_stmt = std::mem::replace(stmt, StmtKind::Expr(Expr {
-            kind: ExprKind::Literal(Literal::Bool(false)),
-            span: stmt_span,
-            ty: None,
-        }));
+        let temp_stmt = std::mem::replace(
+            stmt,
+            StmtKind::Expr(Expr {
+                kind: ExprKind::Literal(Literal::Bool(false)),
+                span: stmt_span,
+                ty: None,
+            }),
+        );
 
         *stmt = match temp_stmt {
-            stmt @ StmtKind::Assign { kind: AssignKind::Normal, .. } => stmt,
+            stmt @ StmtKind::Assign {
+                kind: AssignKind::Normal,
+                ..
+            } => stmt,
             StmtKind::Assign { lval, kind, expr } => {
                 let op = match kind {
                     AssignKind::BitOr => BinOp::BitOr,
@@ -131,7 +146,11 @@ impl<'a> TypeChecker<'a> {
                     ty: None,
                 };
 
-                StmtKind::Assign { lval, kind: AssignKind::Normal, expr }
+                StmtKind::Assign {
+                    lval,
+                    kind: AssignKind::Normal,
+                    expr,
+                }
             }
             stmt => stmt,
         };
@@ -171,7 +190,7 @@ impl<'a> TypeChecker<'a> {
                         right: expr.span,
                         right_ty: rty,
                     });
-                    return Ok(())
+                    return Ok(());
                 }
             }
             StmtKind::If { cond, yes, no } => {
@@ -181,7 +200,8 @@ impl<'a> TypeChecker<'a> {
                         self.errors.push(e);
                         Type::Bool
                     }
-                }.dereferenced();
+                }
+                .dereferenced();
                 if !matches!(condtype, Type::Bool) {
                     self.errors.push(TypeError::TypeMismatch {
                         expected: Type::Bool,
@@ -195,12 +215,12 @@ impl<'a> TypeChecker<'a> {
                     self.check_block(no);
                 }
             }
-            StmtKind::Expr(expr) => {
-                match self.check_expr(expr) {
-                    Ok(_) => {}
-                    Err(e) => { self.errors.push(e); }
+            StmtKind::Expr(expr) => match self.check_expr(expr) {
+                Ok(_) => {}
+                Err(e) => {
+                    self.errors.push(e);
                 }
-            }
+            },
         }
 
         Ok(())
@@ -359,16 +379,18 @@ impl<'a> TypeChecker<'a> {
                             });
                         }
                     }
-                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => if lty.is_num() && rty.is_num() && lty == rty {
-                        lty
-                    } else {
-                        return Err(TypeError::InvalidBinOp {
-                            left: lty,
-                            op: *op,
-                            right: rty,
-                            expr: expr_span,
-                        });
-                    },
+                    BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                        if lty.is_num() && rty.is_num() && lty == rty {
+                            lty
+                        } else {
+                            return Err(TypeError::InvalidBinOp {
+                                left: lty,
+                                op: *op,
+                                right: rty,
+                                expr: expr_span,
+                            });
+                        }
+                    }
                     BinOp::Greater | BinOp::GreaterEq | BinOp::Less | BinOp::LessEq => {
                         if lty.is_num() && rty.is_num() && lty == rty {
                             Type::Bool
@@ -452,8 +474,5 @@ pub enum TypeError {
         expr: Span,
     },
     /// Device already exists
-    DeviceAlreadyExists {
-        old: Span,
-        new: Span,
-    },
+    DeviceAlreadyExists { old: Span, new: Span },
 }

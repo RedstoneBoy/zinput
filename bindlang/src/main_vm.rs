@@ -1,8 +1,15 @@
 #![feature(maybe_uninit_uninit_array)]
 
-use std::{mem::MaybeUninit, time::{Duration, Instant}};
+use std::{
+    mem::MaybeUninit,
+    time::{Duration, Instant},
+};
 
-use bindlang::{to_struct, ty::{ToType, Type}, to_bitfield, util::Width};
+use bindlang::{
+    to_bitfield, to_struct,
+    ty::{ToType, Type},
+    util::Width,
+};
 
 struct ButtonType;
 impl ToType for ButtonType {
@@ -52,20 +59,29 @@ struct Device {
 }
 
 fn main() {
+    let compile_start = Instant::now();
+
     let source = std::fs::read_to_string("example.bind").unwrap();
-    let res = bindlang::compile(&source, to_struct!(
-        name = Device;
-        0: buttons: ButtonType;
-        8: lx: f32;
-        12: ly: f32;
-        16: lx: f32;
-        20: ry: f32;
-        24: l: u8;
-        25: r: u8;
-        32: pitch: f64;
-        40: roll: f64;
-        48: yaw: f64;
-    ));
+    let res = bindlang::compile_vm(
+        &source,
+        to_struct!(
+            name = Device;
+            0: buttons: ButtonType;
+            8: lx: f32;
+            12: ly: f32;
+            16: lx: f32;
+            20: ry: f32;
+            24: l: u8;
+            25: r: u8;
+            32: pitch: f64;
+            40: roll: f64;
+            48: yaw: f64;
+        ),
+    );
+
+    let compile_end = Instant::now();
+
+    println!("compiled in {} ms", (compile_end - compile_start).as_secs_f64() * 1000.0);
 
     let module = match res {
         Ok(ir) => ir,
@@ -84,7 +100,12 @@ fn main() {
 
     for i in 0..60 {
         let start = Instant::now();
-        vm.run(&module, 0, &mut out as *mut _ as _, &[&mut input1 as *mut _ as _]);
+        vm.run(
+            &module,
+            0,
+            &mut out as *mut _ as _,
+            &[&mut input1 as *mut _ as _],
+        );
         let end = Instant::now();
         times[i].write(end - start);
     }
@@ -97,5 +118,10 @@ fn main() {
     }
     avg = avg / 60.0;
 
-    println!("{avg}s\n{}ms\n{}micros", avg * 10.0f64.powi(3), avg * 10.0f64.powi(6));
+    println!(
+        "{avg}s\n{}ms\n{}micros\n{}nanos",
+        avg * 10.0f64.powi(3),
+        avg * 10.0f64.powi(6),
+        avg * 10.0f64.powi(9),
+    );
 }

@@ -2,11 +2,11 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
     ast::{
-        AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind,
-        UnOp, DeviceIn,
+        AssignKind, BinOp, Block, DeviceIn, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp,
     },
     span::Span,
-    token::{Token, TokenKind}, util::{Int, Signed, Width},
+    token::{Token, TokenKind},
+    util::{Int, Signed, Width},
 };
 
 const KW_DEVICES: &'static str = "devices";
@@ -61,12 +61,7 @@ impl<'a> Parser<'a> {
 
         let span = Span { start, end };
 
-        Some(DeviceIn {
-            device,
-            body,
-
-            span,
-        })
+        Some(DeviceIn { device, body, span })
     }
 
     fn parse_block(&mut self) -> Option<Block> {
@@ -468,7 +463,11 @@ impl<'a> Parser<'a> {
             TokenKind::Int(val) => {
                 let mut span = tok.span;
 
-                let (width, signed) = if let Some(Token { kind: TokenKind::IntType(width, signed), span: tspan }) = self.tokens.peek() {
+                let (width, signed) = if let Some(Token {
+                    kind: TokenKind::IntType(width, signed),
+                    span: tspan,
+                }) = self.tokens.peek()
+                {
                     span.end = tspan.end;
                     let ret = (*width, *signed);
                     let _ = self.eat_any_token();

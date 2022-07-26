@@ -1,6 +1,14 @@
 use std::collections::HashMap;
 
-use crate::{ir::{Module, Block, Body, Instruction, Float, Cmp}, ast::{Module as AstModule, Block as AstBlock, DeviceIn, Stmt, StmtKind, ExprKind, Literal, UnOp, BinOp}, ty::Type, util::{Width, Signed, Int}};
+use crate::{
+    ast::{
+        BinOp, Block as AstBlock, DeviceIn, ExprKind, Literal, Module as AstModule, Stmt, StmtKind,
+        UnOp,
+    },
+    ir::{Block, Body, Cmp, Float, Instruction, Module},
+    ty::Type,
+    util::{Int, Signed, Width},
+};
 
 const ICE_TYPE: &'static str = "ICE: ir_compiler: expression without type";
 const ICE_BITS: &'static str = "ICE: ir_compiler: bit operation on non-bit type";
@@ -24,7 +32,8 @@ impl<'a> Env<'a> {
 
     fn new_stack(&mut self) {
         self.sizes.clear();
-        self.vars.first_mut()
+        self.vars
+            .first_mut()
             .expect("ICE: ir_compiler: too many environments popped")
             .clear();
         self.num_vars = 0;
@@ -36,17 +45,24 @@ impl<'a> Env<'a> {
     }
 
     fn pop(&mut self) {
-        let map = self.vars.pop()
+        let map = self
+            .vars
+            .pop()
             .expect("ICE: ir_compiler: too many environments popped");
-        
+
         self.next_id = map.values().copied().min().unwrap_or(self.next_id);
     }
 
     fn insert(&mut self, key: &'a str, size: usize) -> u32 {
-        let vars = self.vars.last_mut().expect("ICE: ir_compiler: null environment insert");
+        let vars = self
+            .vars
+            .last_mut()
+            .expect("ICE: ir_compiler: null environment insert");
 
         if let Some(id) = vars.get(key) {
-            let old_size = self.sizes.get_mut(id)
+            let old_size = self
+                .sizes
+                .get_mut(id)
                 .expect("ICE: ir_compiler: variable without size");
 
             *old_size = usize::max(*old_size, size);
@@ -102,16 +118,18 @@ impl<'a> IrCompiler<'a> {
         // Device variables
 
         let out_name = module.output.index_src(self.src);
-        let in_names: Vec<_> = module.inputs
+        let in_names: Vec<_> = module
+            .inputs
             .iter()
             .map(|input| input.device.index_src(self.src))
             .collect();
 
-        let inputs = module.inputs
+        let inputs = module
+            .inputs
             .into_iter()
             .map(|input| self.compile_input(input, out_name, &in_names))
             .collect();
-        
+
         Module { inputs }
     }
 
@@ -148,7 +166,7 @@ impl<'a> IrCompiler<'a> {
 
     fn compile_stmt(&mut self, stmt: Stmt) {
         match stmt.kind {
-            StmtKind::Let { name, expr } => {
+            StmtKind::Let { name, expr, .. } => {
                 let key = name.index_src(self.src);
                 let expr_ty = expr.ty.expect(ICE_TYPE);
                 let size = expr_ty.stack_size();
@@ -169,11 +187,12 @@ impl<'a> IrCompiler<'a> {
             }
             StmtKind::If { cond, yes, no } => {
                 let yes = self.compile_block(yes);
-                let no = no.map(|no| self.compile_block(no))
+                let no = no
+                    .map(|no| self.compile_block(no))
                     .unwrap_or(Block(Vec::new()));
-                
+
                 self.compile_expr(cond.kind, cond.ty.expect(ICE_TYPE));
-                
+
                 self.instrs.push(Instruction::If { yes, no });
             }
             StmtKind::Expr(expr) => {
@@ -203,7 +222,7 @@ impl<'a> IrCompiler<'a> {
                     let bits: u64 = unsafe { std::mem::transmute(f) };
                     self.instrs.push(Instruction::PushInt(bits.into()));
                 }
-            }
+            },
             ExprKind::Var(name) => {
                 let key = name.index_src(self.src);
                 let id = self.env.get(key);
@@ -219,14 +238,18 @@ impl<'a> IrCompiler<'a> {
                     // ident == "len"
                     Type::Slice(_) => {
                         self.compile_expr(left, ty);
-                        self.instrs.push(Instruction::Swap(std::mem::size_of::<usize>()));
-                        self.instrs.push(Instruction::Pop(std::mem::size_of::<usize>()));
+                        self.instrs
+                            .push(Instruction::Swap(std::mem::size_of::<usize>()));
+                        self.instrs
+                            .push(Instruction::Pop(std::mem::size_of::<usize>()));
                     }
                     Type::Bitfield(_, w, names) => {
                         let w = *w;
-                        let bit = *names.0.get(ident)
+                        let bit = *names
+                            .0
+                            .get(ident)
                             .expect("ICE: ir_compiler: invalid bitfield field");
-                        
+
                         self.compile_expr(left, ty);
                         self.instrs.push(Instruction::PushInt(bit.into()));
                         self.instrs.push(Instruction::ShiftRight(w));
@@ -234,7 +257,9 @@ impl<'a> IrCompiler<'a> {
                         self.instrs.push(Instruction::And(w));
                     }
                     Type::Struct(s) => {
-                        let field = s.fields.get(ident)
+                        let field = s
+                            .fields
+                            .get(ident)
                             .expect("ICE: ir_compiler: invalid struct field");
                         let field_offset = field.byte_offset;
                         let field_size = field.ty.stack_size();
@@ -266,7 +291,10 @@ impl<'a> IrCompiler<'a> {
                         self.compile_expr(left, lty);
                         self.compile_expr(right, rty);
                         if rw > Width::W8 {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::W8 });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::W8,
+                            });
                         }
 
                         self.instrs.push(Instruction::ShiftRight(lw));
@@ -286,13 +314,24 @@ impl<'a> IrCompiler<'a> {
 
                         // sizeof(index) = sizeof(length)
                         if rw < Width::WSize {
-                            self.instrs.push(Instruction::Extend { from: rw, to: Width::WSize, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: rw,
+                                to: Width::WSize,
+                                signed: false,
+                            });
                         } else if rw > Width::WSize {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::WSize });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::WSize,
+                            });
                         }
 
                         // Stack: [pointer, index >= length]
-                        self.instrs.push(Instruction::IntCompare { width: Width::WSize, cmp: Cmp::GreaterEq, signed: false });
+                        self.instrs.push(Instruction::IntCompare {
+                            width: Width::WSize,
+                            cmp: Cmp::GreaterEq,
+                            signed: false,
+                        });
 
                         // Stack: [pointer]
                         self.instrs.push(Instruction::If {
@@ -304,13 +343,23 @@ impl<'a> IrCompiler<'a> {
                         self.compile_expr(right, rty);
 
                         if rw < Width::WSize {
-                            self.instrs.push(Instruction::Extend { from: rw, to: Width::WSize, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: rw,
+                                to: Width::WSize,
+                                signed: false,
+                            });
                         } else if rw > Width::WSize {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::WSize });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::WSize,
+                            });
                         }
 
                         self.instrs.push(Instruction::PushInt(Int::WSize(size)));
-                        self.instrs.push(Instruction::Mul { width: Width::WSize, signed: false });
+                        self.instrs.push(Instruction::Mul {
+                            width: Width::WSize,
+                            signed: false,
+                        });
                         self.instrs.push(Instruction::Add(Width::WSize));
 
                         self.instrs.push(Instruction::Load(size));
@@ -333,7 +382,7 @@ impl<'a> IrCompiler<'a> {
                             self.instrs.push(Instruction::FloatNeg(Float::F64));
                         }
                         _ => panic!("ICE: ir_compiler: invalid unary op '-'"),
-                    }
+                    },
                     UnOp::Not => match ty {
                         Type::Bool => {
                             self.instrs.push(Instruction::BoolNot);
@@ -378,8 +427,14 @@ impl<'a> IrCompiler<'a> {
                         let ifn = match op {
                             BinOp::Add => |w, _| Instruction::Add(w),
                             BinOp::Sub => |w, _| Instruction::Sub(w),
-                            BinOp::Mul => |w, s| Instruction::Mul { width: w, signed: s },
-                            BinOp::Div => |w, s| Instruction::Div { width: w, signed: s },
+                            BinOp::Mul => |w, s| Instruction::Mul {
+                                width: w,
+                                signed: s,
+                            },
+                            BinOp::Div => |w, s| Instruction::Div {
+                                width: w,
+                                signed: s,
+                            },
                             _ => unreachable!(),
                         };
 
@@ -413,15 +468,13 @@ impl<'a> IrCompiler<'a> {
                         };
 
                         let instr = match &lty {
-                            Type::Int(w, s) => {
-                                Instruction::IntCompare { width: *w, cmp, signed: s == &Signed::Yes }
-                            }
-                            Type::F32 => {
-                                Instruction::FloatCompare(Float::F32, cmp)
-                            }
-                            Type::F64 => {
-                                Instruction::FloatCompare(Float::F64, cmp)
-                            }
+                            Type::Int(w, s) => Instruction::IntCompare {
+                                width: *w,
+                                cmp,
+                                signed: s == &Signed::Yes,
+                            },
+                            Type::F32 => Instruction::FloatCompare(Float::F32, cmp),
+                            Type::F64 => Instruction::FloatCompare(Float::F64, cmp),
                             _ => panic!("ICE: ir_compiler: invalid compare type"),
                         };
 
@@ -438,9 +491,21 @@ impl<'a> IrCompiler<'a> {
                         };
 
                         let instr = match lty {
-                            Type::Int(w, _) => Instruction::IntCompare { width: w, cmp, signed: false },
-                            Type::Bool => Instruction::IntCompare { width: Width::W8, cmp, signed: false },
-                            Type::Bitfield(_, w, _) => Instruction::IntCompare { width: w, cmp, signed: false },
+                            Type::Int(w, _) => Instruction::IntCompare {
+                                width: w,
+                                cmp,
+                                signed: false,
+                            },
+                            Type::Bool => Instruction::IntCompare {
+                                width: Width::W8,
+                                cmp,
+                                signed: false,
+                            },
+                            Type::Bitfield(_, w, _) => Instruction::IntCompare {
+                                width: w,
+                                cmp,
+                                signed: false,
+                            },
                             Type::F32 => Instruction::FloatCompare(Float::F32, cmp),
                             Type::F64 => Instruction::FloatCompare(Float::F64, cmp),
                             _ => panic!("ICE: ir_compiler: invalid equals type"),
@@ -459,9 +524,12 @@ impl<'a> IrCompiler<'a> {
                         self.compile_expr(right.kind, rty);
 
                         if rw.size() != 1 {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::W8 });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::W8,
+                            });
                         }
-                        
+
                         match op {
                             BinOp::ShiftLeft => self.instrs.push(Instruction::ShiftLeft(lw)),
                             BinOp::ShiftRight => self.instrs.push(Instruction::ShiftRight(lw)),
@@ -481,30 +549,48 @@ impl<'a> IrCompiler<'a> {
                 let name = name.index_src(self.src);
                 let var_index = self.env.get(name);
 
-                self.instrs.push(Instruction::VarPut(ty.stack_size(), var_index));
+                self.instrs
+                    .push(Instruction::VarPut(ty.stack_size(), var_index));
             }
             ExprKind::Dot(left, field) => {
                 let lty = left.ty.expect(ICE_TYPE).dereferenced();
                 let left = left.kind;
                 match &lty {
                     Type::Bitfield(_, w, names) => {
-                        assert!(ty == Type::Bool, "ICE: ir_compiler: tried to store non-bool field in bitfield");
-                        
+                        assert!(
+                            ty == Type::Bool,
+                            "ICE: ir_compiler: tried to store non-bool field in bitfield"
+                        );
+
                         let w = *w;
-                        let bit = *names.0.get(field.index_src(self.src))
+                        let bit = *names
+                            .0
+                            .get(field.index_src(self.src))
                             .expect("ICE: ir_compiler: invalid bitfield field");
-                        
+
                         if w > Width::W8 {
-                            self.instrs.push(Instruction::Extend { from: Width::W8, to: w, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: Width::W8,
+                                to: w,
+                                signed: false,
+                            });
                         }
                         self.instrs.push(Instruction::PushInt(bit.into()));
                         self.instrs.push(Instruction::ShiftLeft(w));
 
                         match w {
-                            Width::W8 => self.instrs.push(Instruction::PushInt((!(1 << bit)).into())),
-                            Width::W16 => self.instrs.push(Instruction::PushInt((!(1 << bit as u16)).into())),
-                            Width::W32 => self.instrs.push(Instruction::PushInt((!(1 << bit as u32)).into())),
-                            Width::W64 => self.instrs.push(Instruction::PushInt((!(1 << bit as u64)).into())),
+                            Width::W8 => {
+                                self.instrs.push(Instruction::PushInt((!(1 << bit)).into()))
+                            }
+                            Width::W16 => self
+                                .instrs
+                                .push(Instruction::PushInt((!(1 << bit as u16)).into())),
+                            Width::W32 => self
+                                .instrs
+                                .push(Instruction::PushInt((!(1 << bit as u32)).into())),
+                            Width::W64 => self
+                                .instrs
+                                .push(Instruction::PushInt((!(1 << bit as u64)).into())),
                         }
 
                         self.compile_expr(left.clone(), lty.clone());
@@ -515,12 +601,14 @@ impl<'a> IrCompiler<'a> {
                         self.compile_store(left, lty);
                     }
                     Type::Struct(s) => {
-                        let field = s.fields.get(field.index_src(self.src))
+                        let field = s
+                            .fields
+                            .get(field.index_src(self.src))
                             .expect("ICE: ir_compiler: invalid struct field");
-                        
+
                         let offset = field.byte_offset;
                         let size = field.ty.stack_size();
-                        
+
                         if size != ty.stack_size() {
                             panic!("ICE: ir_compiler: tried to store wrong field in struct");
                         }
@@ -543,7 +631,10 @@ impl<'a> IrCompiler<'a> {
 
                 match &lty {
                     Type::Int(lw, _) | Type::Bitfield(_, lw, _) => {
-                        assert!(ty == Type::Bool, "ICE: ir_compiler: tried to set bit to non-bool");
+                        assert!(
+                            ty == Type::Bool,
+                            "ICE: ir_compiler: tried to set bit to non-bool"
+                        );
 
                         let Type::Int(rw, _) = &rty
                         else { panic!("ICE: ir_compiler: invalid index type"); };
@@ -552,13 +643,20 @@ impl<'a> IrCompiler<'a> {
 
                         // Widen bool on stack
                         if lw > Width::W8 {
-                            self.instrs.push(Instruction::Extend { from: Width::W8, to: lw, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: Width::W8,
+                                to: lw,
+                                signed: false,
+                            });
                         }
                         // Push bit on to stack
                         self.compile_expr(right.clone(), rty.clone());
                         // Shorten it for the shift operator
                         if rw > Width::W8 {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::W8 });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::W8,
+                            });
                         }
                         // Shift bool
                         self.instrs.push(Instruction::ShiftRight(lw));
@@ -574,7 +672,10 @@ impl<'a> IrCompiler<'a> {
                         self.compile_expr(right.clone(), rty.clone());
                         // Shorten it for the shift operator
                         if rw > Width::W8 {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::W8 });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::W8,
+                            });
                         }
                         // Shift 1
                         self.instrs.push(Instruction::ShiftRight(lw));
@@ -608,13 +709,24 @@ impl<'a> IrCompiler<'a> {
                         self.compile_expr(right.clone(), rty.clone());
 
                         if rw < Width::WSize {
-                            self.instrs.push(Instruction::Extend { from: rw, to: Width::WSize, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: rw,
+                                to: Width::WSize,
+                                signed: false,
+                            });
                         } else if rw > Width::WSize {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::WSize });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::WSize,
+                            });
                         }
 
                         // Stack: [value, pointer, index >= length]
-                        self.instrs.push(Instruction::IntCompare { width: Width::WSize, cmp: Cmp::GreaterEq, signed: false });
+                        self.instrs.push(Instruction::IntCompare {
+                            width: Width::WSize,
+                            cmp: Cmp::GreaterEq,
+                            signed: false,
+                        });
 
                         // Stack: [value, pointer]
                         self.instrs.push(Instruction::If {
@@ -627,15 +739,25 @@ impl<'a> IrCompiler<'a> {
 
                         // index: usize
                         if rw < Width::WSize {
-                            self.instrs.push(Instruction::Extend { from: rw, to: Width::WSize, signed: false });
+                            self.instrs.push(Instruction::Extend {
+                                from: rw,
+                                to: Width::WSize,
+                                signed: false,
+                            });
                         } else if rw > Width::WSize {
-                            self.instrs.push(Instruction::Shorten { from: rw, to: Width::WSize });
+                            self.instrs.push(Instruction::Shorten {
+                                from: rw,
+                                to: Width::WSize,
+                            });
                         }
 
                         // Stack: [value, pointer, index, value_size]
                         self.instrs.push(Instruction::PushInt(size.into()));
                         // Stack: [value, pointer, index * value_size]
-                        self.instrs.push(Instruction::Mul { width: Width::WSize, signed: false });
+                        self.instrs.push(Instruction::Mul {
+                            width: Width::WSize,
+                            signed: false,
+                        });
                         // Stack: [value, pointer + index * value_size]
                         self.instrs.push(Instruction::Add(Width::WSize));
 
@@ -652,43 +774,72 @@ impl<'a> IrCompiler<'a> {
         let from = from.dereferenced();
         let to = to.dereferenced();
 
-        if from == to { return; }
+        if from == to {
+            return;
+        }
 
         match to {
             Type::Int(width, signed) => match from {
                 Type::Int(owidth, Signed::No) => {
-                    self.instrs.push(Instruction::Extend { from: owidth, to: width, signed: false });
+                    self.instrs.push(Instruction::Extend {
+                        from: owidth,
+                        to: width,
+                        signed: false,
+                    });
                 }
                 Type::Int(owidth, Signed::Yes) if signed == Signed::Yes => {
-                    self.instrs.push(Instruction::Extend { from: owidth, to: width, signed: true });
+                    self.instrs.push(Instruction::Extend {
+                        from: owidth,
+                        to: width,
+                        signed: true,
+                    });
                 }
                 Type::Bool => {
-                    self.instrs.push(Instruction::Extend { from: Width::W8, to: width, signed: false });
+                    self.instrs.push(Instruction::Extend {
+                        from: Width::W8,
+                        to: width,
+                        signed: false,
+                    });
                 }
                 Type::Bitfield(_, owidth, _) => {
-                    self.instrs.push(Instruction::Extend { from: owidth, to: width, signed: false });
+                    self.instrs.push(Instruction::Extend {
+                        from: owidth,
+                        to: width,
+                        signed: false,
+                    });
                 }
                 _ => panic!("ICE: ir_compiler: invalid assign conversion"),
-            }
+            },
             Type::F32 => match from {
                 Type::Int(width, signed) => {
-                    self.instrs.push(Instruction::IntToFloat { width: width, signed: signed == Signed::Yes, float: Float::F32 });
+                    self.instrs.push(Instruction::IntToFloat {
+                        width: width,
+                        signed: signed == Signed::Yes,
+                        float: Float::F32,
+                    });
+                }
+                Type::F64 => {
+                    self.instrs.push(Instruction::F64To32);
                 }
                 _ => panic!("ICE: ir_compiler: invalid assign conversion"),
-            }
+            },
             Type::F64 => match from {
                 Type::F32 => {
                     self.instrs.push(Instruction::F32To64);
                 }
                 Type::Int(width, signed) => {
-                    self.instrs.push(Instruction::IntToFloat { width: width, signed: signed == Signed::Yes, float: Float::F64 });
+                    self.instrs.push(Instruction::IntToFloat {
+                        width: width,
+                        signed: signed == Signed::Yes,
+                        float: Float::F64,
+                    });
                 }
                 _ => panic!("ICE: ir_compiler: invalid assign conversion"),
-            }
+            },
             Type::Bitfield(_, _, _) => match from {
                 Type::Int(_, _) => {}
                 _ => panic!("ICE: ir_compiler: invalid assign conversion"),
-            }
+            },
             _ => panic!("ICE: ir_compiler: invalid assign conversion"),
         }
     }

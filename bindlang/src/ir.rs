@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::util::{Width, Int};
+use crate::util::{Int, Width};
 
 #[derive(Debug)]
 pub struct Module {
@@ -40,12 +40,10 @@ pub enum Instruction {
     Store(usize),
 
     // Booleans
-
     /// Not the boolean on the stack
     BoolNot,
 
     // Integers and bits
-
     /// Negate signed integer on stack
     Neg(Width),
     Not(Width),
@@ -82,7 +80,6 @@ pub enum Instruction {
     },
 
     // Floats
-
     FloatNeg(Float),
     FloatAdd(Float),
     FloatSub(Float),
@@ -91,7 +88,6 @@ pub enum Instruction {
     FloatCompare(Float, Cmp),
 
     // Conversions
-
     /// Signed/Zero extend integer on stack
     Extend {
         from: Width,
@@ -120,14 +116,12 @@ pub enum Instruction {
     },
 
     // Branching
-
     If {
         yes: Block,
         no: Block,
     },
 
     // Misc
-
     /// Swap bytes on stack
     Swap(usize),
     Error(u8),

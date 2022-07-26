@@ -6,7 +6,8 @@ use std::{
 use crate::{
     lexer::{LexerError, LexerErrorKind},
     parser::ParserError,
-    span::{Pos, Span}, typecheck::TypeError,
+    span::{Pos, Span},
+    typecheck::TypeError,
 };
 
 #[derive(Clone, Debug)]
@@ -167,8 +168,16 @@ impl<'a> Display for Errors<'a> {
 
                     Self::write_context(f, self.src, *span)?;
                 }
-                TypeError::NotAssignable { left, left_ty, right, right_ty } => {
-                    writeln!(f, "a value of type '{right_ty}' cannot be assigned to '{left_ty}'")?;
+                TypeError::NotAssignable {
+                    left,
+                    left_ty,
+                    right,
+                    right_ty,
+                } => {
+                    writeln!(
+                        f,
+                        "a value of type '{right_ty}' cannot be assigned to '{left_ty}'"
+                    )?;
 
                     Self::write_context(
                         f,
@@ -176,10 +185,14 @@ impl<'a> Display for Errors<'a> {
                         Span {
                             start: left.start,
                             end: right.end,
-                        }
+                        },
                     )?;
                 }
-                TypeError::TypeMismatch { expected, got, span } => {
+                TypeError::TypeMismatch {
+                    expected,
+                    got,
+                    span,
+                } => {
                     writeln!(f, "type mismatch: expected '{expected}', got '{got}'")?;
 
                     Self::write_context(f, self.src, *span)?;
@@ -190,7 +203,11 @@ impl<'a> Display for Errors<'a> {
                     Self::write_context(f, self.src, *span)?;
                 }
                 TypeError::InvalidField { ty, field } => {
-                    writeln!(f, "type '{ty}' does not have field {}", field.index_src(self.src))?;
+                    writeln!(
+                        f,
+                        "type '{ty}' does not have field {}",
+                        field.index_src(self.src)
+                    )?;
 
                     Self::write_context(f, self.src, *field)?;
                 }
@@ -205,12 +222,23 @@ impl<'a> Display for Errors<'a> {
                     Self::write_context(f, self.src, *expr)?;
                 }
                 TypeError::InvalidUnOp { op, ty, expr } => {
-                    writeln!(f, "operator '{op}' cannot be used on a value of type '{ty}'")?;
+                    writeln!(
+                        f,
+                        "operator '{op}' cannot be used on a value of type '{ty}'"
+                    )?;
 
                     Self::write_context(f, self.src, *expr)?;
                 }
-                TypeError::InvalidBinOp { left, op, right, expr } => {
-                    writeln!(f, "operator '{op}' cannot be used on values of type '{left}' and '{right}'")?;
+                TypeError::InvalidBinOp {
+                    left,
+                    op,
+                    right,
+                    expr,
+                } => {
+                    writeln!(
+                        f,
+                        "operator '{op}' cannot be used on values of type '{left}' and '{right}'"
+                    )?;
 
                     Self::write_context(f, self.src, *expr)?;
                 }

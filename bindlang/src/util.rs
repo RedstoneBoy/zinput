@@ -123,8 +123,12 @@ impl Into<u64> for Int {
 }
 
 macro_rules! int_map_ret {
-    () => { Int };
-    ($typ:ty) => { $typ };
+    () => {
+        Int
+    };
+    ($typ:ty) => {
+        $typ
+    };
 }
 
 macro_rules! int_map {
@@ -250,8 +254,28 @@ trait ToSigned<S> {
     fn to_signed(self) -> S;
 }
 
-impl ToSigned<i8> for u8 { fn to_signed(self) -> i8 { self as _ } }
-impl ToSigned<i16> for u16 { fn to_signed(self) -> i16 { self as _ } }
-impl ToSigned<i32> for u32 { fn to_signed(self) -> i32 { self as _ } }
-impl ToSigned<i64> for u64 { fn to_signed(self) -> i64 { self as _ } }
-impl ToSigned<isize> for usize { fn to_signed(self) -> isize { self as _ } }
+impl ToSigned<i8> for u8 {
+    fn to_signed(self) -> i8 {
+        self as _
+    }
+}
+impl ToSigned<i16> for u16 {
+    fn to_signed(self) -> i16 {
+        self as _
+    }
+}
+impl ToSigned<i32> for u32 {
+    fn to_signed(self) -> i32 {
+        self as _
+    }
+}
+impl ToSigned<i64> for u64 {
+    fn to_signed(self) -> i64 {
+        self as _
+    }
+}
+impl ToSigned<isize> for usize {
+    fn to_signed(self) -> isize {
+        self as _
+    }
+}
