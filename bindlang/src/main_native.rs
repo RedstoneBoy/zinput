@@ -7,13 +7,13 @@ use std::{
 
 use bindlang::{
     to_bitfield, to_struct,
-    ty::{ToType, Type},
+    ty::{BLType, Type},
     util::Width,
 };
 
 struct ButtonType;
-impl ToType for ButtonType {
-    fn to_type() -> Type {
+impl BLType for ButtonType {
+    fn bl_type() -> Type {
         to_bitfield! {
             name = ControllerButtons;
             size = Width::W64;

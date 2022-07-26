@@ -148,18 +148,18 @@ macro_rules! device {
                 $(pub [< $cname s >]: FfiSlice,)*
             }
 
-            impl<'a> bindlang::ty::ToType for DeviceMutFfi<'a> {
-                fn to_type() -> bindlang::ty::Type {
+            impl<'a> bindlang::ty::BLType for DeviceMutFfi<'a> {
+                fn bl_type() -> bindlang::ty::Type {
                     use std::collections::HashMap;
                     use std::sync::LazyLock;
-                    use bindlang::ty::{Field, Struct, Type, ToType};
+                    use bindlang::ty::{Field, Struct, Type, BLType};
 
                     static TYPE: LazyLock<Type> = LazyLock::new(|| {
                         let mut fields = HashMap::new();
                         let mut _i = 0;
                         $(
                             fields.insert(stringify!([< $cname s >]), Field {
-                                ty: Type::Slice(<$ctype as ToType>::to_type().into()),
+                                ty: Type::Slice(<$ctype as BLType>::bl_type().into()),
                                 byte_offset: _i,
                             });
                             _i += std::mem::size_of::<FfiSlice>();

@@ -1,6 +1,6 @@
 use std::{sync::LazyLock, collections::HashMap};
 
-use bindlang::{ty::{Type, ToType}, to_struct};
+use bindlang::{ty::{Type, BLType}, to_struct};
 
 use super::ComponentData;
 
@@ -43,8 +43,8 @@ pub struct Motion {
     pub accel_z: f32,
 }
 
-impl ToType for Motion {
-    fn to_type() -> Type {
+impl BLType for Motion {
+    fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             to_struct! {
                 name = Motion;

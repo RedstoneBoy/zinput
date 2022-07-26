@@ -1,6 +1,6 @@
 use std::{ops::BitOr, collections::HashMap, sync::LazyLock};
 
-use bindlang::{ty::{ToType, Type, BitNames}, to_struct, to_bitfield, util::Width};
+use bindlang::{ty::{BLType, Type, BitNames}, to_struct, to_bitfield, util::Width};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -180,12 +180,12 @@ pub struct Controller {
     pub r2_analog: u8,
 }
 
-impl ToType for Controller {
-    fn to_type() -> Type {
+impl BLType for Controller {
+    fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             struct ButtonType;
-            impl ToType for ButtonType {
-                fn to_type() -> Type {
+            impl BLType for ButtonType {
+                fn bl_type() -> Type {
                     to_bitfield! {
                         name = ControllerButtons;
                         size = Width::W64;

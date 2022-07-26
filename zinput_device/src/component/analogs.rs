@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bindlang::ty::{ToType, Type, Struct};
+use bindlang::ty::{BLType, Type, Struct};
 use serde::{Deserialize, Serialize};
 
 use super::ComponentData;
@@ -35,8 +35,8 @@ pub struct Analogs {
     pub analogs: [u8; 8],
 }
 
-impl ToType for Analogs {
-    fn to_type() -> Type {
+impl BLType for Analogs {
+    fn bl_type() -> Type {
         // TODO
         Type::Struct(Struct {
             name: "Analogs",

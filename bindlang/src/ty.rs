@@ -130,6 +130,14 @@ impl std::fmt::Display for Type {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BitNames(pub HashMap<&'static str, u8>);
 
+/// # Safety
+/// 
+/// The struct this is representing must have a defined abi.
+/// This can usually be acheived by marking the struct as #[repr(C)].
+/// 
+/// `size` must be equal to [`std::mem::size_of`] of the type being represented.
+/// 
+/// Every field must be aligned correctly.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Struct {
     pub name: &'static str,
@@ -143,21 +151,27 @@ pub struct Field {
     pub byte_offset: usize,
 }
 
-pub trait ToType {
-    fn to_type() -> Type;
+/// A trait for types that can be represented as BL types.
+/// 
+/// This function is unsafe since returning incorrect type data
+/// can lead to undefined behaviour in BL.
+/// 
+/// See [`Struct`] for safety information
+pub trait BLType {
+    fn bl_type() -> Type;
 }
 
-macro_rules! impl_to_type {
+macro_rules! impl_bl_type {
     ($($typ:ty = $e:expr;)*) => {
-        $(impl ToType for $typ {
-            fn to_type() -> Type {
+        $(impl BLType for $typ {
+            fn bl_type() -> Type {
                 $e
             }
         })*
     }
 }
 
-impl_to_type! {
+impl_bl_type! {
     u8  = Type::Int(Width::W8,  Signed::No);
     u16 = Type::Int(Width::W16, Signed::No);
     u32 = Type::Int(Width::W32, Signed::No);
@@ -178,7 +192,7 @@ macro_rules! to_struct {
 
         $({
             fields.insert(stringify!($fname), $crate::ty::Field {
-                ty: <$typ as $crate::ty::ToType>::to_type(),
+                ty: <$typ as $crate::ty::BLType>::bl_type(),
                 byte_offset: $offset,
             });
         })*

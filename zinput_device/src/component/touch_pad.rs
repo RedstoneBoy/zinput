@@ -1,6 +1,6 @@
 use std::{sync::LazyLock, collections::HashMap};
 
-use bindlang::{ty::{ToType, Type}, to_struct};
+use bindlang::{ty::{BLType, Type}, to_struct};
 
 use super::ComponentData;
 
@@ -33,8 +33,8 @@ pub struct TouchPad {
     pub touched: bool,
 }
 
-impl ToType for TouchPad {
-    fn to_type() -> Type {
+impl BLType for TouchPad {
+    fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             to_struct! {
                 name = TouchPad;
