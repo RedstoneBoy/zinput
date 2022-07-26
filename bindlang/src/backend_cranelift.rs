@@ -5,7 +5,7 @@ use cranelift::{
     frontend::{FunctionBuilder, FunctionBuilderContext, Variable},
     prelude::{
         types, AbiParam, EntityRef, FloatCC, InstBuilder, IntCC, MemFlags, StackSlotData,
-        StackSlotKind, Type, Value,
+        StackSlotKind, Type, Value, isa::CallConv,
     },
 };
 use cranelift_jit::{JITBuilder, JITModule};
@@ -165,6 +165,7 @@ impl<'a> Compiler<'a> {
         // function parameters
         {
             let sig = &mut self.ctx.func.signature;
+            sig.call_conv = CallConv::SystemV;
             sig.params.push(AbiParam::new(ptr_type));
             sig.params.push(AbiParam::new(ptr_type));
             sig.params.push(AbiParam::new(types::I32));
