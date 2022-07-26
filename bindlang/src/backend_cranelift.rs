@@ -908,7 +908,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
 
     fn convert_type(&self, ty: Ty) -> Option<Type> {
         Some(match ty.dereferenced() {
-            Ty::Reference(_) => unreachable!(),
+            Ty::Reference(_, _) => unreachable!(),
             Ty::Int(w, _) | Ty::Bitfield(_, w, _) => match w {
                 Width::W8 => types::I8,
                 Width::W16 => types::I16,

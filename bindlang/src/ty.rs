@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use crate::util::{Signed, Width};
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct RefData(pub(crate) ());
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Type {
-    Reference(Box<Type>),
+    Reference(Box<Type>, RefData),
     Int(Width, Signed),
     F32,
     F64,
@@ -15,16 +18,19 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn stack_size(&self) -> usize {
+    pub fn stack_size(&self) -> i32 {
+        let ptr_size = std::mem::size_of::<usize>();
+        assert!(ptr_size < (i32::MAX / 2) as usize);
+        let ptr_size = ptr_size as i32;
         match self {
-            Type::Reference(_) => std::mem::size_of::<usize>(),
+            Type::Reference(_, _) => ptr_size,
             Type::Int(w, _) => w.size(),
             Type::F32 => 4,
             Type::F64 => 8,
             Type::Bool => 1,
-            Type::Slice(_) => std::mem::size_of::<usize>() * 2,
+            Type::Slice(_) => ptr_size * 2,
             Type::Bitfield(_, w, _) => w.size(),
-            Type::Struct(_) => std::mem::size_of::<usize>(),
+            Type::Struct(_) => ptr_size,
         }
     }
 
@@ -51,7 +57,7 @@ impl Type {
     pub fn dereferenced(self) -> Self {
         let mut this = self;
 
-        while let Type::Reference(ty) = this {
+        while let Type::Reference(ty, _) = this {
             this = *ty;
         }
 
@@ -60,7 +66,7 @@ impl Type {
 
     pub fn assignable_from(&self, from: &Type) -> bool {
         match self {
-            Type::Reference(_) => false,
+            Type::Reference(_, _) => false,
             Type::Int(width, signed) => match from {
                 Type::Int(owidth, Signed::No) => {
                     if signed == &Signed::Yes {
@@ -92,7 +98,7 @@ impl Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Reference(ty) => write!(f, "{ty}"),
+            Type::Reference(ty, _) => write!(f, "{ty}"),
             Type::Int(w, s) => {
                 match s {
                     Signed::No => write!(f, "u")?,
@@ -113,14 +119,14 @@ impl std::fmt::Display for Type {
             Type::Bool => write!(f, "bool"),
             Type::Slice(ty) => write!(f, "&[{ty}]"),
             Type::Bitfield(name, w, _) => {
-                write!(f, "bitfield(u")?;
+                write!(f, "u")?;
                 match w {
                     Width::W8 => write!(f, "8")?,
                     Width::W16 => write!(f, "16")?,
                     Width::W32 => write!(f, "32")?,
                     Width::W64 => write!(f, "64")?,
                 }
-                write!(f, ") {name}")
+                write!(f, "({name})")
             }
             Type::Struct(s) => write!(f, "{}", s.name),
         }
@@ -131,31 +137,31 @@ impl std::fmt::Display for Type {
 pub struct BitNames(pub HashMap<&'static str, u8>);
 
 /// # Safety
-/// 
+///
 /// The struct this is representing must have a defined abi.
 /// This can usually be acheived by marking the struct as #[repr(C)].
-/// 
+///
 /// `size` must be equal to [`std::mem::size_of`] of the type being represented.
-/// 
+///
 /// Every field must be aligned correctly.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Struct {
     pub name: &'static str,
     pub fields: HashMap<&'static str, Field>,
-    pub size: usize,
+    pub size: i32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field {
     pub ty: Type,
-    pub byte_offset: usize,
+    pub byte_offset: i32,
 }
 
 /// A trait for types that can be represented as BL types.
-/// 
+///
 /// This function is unsafe since returning incorrect type data
 /// can lead to undefined behaviour in BL.
-/// 
+///
 /// See [`Struct`] for safety information
 pub trait BLType {
     fn bl_type() -> Type;
@@ -200,7 +206,14 @@ macro_rules! to_struct {
         $crate::ty::Type::Struct($crate::ty::Struct {
             name: stringify!($name),
             fields,
-            size: std::mem::size_of::<$name>(),
+            size: {
+                let size = std::mem::size_of::<$name>();
+                if size <= i32::MAX as usize {
+                    size as i32
+                } else {
+                    panic!("Size of '{}' too large, BL struct sizes must be less than {} bytes", stringify!($name), size);
+                }
+            },
         })
     }};
 }

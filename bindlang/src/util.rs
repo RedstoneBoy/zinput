@@ -10,7 +10,7 @@ impl Width {
     #[allow(non_upper_case_globals)]
     pub const WSize: Width = Int::WSize(0).width();
 
-    pub fn size(&self) -> usize {
+    pub fn size(&self) -> i32 {
         match self {
             Width::W8 => 1,
             Width::W16 => 2,

@@ -469,7 +469,17 @@ impl<'a> Parser<'a> {
                     let _ = self.eat_any_token();
                     ret
                 } else {
-                    (Width::W32, Signed::No)
+                    const U8_MAX: u64 = u8::MAX as u64;
+                    const U16_MAX: u64 = u16::MAX as u64;
+                    const U32_MAX: u64 = u32::MAX as u64;
+                    const U64_MAX: u64 = u64::MAX;
+
+                    match val {
+                        0..=U8_MAX => (Width::W8, Signed::No),
+                        0..=U16_MAX => (Width::W16, Signed::No),
+                        0..=U32_MAX => (Width::W32, Signed::No),
+                        0..=U64_MAX => (Width::W64, Signed::No),
+                    }
                 };
 
                 let int = match width {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     ast::{AssignKind, BinOp, Block, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp},
     span::Span,
-    ty::Type,
+    ty::{Type, RefData},
     util::{Signed, Width},
 };
 
@@ -171,7 +171,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 };
 
-                if !matches!(lty, Type::Reference(_)) {
+                if !matches!(lty, Type::Reference(_, _)) {
                     self.errors.push(TypeError::NotLVal(lval.span));
                     return Ok(());
                 }
@@ -241,11 +241,11 @@ impl<'a> TypeChecker<'a> {
                     .get(name_str)
                     .ok_or(TypeError::InvalidVariable(*name))?;
 
-                Type::Reference(ty.clone().into())
+                Type::Reference(ty.clone().into(), RefData(()))
             }
             ExprKind::Dot(left, name_span) => {
                 let left_ty = self.check_expr(left)?;
-                let is_ref = matches!(left_ty, Type::Reference(_));
+                let is_ref = matches!(left_ty, Type::Reference(_, _));
                 let left_ty = left_ty.dereferenced();
 
                 let name = name_span.index_src(&self.src);
@@ -265,7 +265,7 @@ impl<'a> TypeChecker<'a> {
                         .get(name)
                         .map(|_| {
                             if is_ref {
-                                Type::Reference(Type::Bool.into())
+                                Type::Reference(Type::Bool.into(), RefData(()))
                             } else {
                                 Type::Bool
                             }
@@ -277,7 +277,7 @@ impl<'a> TypeChecker<'a> {
                     Type::Struct(s) => s
                         .fields
                         .get(name)
-                        .map(|field| Type::Reference(field.ty.clone().into()))
+                        .map(|field| Type::Reference(field.ty.clone().into(), RefData(())))
                         .ok_or(TypeError::InvalidField {
                             ty: left_ty.clone(),
                             field: *name_span,
@@ -292,7 +292,7 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Index(left, idx) => {
                 let left_ty = self.check_expr(left)?;
-                let is_ref = matches!(left_ty, Type::Reference(_));
+                let is_ref = matches!(left_ty, Type::Reference(_, _));
                 let left_ty = left_ty.dereferenced();
 
                 let idx_type = self.check_expr(idx)?.dereferenced();
@@ -306,12 +306,12 @@ impl<'a> TypeChecker<'a> {
                 match left_ty {
                     Type::Int(_, _) | Type::Bitfield(_, _, _) => {
                         if is_ref {
-                            Type::Reference(Type::Bool.into())
+                            Type::Reference(Type::Bool.into(), RefData(()))
                         } else {
                             Type::Bool
                         }
                     }
-                    Type::Slice(ty) => Type::Reference(ty),
+                    Type::Slice(ty) => Type::Reference(ty, RefData(())),
                     other => {
                         return Err(TypeError::NotIndexable {
                             ty: other,
