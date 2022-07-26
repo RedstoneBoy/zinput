@@ -436,7 +436,7 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        expr.ty = Some(ty.clone());
+        expr.ty = Some(ty.clone().dereferenced());
 
         Ok(ty)
     }

@@ -41,7 +41,7 @@ impl BLType for Analogs {
         Type::Struct(Struct {
             name: "Analogs",
             fields: HashMap::new(),
-            size: std::mem::size_of::<Analogs>(),
+            size: std::mem::size_of::<Analogs>() as i32,
         })
     }
 }

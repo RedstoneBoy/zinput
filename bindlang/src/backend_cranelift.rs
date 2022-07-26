@@ -279,7 +279,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
             StmtKind::Let { name, expr } => {
                 let name = name.index_src(self.src);
 
-                let ty = expr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let ty = expr.ty.clone().expect(ICE_TYPE);
                 match self.convert_type(ty) {
                     Some(ty) => {
                         let var = self.env.insert(name);
@@ -295,8 +295,8 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                 }
             }
             StmtKind::Assign { lval, expr, .. } => {
-                let lty = lval.ty.clone().expect(ICE_TYPE).dereferenced();
-                let rty = expr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let lty = lval.ty.clone().expect(ICE_TYPE);
+                let rty = expr.ty.clone().expect(ICE_TYPE);
 
                 let value = self.compile_expr(expr);
                 let value = self.compile_assign_convert(value, rty, lty);
@@ -357,7 +357,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
             ExprKind::Dot(left, field) => {
                 let field = field.index_src(self.src);
 
-                let lty = left.ty.clone().expect(ICE_TYPE).dereferenced();
+                let lty = left.ty.clone().expect(ICE_TYPE);
                 let lval = self.compile_expr(*left);
 
                 match lty {
@@ -422,10 +422,10 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                 }
             }
             ExprKind::Index(pexpr, iexpr) => {
-                let pty = pexpr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let pty = pexpr.ty.clone().expect(ICE_TYPE);
                 let pval = self.compile_expr(*pexpr);
 
-                // let ity = iexpr.ty.clone().expect(ICE_TYPE).dereferenced();
+                // let ity = iexpr.ty.clone().expect(ICE_TYPE);
                 let ival = self.compile_expr(*iexpr).expect(ICE_EXPECT_VAL);
 
                 match pty {
@@ -437,7 +437,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                         self.builder.ins().icmp_imm(IntCC::NotEqual, val, 0i64)
                     }
                     Ty::Slice(rty) => {
-                        let rty = rty.dereferenced();
+                        let rty = rty;
 
                         let pval = pval.expect_err(ICE_EXPECT_STACK);
 
@@ -474,7 +474,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
 
                         let ptr_val = self.builder.ins().iadd(pval, ptr_offset);
 
-                        match self.convert_type(rty.clone()) {
+                        match self.convert_type(*rty.clone()) {
                             Some(ty) => self.builder.ins().load(ty, MemFlags::new(), ptr_val, 0i32),
                             None => {
                                 let slot = self.builder.create_stack_slot(StackSlotData::new(
@@ -505,7 +505,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
             }
 
             ExprKind::Unary(op, expr) => {
-                let ty = expr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let ty = expr.ty.clone().expect(ICE_TYPE);
                 let val = self.compile_expr(*expr).expect(ICE_EXPECT_VAL);
 
                 match op {
@@ -523,7 +523,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                 }
             }
             ExprKind::Binary(left, op, right) => {
-                let lty = left.ty.clone().expect(ICE_TYPE).dereferenced();
+                let lty = left.ty.clone().expect(ICE_TYPE);
 
                 let lval = self.compile_expr(*left).expect(ICE_EXPECT_VAL);
 
@@ -636,7 +636,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
 
     /// Returns a variable in Ok, or an address to write to in Err
     fn compile_assign(&mut self, expr: Expr, val: Result<Value, StackSlot>) {
-        let val_size = expr.ty.clone().expect(ICE_TYPE).dereferenced().stack_size();
+        let val_size = expr.ty.clone().expect(ICE_TYPE).stack_size();
 
         match expr.kind {
             ExprKind::Var(ident) => {
@@ -667,7 +667,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
             ExprKind::Dot(lexpr, field) => {
                 let field = field.index_src(self.src);
 
-                let lty = lexpr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let lty = lexpr.ty.clone().expect(ICE_TYPE);
 
                 match lty.clone() {
                     Ty::Bitfield(_, _, names) => {
@@ -704,7 +704,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                             .ins()
                             .iadd_imm(ptr_val, field.byte_offset as i64);
                         assert!(
-                            expr.ty.expect(ICE_TYPE).dereferenced() == field.ty,
+                            expr.ty.expect(ICE_TYPE) == field.ty,
                             "ICE: backend_cranelift: tried to load wrong type from struct field"
                         );
 
@@ -737,7 +737,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
             ExprKind::Index(pexpr, iexpr) => {
                 let ival = self.compile_expr(*iexpr).expect(ICE_EXPECT_VAL);
 
-                let pty = pexpr.ty.clone().expect(ICE_TYPE).dereferenced();
+                let pty = pexpr.ty.clone().expect(ICE_TYPE);
                 match pty.clone() {
                     Ty::Bitfield(_, _, _) | Ty::Int(_, _) => {
                         let cpty = self.convert_type(pty).expect(ICE_EXPECT_VAL);
@@ -914,7 +914,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
     }
 
     fn convert_type(&self, ty: Ty) -> Option<Type> {
-        Some(match ty.dereferenced() {
+        Some(match ty {
             Ty::Reference(_, _) => unreachable!(),
             Ty::Int(w, _) | Ty::Bitfield(_, w, _) => match w {
                 Width::W8 => types::I8,

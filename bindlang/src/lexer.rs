@@ -5,6 +5,9 @@ use crate::{
     token::{Token, TokenKind},
 };
 
+#[cfg(test)]
+mod tests;
+
 pub struct Lexer<'a> {
     src: &'a str,
     chars: Peekable<Chars<'a>>,

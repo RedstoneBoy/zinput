@@ -162,13 +162,13 @@ macro_rules! device {
                                 ty: Type::Slice(<$ctype as BLType>::bl_type().into()),
                                 byte_offset: _i,
                             });
-                            _i += std::mem::size_of::<FfiSlice>();
+                            _i += std::mem::size_of::<FfiSlice>() as i32;
                         )*
     
                         Type::Struct(Struct {
                             name: "device",
                             fields,
-                            size: std::mem::size_of::<DeviceMutFfi<'static>>(),
+                            size: std::mem::size_of::<DeviceMutFfi<'static>>() as i32,
                         })
                     });
 

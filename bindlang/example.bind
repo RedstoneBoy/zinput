@@ -5,5 +5,4 @@ ljoy {
     i = out.buttons;
     i += 1u64;
     out.buttons = i;
-    out.buttons += i;
 }
