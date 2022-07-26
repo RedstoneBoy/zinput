@@ -838,12 +838,16 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                     .builder
                     .ins()
                     .uextend(convert_width(w), val.expect(ICE_EXPECT_VAL)),
+                
+                Ty::Int(ow, Signed::No) if ow == w => return val,
 
                 Ty::Int(ow, Signed::Yes) if s == Signed::Yes && ow < w => self
                     .builder
                     .ins()
                     .sextend(convert_width(w), val.expect(ICE_EXPECT_VAL)),
 
+                Ty::Int(ow, Signed::No) if s == Signed::Yes && ow == w => return val,
+                
                 Ty::Bool => self
                     .builder
                     .ins()
@@ -854,6 +858,8 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                     .ins()
                     .uextend(convert_width(w), val.expect(ICE_EXPECT_VAL)),
 
+                Ty::Bitfield(_, ow, _) if ow == w => return val,
+                
                 _ => panic!("ICE: backend_cranelift: invalid assign conversion"),
             },
             Ty::F32 => match from {

@@ -119,4 +119,6 @@ fn main() {
         avg * 10.0f64.powi(6),
         avg * 10.0f64.powi(9),
     );
+
+    println!("{:?}", out);
 }

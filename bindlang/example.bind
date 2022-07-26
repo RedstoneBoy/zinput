@@ -1,14 +1,8 @@
 device out;
 
 ljoy {
-    let lmask = 243294u64;
-    let rmask = !lmask;
-    out.buttons = out.buttons & !lmask | (ljoy.buttons & lmask);
-
-    let x = 432.42;
-    let y = 521.1;
-    x * y * x;
-    x * y / x;
-    x / y / y / x;
-    x >= 2.0;
+    let i = 0u64;
+    i = out.buttons;
+    i += 1u64;
+    out.buttons = i;
 }
