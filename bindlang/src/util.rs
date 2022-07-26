@@ -1,5 +1,3 @@
-use crate::ir::Cmp;
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Width {
     W8,
@@ -118,97 +116,6 @@ impl Into<u64> for Int {
             Int::W16(v) => v as _,
             Int::W32(v) => v as _,
             Int::W64(v) => v as _,
-        }
-    }
-}
-
-macro_rules! int_map_ret {
-    () => {
-        Int
-    };
-    ($typ:ty) => {
-        $typ
-    };
-}
-
-macro_rules! int_map {
-    {
-        unary($vname:ident) {
-            $($fname:ident $( ( $($pid:ident : $pty:ty ),* $(,)? ) )? $( -> $ret:ty )? => $fexpr:expr ;)*
-        }
-        binary($l:ident, $r:ident) {
-            $($bfname:ident $( ( $($bpid:ident : $bpty:ty ),* $(,)? ) )? $( -> $bret:ty )? => $bfexpr:expr ;)*
-        }
-    } => {
-        $(
-            pub fn $fname(self, $( $($pid : $pty ,)* )? ) -> int_map_ret!($( $ret )?) {
-                match self {
-                    Int::W8($vname) => $fexpr.into(),
-                    Int::W16($vname) => $fexpr.into(),
-                    Int::W32($vname) => $fexpr.into(),
-                    Int::W64($vname) => $fexpr.into(),
-                }
-            }
-        )*
-
-        $(
-            pub fn $bfname(self, other: Self, $( $($bpid : $bpty ,)* )? ) -> int_map_ret!($( $bret )?) {
-                match (self, other) {
-                    (Int::W8($l), Int::W8($r)) => $bfexpr.into(),
-                    (Int::W16($l), Int::W16($r)) => $bfexpr.into(),
-                    (Int::W32($l), Int::W32($r)) => $bfexpr.into(),
-                    (Int::W64($l), Int::W64($r)) => $bfexpr.into(),
-                    _ => panic!("binary op on mismatched integers"),
-                }
-            }
-        )*
-    }
-}
-
-impl Int {
-    int_map! {
-        unary(v) {
-            neg => (!v + 1);
-            not => !v;
-            shift_left(bit: u8) => v << bit;
-            shift_right(bit: u8) => v >> bit;
-            to_f32_unsigned => Int::W32(unsafe { std::mem::transmute(v as f32) });
-            to_f64_unsigned => Int::W64(unsafe { std::mem::transmute(v as f64) });
-            to_f32_signed => Int::W32(unsafe { std::mem::transmute(v.to_signed() as f32) });
-            to_f64_signed => Int::W64(unsafe { std::mem::transmute(v.to_signed() as f64) });
-            sign_extend(to: Width) => match to {
-                Width::W8 => Int::W8(v.to_signed() as i8 as u8),
-                Width::W16 => Int::W16(v.to_signed() as i16 as u16),
-                Width::W32 => Int::W32(v.to_signed() as i32 as u32),
-                Width::W64 => Int::W64(v.to_signed() as i64 as u64),
-            };
-        }
-        binary(l, r) {
-            or => l | r;
-            and => l & r;
-            xor => l ^ r;
-            add => l + r;
-            sub => l - r;
-            mul_unsigned => l * r;
-            mul_signed => l.to_signed() * r.to_signed();
-            div_unsigned => l / r;
-            div_signed => l.to_signed() / r.to_signed();
-            cmp_unsigned(cmp: Cmp) => match cmp {
-                Cmp::Eq => l == r,
-                Cmp::Neq => l != r,
-                Cmp::Greater => l > r,
-                Cmp::GreaterEq => l >= r,
-                Cmp::Less => l < r,
-                Cmp::LessEq => l <= r,
-            };
-            cmp_signed(cmp: Cmp) => match cmp {
-                Cmp::Eq => l.to_signed() == r.to_signed(),
-                Cmp::Neq => l.to_signed() != r.to_signed(),
-                Cmp::Greater => l.to_signed() > r.to_signed(),
-                Cmp::GreaterEq => l.to_signed() >= r.to_signed(),
-                Cmp::Less => l.to_signed() < r.to_signed(),
-                Cmp::LessEq => l.to_signed() <= r.to_signed(),
-            };
         }
     }
 }

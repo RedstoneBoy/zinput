@@ -9,10 +9,6 @@ use crate::{
     util::{Int, Signed, Width},
 };
 
-const KW_DEVICES: &'static str = "devices";
-const KW_IN: &'static str = "in";
-const KW_OUT: &'static str = "out";
-
 pub struct Parser<'a> {
     src: &'a str,
     tokens: Peekable<IntoIter<Token>>,
