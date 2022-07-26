@@ -82,6 +82,8 @@ pub enum ExprKind {
 
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
+
+    Cast(Box<Expr>, Ident, Option<Ident>),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -294,6 +296,15 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                 write!(f, " {} ", op)?;
 
                 self.write_expr(f, right)?;
+                write!(f, ")")?;
+            }
+            ExprKind::Cast(expr, ty, tymeta) => {
+                write!(f, "::[{}", ty.index_src(self.source))?;
+                if let Some(tymeta) = tymeta {
+                    write!(f, "({})", tymeta.index_src(self.source))?;
+                }
+                write!(f, "](")?;
+                self.write_expr(f, expr)?;
                 write!(f, ")")?;
             }
         }

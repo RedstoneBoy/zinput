@@ -62,7 +62,7 @@ impl<'a> Env<'a> {
             .vars
             .last_mut()
             .expect("ICE: backend_cranelift: null environment insert");
-        let var = Variable::new(self.next_id as _);
+        let var = Variable::new(self.next_id as usize);
         vars.insert(key, Ok(var));
         self.next_id = match self.next_id.checked_add(1) {
             Some(id) => id,
@@ -196,6 +196,10 @@ impl<'a> Compiler<'a> {
 
         // verify number of input variables
         {
+            if inputs.len() > u8::MAX as usize {
+                panic!("ICE: backend_cranelift: too many input devices");
+            }
+
             let val_num_inputs = fparam3;
             let val_cond =
                 builder
@@ -623,6 +627,9 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                     BinOp::ShiftLeft => self.builder.ins().ishl(lval, rval),
                     BinOp::ShiftRight => self.builder.ins().ushr(lval, rval),
                 }
+            }
+            ExprKind::Cast(expr, ty, tymeta) => {
+                todo!();
             }
         })
     }

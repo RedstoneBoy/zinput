@@ -125,7 +125,14 @@ impl<'a> Lexer<'a> {
             '(' => self.single(TokenKind::LParen, start),
             ')' => self.single(TokenKind::RParen, start),
 
-            ':' => self.single(TokenKind::Colon, start),
+            ':' => self.double(
+                TokenKind::Colon,
+                |ch| match ch {
+                    ':' => Some(TokenKind::DoubleColon),
+                    _ => None,
+                },
+                start,
+            ),
             ',' => self.single(TokenKind::Comma, start),
             '.' => self.single(TokenKind::Dot, start),
             ';' => self.single(TokenKind::Semicolon, start),

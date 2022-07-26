@@ -431,6 +431,9 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
+            ExprKind::Cast(expr, ty, tymeta) => {
+                todo!();
+            }
         };
 
         expr.ty = Some(ty.clone());

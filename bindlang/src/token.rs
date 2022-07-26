@@ -26,6 +26,7 @@ pub enum TokenKind {
     LParen,
     RParen,
 
+    DoubleColon,
     Colon,
     Comma,
     Dot,
@@ -116,6 +117,7 @@ impl Display for TokenKind {
             LParen => write!(f, "("),
             RParen => write!(f, ")"),
 
+            DoubleColon => write!(f, "::"),
             Colon => write!(f, ":"),
             Comma => write!(f, ";"),
             Dot => write!(f, "."),
