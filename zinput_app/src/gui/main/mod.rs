@@ -36,6 +36,10 @@ impl MainUi {
                     Tab::Output,
                     Box::new(output_tab::OutputTab::new(engine, &plugins)) as _,
                 );
+                map.insert(
+                    Tab::VirtualDevices,
+                    Box::new(virtual_tab::VirtualTab::new(engine)) as _,
+                );
                 map
             },
         }

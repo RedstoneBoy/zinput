@@ -53,6 +53,10 @@ impl DeviceHandle {
     pub fn view(&self) -> DeviceView {
         DeviceView::new(self.internal.clone())
     }
+
+    pub fn info(&self) -> &DeviceInfo {
+        &self.internal.info
+    }
 }
 
 impl Drop for DeviceHandle {

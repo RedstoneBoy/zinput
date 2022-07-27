@@ -12,7 +12,6 @@ use zinput_engine::{util::Uuid, DeviceAlreadyExists, DeviceView, Engine};
 mod ast;
 mod vm;
 mod device;
-mod updater;
 
 pub use self::device::VDevice;
 pub use self::updater::{Updater, VerificationError};

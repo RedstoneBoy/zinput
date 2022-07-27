@@ -2110,6 +2110,7 @@ name = "zinput"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bindlang",
  "crc",
  "crossbeam-channel",
  "dashmap 4.0.2",

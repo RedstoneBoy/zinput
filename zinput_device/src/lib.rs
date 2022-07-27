@@ -142,13 +142,23 @@ macro_rules! device {
                 $(pub [< $cname s >]: &'a mut [$ctype],)*
             }
 
+            impl<'a> DeviceMut<'a> {
+                pub fn to_ffi(&mut self) -> DeviceMutFfi {
+                    DeviceMutFfi {
+                        $([< $cname s >]: FfiSlice {
+                            ptr: self.[< $cname s >].as_mut_ptr() as _,
+                            len: self.[< $cname s >].len(),
+                        },)*
+                    }
+                }
+            }
+
             #[repr(C)]
-            pub struct DeviceMutFfi<'a> {
-                ph: std::marker::PhantomData<DeviceMut<'a>>,
+            pub struct DeviceMutFfi {
                 $(pub [< $cname s >]: FfiSlice,)*
             }
 
-            unsafe impl<'a> bindlang::ty::BLType for DeviceMutFfi<'a> {
+            unsafe impl bindlang::ty::BLType for DeviceMutFfi {
                 fn bl_type() -> bindlang::ty::Type {
                     use std::collections::HashMap;
                     use std::sync::LazyLock;
@@ -168,7 +178,7 @@ macro_rules! device {
                         Type::Struct(Struct {
                             name: "device",
                             fields,
-                            size: std::mem::size_of::<DeviceMutFfi<'static>>() as i32,
+                            size: std::mem::size_of::<DeviceMutFfi>() as i32,
                         })
                     });
 
