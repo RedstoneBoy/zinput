@@ -431,7 +431,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
-            ExprKind::Cast(expr, ty, tymeta) => {
+            ExprKind::Cast(_expr, _ty, _tymeta) => {
                 todo!();
             }
         };

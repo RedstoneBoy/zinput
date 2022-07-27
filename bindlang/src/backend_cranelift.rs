@@ -93,12 +93,22 @@ impl<'a> Env<'a> {
     }
 }
 
-pub struct CompiledFunction<T: BLType>(RawFunction, PhantomData<T>);
+pub struct Program<T: BLType> {
+    funcs: Vec<RawFunction>,
+    jit: JITModule,
+    _ph: PhantomData<T>,
+}
 
-impl<T: BLType> CompiledFunction<T> {
-    pub fn call(&self, output: &mut T, inputs: &mut [&mut T]) -> u32 {
+impl<T: BLType> Program<T> {
+    /// Call the updater function for input device `input`.
+    /// 
+    /// # Panics
+    /// 
+    /// Panics if `input` is too large.
+    pub fn call(&self, output: &mut T, inputs: &mut [&mut T], input: usize) -> u32 {
         unsafe {
-            self.0(
+            let func = self.funcs[input];
+            func(
                 output as *mut _ as _,
                 inputs as *mut _ as _,
                 match inputs.len().try_into() {
@@ -109,6 +119,20 @@ impl<T: BLType> CompiledFunction<T> {
         }
     }
 }
+
+impl<T: BLType> Drop for Program<T> {
+    fn drop(&mut self) {
+        // SAFETY:
+        // Since we have an exclusive reference to self,
+        // there is no JITted function executing.
+        // Since self is dropped, the functions cannot
+        // be executed after this.
+        unsafe {
+            self.jit.free_memory();
+        }
+    }
+}
+
 /// # Safety
 /// 
 /// `output` must be a pointer to the output device.
@@ -146,7 +170,7 @@ impl<'a> Compiler<'a> {
     /// # Safety
     /// 
     /// `T` must be the same type that was used to construct `module`
-    pub unsafe fn compile<T: BLType>(mut self, module: AstModule) -> Vec<CompiledFunction<T>> {
+    pub unsafe fn compile<T: BLType>(mut self, module: AstModule) -> Program<T> {
         let d_out = module.output.index_src(self.src);
         let inputs = module
             .inputs
@@ -177,14 +201,18 @@ impl<'a> Compiler<'a> {
 
         self.module.finalize_definitions();
 
-        let mut ret = Vec::new();
+        let mut out_funcs = Vec::new();
         for func_id in funcs {
             let ptr = self.module.get_finalized_function(func_id);
             let ptr = unsafe { std::mem::transmute(ptr) };
-            ret.push(CompiledFunction(ptr, PhantomData));
+            out_funcs.push(ptr);
         }
 
-        ret
+        Program {
+            funcs: out_funcs,
+            jit: self.module,
+            _ph: PhantomData,
+        }
     }
 
     fn compile_function(&mut self, func: DeviceIn, d_out: &'a str, inputs: &[&'a str]) {
@@ -656,7 +684,7 @@ impl<'a, 'b> FunctionCompiler<'a, 'b> {
                     BinOp::ShiftRight => self.builder.ins().ushr(lval, rval),
                 }
             }
-            ExprKind::Cast(expr, ty, tymeta) => {
+            ExprKind::Cast(_expr, _ty, _tymeta) => {
                 todo!();
             }
         })

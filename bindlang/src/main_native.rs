@@ -58,12 +58,8 @@ struct Device {
     yaw: f64,
 }
 
-fn main() {
-    let compile_start = Instant::now();
-
-    let source = std::fs::read_to_string("example.bind").unwrap();
-    let res = bindlang::compile_native(
-        &source,
+impl BLType for Device {
+    fn bl_type() -> Type {
         to_struct!(
             name = Device;
             0: buttons: ButtonType;
@@ -76,8 +72,15 @@ fn main() {
             32: pitch: f64;
             40: roll: f64;
             48: yaw: f64;
-        ),
-    );
+        )
+    }
+}
+
+fn main() {
+    let compile_start = Instant::now();
+
+    let source = std::fs::read_to_string("example.bind").unwrap();
+    let res = bindlang::compile_native::<Device>(&source);
 
     let compile_end = Instant::now();
 
@@ -100,7 +103,7 @@ fn main() {
 
     for i in 0..60 {
         let start = Instant::now();
-        func(&mut out as *mut _ as _, &mut [&mut input1 as *mut _] as *mut _ as _, 1);
+        func.call(&mut out, &mut [&mut input1]);
         let end = Instant::now();
         times[i].write(end - start);
     }
