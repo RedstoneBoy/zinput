@@ -12,11 +12,11 @@ pub mod ty;
 mod typecheck;
 pub mod util;
 
-use backend_cranelift::CompiledFunction;
+use backend_cranelift::Program;
 pub use error::Errors;
 use ty::BLType;
 
-pub fn compile_native<T: BLType>(source: &str) -> Result<Vec<CompiledFunction<T>>, Errors> {
+pub fn compile_native<T: BLType>(source: &str) -> Result<Program<T>, Errors> {
     use std::collections::HashMap;
 
     let device_type = T::bl_type();

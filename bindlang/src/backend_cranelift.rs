@@ -95,7 +95,7 @@ impl<'a> Env<'a> {
 
 pub struct Program<T: BLType> {
     funcs: Vec<RawFunction>,
-    jit: JITModule,
+    jit: Option<JITModule>,
     _ph: PhantomData<T>,
 }
 
@@ -128,7 +128,9 @@ impl<T: BLType> Drop for Program<T> {
         // Since self is dropped, the functions cannot
         // be executed after this.
         unsafe {
-            self.jit.free_memory();
+            if let Some(jit) = self.jit.take() {
+                jit.free_memory();
+            }
         }
     }
 }
@@ -210,7 +212,7 @@ impl<'a> Compiler<'a> {
 
         Program {
             funcs: out_funcs,
-            jit: self.module,
+            jit: Some(self.module),
             _ph: PhantomData,
         }
     }

@@ -86,15 +86,13 @@ fn main() {
 
     println!("compiled in {} ms", (compile_end - compile_start).as_secs_f64() * 1000.0);
 
-    let funcs = match res {
+    let program = match res {
         Ok(f) => f,
         Err(err) => {
             println!("{}", err);
             return;
         }
     };
-
-    let func = funcs[0];
 
     let mut out = Device::default();
     let mut input1 = Device::default();
@@ -103,7 +101,9 @@ fn main() {
 
     for i in 0..60 {
         let start = Instant::now();
-        func.call(&mut out, &mut [&mut input1]);
+
+        program.call(&mut out, &mut [&mut input1], 0);
+
         let end = Instant::now();
         times[i].write(end - start);
     }
