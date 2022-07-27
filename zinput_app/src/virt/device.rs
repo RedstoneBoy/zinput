@@ -1,7 +1,6 @@
 use bindlang::backend_cranelift::Program;
-use hidapi::DeviceInfo;
 use paste::paste;
-use zinput_engine::{DeviceView, DeviceHandle, device::{Device, components, DeviceMutFfi}};
+use zinput_engine::{DeviceView, DeviceHandle, device::{Device, components, DeviceMutFfi, DeviceInfo}};
 
 fn info_to_device(info: &DeviceInfo) -> Device {
     macro_rules! info_to_device {
@@ -20,6 +19,7 @@ fn info_to_device(info: &DeviceInfo) -> Device {
 struct Input {
     view: DeviceView,
     device: Device,
+    ffi: DeviceMutFfi,
 }
 
 impl Input {
@@ -27,7 +27,7 @@ impl Input {
         let info = view.info();
         let device = info_to_device(info);
 
-        Input { view, device }
+        Input { view, device, ffi: device.as_mut().to_ffi() }
     }
 }
 
@@ -35,44 +35,54 @@ pub struct VDevice {
     name: String,
     
     inputs: Vec<Input>,
-    inputs_ffi: Vec<DeviceMutFfi>,
-    inputs_ffi_mut: Vec<&mut DeviceMutFfi>,
-    // output: Device,
+    inputs_ffi: (*mut *mut DeviceMutFfi, usize, usize),
     output_handle: DeviceHandle,
-    
 
-    program: Program<DeviceMutFfi>,
+    program: Option<Program<DeviceMutFfi>>,
 }
 
+unsafe impl Send for VDevice {}
+
 impl VDevice {
-    pub(super) fn new(name: String, inputs: Vec<DeviceView>, output: DeviceHandle, program: Program<DeviceMutFfi>) -> Self {
+    pub fn new(name: String, inputs: Vec<DeviceView>, output: DeviceHandle) -> Self {
         let inputs = inputs.into_iter().map(Input::new).collect();
 
         VDevice {
             name,
 
             inputs,
-            inputs_ffi: Vec::new(),
-            inputs_ffi_mut: Vec::new(),
-            // output: info_to_device(output.info()),
+            inputs_ffi: unsafe { Vec::new().into_raw_parts() },
             output_handle: output,
             
-            
-            program,
+            program: None,
         }
     }
 
-    pub(super) fn update(&mut self, input_index: usize) {
+    pub fn set_program(&mut self, program: Option<Program<DeviceMutFfi>>) {
+        self.program = program;
+    }
+
+    pub fn update(&mut self, input_index: usize) {
+        let Some(program) = &mut self.program
+        else { return; };
+
+        let inputs_ffi = unsafe {
+            Vec::from_raw_parts(self.inputs_ffi.0 as *mut &mut DeviceMutFfi, self.inputs_ffi.1, self.inputs_ffi.2)
+        };
+
         for input in &mut self.inputs {
-            self.inputs_ffi.
+            input.ffi = input.device.as_mut().to_ffi();
+            inputs_ffi.push(&mut input.ffi);
         }
 
-        let output = 
-        self.program.call(output, inputs, input)
-        let view = &self.inputs[view_index];
-        self.updater.update(view, view_index, &self.out);
+        self.output_handle.update(|output| {
+            let output = output.to_ffi();
 
-        self.inputs_ffi.clear();
+            program.call(&mut output, &mut inputs_ffi, input_index);
+        });
+
+        let parts = unsafe { inputs_ffi.into_raw_parts() };
+        self.inputs_ffi = (parts.0 as _, parts.1, parts.2);
     }
 
     pub fn name(&self) -> &str {

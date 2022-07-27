@@ -1,20 +1,21 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
+use bindlang::backend_cranelift::Program;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
-use zinput_engine::device::DeviceInfo;
+use zinput_engine::DeviceHandle;
+use zinput_engine::device::DeviceMutFfi;
 use zinput_engine::{util::Uuid, DeviceAlreadyExists, DeviceView, Engine};
 
-mod ast;
-mod vm;
 mod device;
 
-pub use self::device::VDevice;
-pub use self::updater::{Updater, VerificationError};
+use self::device::VDevice;
+
+#[derive(Copy, Clone)]
+pub struct VDeviceHandle(Uuid);
 
 pub struct VirtualDevices {
     engine: Arc<Engine>,
@@ -44,30 +45,63 @@ impl VirtualDevices {
         }
     }
 
-    pub fn new_device(
-        &mut self,
+    pub fn insert(
+        &self,
+        out: DeviceHandle,
         mut views: Vec<DeviceView>,
-        updater: Box<dyn Updater>,
-    ) -> Result<VDevice, VirtualDeviceError> {
+    ) -> Result<VDeviceHandle, VirtualDeviceError> {
         let mut shared = self.shared.lock();
 
-        updater.verify(&views)?;
-        let out = updater.create_output(&self.engine)?;
         let name = out.view().info().name.clone();
 
-        let device = shared.devices.len();
+        let device = Uuid::new_v4();
 
         for view in 0..views.len() {
             views[view].register_channel(self.send.clone());
 
             shared
                 .recv_map
-                .insert(*views[view].uuid(), RecvDest { device, view });
+                .entry(*views[view].uuid())
+                .or_default()
+                .push(RecvDest { device, view });
         }
 
-        let vdev = VDevice::new(name, views, out, updater);
+        let vdev = VDevice::new(name, views, out);
+        shared.devices.insert(device, vdev);
 
-        Ok(vdev)
+        Ok(VDeviceHandle(device))
+    }
+
+    pub fn remove(
+        &mut self,
+        handle: VDeviceHandle,
+    ) {
+        let mut shared = self.shared.lock();
+
+        for dests in shared.recv_map.values_mut() {
+            let mut i = 0;
+            while i < dests.len() {
+                if dests[i].device == handle.0 {
+                    dests.swap_remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        shared.devices.remove(&handle.0);
+    }
+
+    pub fn set_program(
+        &mut self,
+        handle: VDeviceHandle,
+        program: Option<Program<DeviceMutFfi>>,
+    ) {
+        let shared = self.shared.lock();
+        let Some(device) = shared.devices.get_mut(&handle.0)
+        else { return; };
+
+        device.set_program(program);
     }
 }
 
@@ -100,25 +134,19 @@ impl Thread {
 
 #[derive(Default)]
 struct Shared {
-    devices: Vec<VDevice>,
-    recv_map: HashMap<Uuid, RecvDest>,
+    devices: HashMap<Uuid, VDevice>,
+    recv_map: HashMap<Uuid, Vec<RecvDest>>,
 }
 
+#[derive(Copy, Clone)]
 struct RecvDest {
-    device: usize,
+    device: Uuid,
     view: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VirtualDeviceError {
-    VerificationError(VerificationError),
     DeviceAlreadyExists(DeviceAlreadyExists),
-}
-
-impl From<VerificationError> for VirtualDeviceError {
-    fn from(err: VerificationError) -> Self {
-        VirtualDeviceError::VerificationError(err)
-    }
 }
 
 impl From<DeviceAlreadyExists> for VirtualDeviceError {
@@ -130,7 +158,6 @@ impl From<DeviceAlreadyExists> for VirtualDeviceError {
 impl std::error::Error for VirtualDeviceError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            VirtualDeviceError::VerificationError(err) => Some(err),
             VirtualDeviceError::DeviceAlreadyExists(err) => Some(err),
         }
     }
@@ -139,7 +166,6 @@ impl std::error::Error for VirtualDeviceError {
 impl std::fmt::Display for VirtualDeviceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VirtualDeviceError::VerificationError(err) => write!(f, "{err}"),
             VirtualDeviceError::DeviceAlreadyExists(err) => write!(f, "{err}"),
         }
     }
@@ -148,22 +174,27 @@ impl std::fmt::Display for VirtualDeviceError {
 fn updater_thread(thread: Thread) -> impl FnOnce() {
     move || {
         let Thread { shared, recv, stop } = thread;
+        let mut recv_dests = Vec::new();
 
         loop {
             crossbeam_channel::select! {
                 recv(recv) -> recv => {
-                    let shared = shared.lock();
+                    let mut shared = shared.lock();
 
                     let Ok(id) = recv
                     else { break; };
 
-                    let Some(dest) = shared.recv_map.get(&id)
+                    let Some(dests) = shared.recv_map.get(&id)
                     else { continue; };
 
-                    let Some(device) = shared.devices.get(dest.device)
-                    else { continue; };
+                    recv_dests.clone_from(&dests);
 
-                    device.update(dest.view);
+                    for dest in &recv_dests {
+                        let Some(device) = shared.devices.get_mut(&dest.device)
+                        else { continue; };
+    
+                        device.update(dest.view);
+                    }                    
 
                     drop(shared);
                 }

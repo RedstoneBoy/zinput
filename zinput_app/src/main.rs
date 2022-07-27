@@ -1,6 +1,7 @@
 #![feature(let_else)]
 #![feature(generic_associated_types)]
 #![feature(maybe_uninit_uninit_array)]
+#![feature(vec_into_raw_parts)]
 
 use std::sync::Arc;
 
