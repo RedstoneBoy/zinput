@@ -1,6 +1,9 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::span::Span;
+use crate::{
+    span::Span,
+    util::{Signed, Width},
+};
 
 #[derive(Clone, Debug)]
 pub struct Token {
@@ -14,6 +17,8 @@ pub enum TokenKind {
     Int(u64),
     Float(f64),
 
+    IntType(Width, Signed),
+
     LBrace,
     RBrace,
     LBrack,
@@ -21,6 +26,7 @@ pub enum TokenKind {
     LParen,
     RParen,
 
+    DoubleColon,
     Colon,
     Comma,
     Dot,
@@ -45,7 +51,7 @@ pub enum TokenKind {
     LessEq,
     Equals,
     NotEquals,
-    
+
     ShiftLeft,
     ShiftRight,
 
@@ -68,12 +74,21 @@ pub enum TokenKind {
 impl TokenKind {
     pub fn ident(ident: &str) -> TokenKind {
         match ident {
-            "else"  => TokenKind::KElse,
+            "u8" => TokenKind::IntType(Width::W8, Signed::No),
+            "u16" => TokenKind::IntType(Width::W16, Signed::No),
+            "u32" => TokenKind::IntType(Width::W32, Signed::No),
+            "u64" => TokenKind::IntType(Width::W64, Signed::No),
+            "i8" => TokenKind::IntType(Width::W8, Signed::Yes),
+            "i16" => TokenKind::IntType(Width::W16, Signed::Yes),
+            "i32" => TokenKind::IntType(Width::W32, Signed::Yes),
+            "i64" => TokenKind::IntType(Width::W64, Signed::Yes),
+
+            "else" => TokenKind::KElse,
             "false" => TokenKind::KFalse,
-            "if"    => TokenKind::KIf,
-            "let"   => TokenKind::KLet,
-            "true"  => TokenKind::KTrue,
-            _       => TokenKind::Ident,
+            "if" => TokenKind::KIf,
+            "let" => TokenKind::KLet,
+            "true" => TokenKind::KTrue,
+            _ => TokenKind::Ident,
         }
     }
 }
@@ -86,6 +101,15 @@ impl Display for TokenKind {
             Int(_) => write!(f, "{{int}}"),
             Float(_) => write!(f, "{{float}}"),
 
+            IntType(Width::W8, Signed::No) => write!(f, "u8"),
+            IntType(Width::W16, Signed::No) => write!(f, "u16"),
+            IntType(Width::W32, Signed::No) => write!(f, "u32"),
+            IntType(Width::W64, Signed::No) => write!(f, "u64"),
+            IntType(Width::W8, Signed::Yes) => write!(f, "i8"),
+            IntType(Width::W16, Signed::Yes) => write!(f, "i16"),
+            IntType(Width::W32, Signed::Yes) => write!(f, "i32"),
+            IntType(Width::W64, Signed::Yes) => write!(f, "i64"),
+
             LBrace => write!(f, "{{"),
             RBrace => write!(f, "}}"),
             LBrack => write!(f, "["),
@@ -93,6 +117,7 @@ impl Display for TokenKind {
             LParen => write!(f, "("),
             RParen => write!(f, ")"),
 
+            DoubleColon => write!(f, "::"),
             Colon => write!(f, ":"),
             Comma => write!(f, ";"),
             Dot => write!(f, "."),
@@ -117,7 +142,7 @@ impl Display for TokenKind {
             LessEq => write!(f, "<="),
             Equals => write!(f, "=="),
             NotEquals => write!(f, "!="),
-            
+
             ShiftLeft => write!(f, "<<"),
             ShiftRight => write!(f, ">>"),
 

@@ -1,33 +1,31 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::span::Span;
+use crate::{
+    span::Span,
+    ty::Type,
+    util::{Int, Signed},
+};
 
 pub type Ident = Span;
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub devices: Devices,
-    pub events: Vec<Event>,
+    pub output: Ident,
+    pub inputs: Vec<DeviceIn>,
 }
 
 impl Module {
     pub fn display<'a, 'b>(&'a self, source: &'b str) -> AstDisplay<'a, 'b> {
-        AstDisplay { source, module: self }
+        AstDisplay {
+            source,
+            module: self,
+        }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct Devices {
-    pub d_in: Vec<Ident>,
-    pub d_out: Ident,
-
-    pub span: Span,
-}
-
-#[derive(Clone, Debug)]
-pub struct Event {
-    pub source: Ident,
-    pub kind: Ident,
+pub struct DeviceIn {
+    pub device: Ident,
     pub body: Block,
 
     pub span: Span,
@@ -71,6 +69,8 @@ pub struct Expr {
     pub kind: ExprKind,
 
     pub span: Span,
+
+    pub ty: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
@@ -79,25 +79,35 @@ pub enum ExprKind {
     Var(Ident),
     Dot(Box<Expr>, Ident),
     Index(Box<Expr>, Box<Expr>),
-    Bit(Box<Expr>, Ident),
 
     Unary(UnOp, Box<Expr>),
     Binary(Box<Expr>, BinOp, Box<Expr>),
+
+    Cast(Box<Expr>, Ident, Option<Ident>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum UnOp {
     Negate,
     Not,
 }
 
-#[derive(Clone, Debug)]
+impl std::fmt::Display for UnOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            UnOp::Negate => write!(f, "-"),
+            UnOp::Not => write!(f, "!"),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub enum BinOp {
     BitOr,
     BitAnd,
+    BitXor,
     Or,
     And,
-    Xor,
 
     Add,
     Sub,
@@ -115,14 +125,41 @@ pub enum BinOp {
     ShiftRight,
 }
 
+impl std::fmt::Display for BinOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            BinOp::BitOr => write!(f, "|"),
+            BinOp::BitAnd => write!(f, "&"),
+            BinOp::BitXor => write!(f, "^"),
+            BinOp::Or => write!(f, "||"),
+            BinOp::And => write!(f, "&&"),
+
+            BinOp::Add => write!(f, "+"),
+            BinOp::Sub => write!(f, "-"),
+            BinOp::Mul => write!(f, "*"),
+            BinOp::Div => write!(f, "/"),
+
+            BinOp::Greater => write!(f, ">"),
+            BinOp::GreaterEq => write!(f, ">="),
+            BinOp::Less => write!(f, "<"),
+            BinOp::LessEq => write!(f, "<="),
+            BinOp::Equals => write!(f, "=="),
+            BinOp::NotEquals => write!(f, "!="),
+
+            BinOp::ShiftLeft => write!(f, "<<"),
+            BinOp::ShiftRight => write!(f, ">>"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Literal {
-    Int(u64),
+    Int(Int, Signed),
     Float(f64),
     Bool(bool),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AssignKind {
     Normal,
     BitOr,
@@ -155,14 +192,15 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
             match &stmt.kind {
                 StmtKind::Let { name, expr } => {
                     self.write_tabs(f, tabs)?;
-                    write!(f, "let {} = ", name.index_src(&self.source))?;
+                    write!(f, "let")?;
+                    write!(f, " {} = ", name.index_src(&self.source))?;
                     self.write_expr(f, expr)?;
                     write!(f, ";\n")?;
                 }
                 StmtKind::Assign { lval, kind, expr } => {
                     self.write_tabs(f, tabs)?;
                     self.write_expr(f, lval)?;
-                    
+
                     let assign = match kind {
                         AssignKind::Normal => "=",
                         AssignKind::BitOr => "|=",
@@ -205,13 +243,11 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
 
     fn write_expr(&self, f: &mut Formatter, expr: &Expr) -> Result {
         match &expr.kind {
-            ExprKind::Literal(literal) => {
-                match literal {
-                    Literal::Bool(val) => write!(f, "{val}")?,
-                    Literal::Int(val) => write!(f, "{val}")?,
-                    Literal::Float(val) => write!(f, "{val}")?,
-                }
-            }
+            ExprKind::Literal(literal) => match literal {
+                Literal::Bool(val) => write!(f, "{val}")?,
+                Literal::Int(val, _) => write!(f, "{val}")?,
+                Literal::Float(val) => write!(f, "{val}")?,
+            },
             ExprKind::Var(ident) => write!(f, "{}", ident.index_src(&self.source))?,
             ExprKind::Dot(left, ident) => {
                 self.write_expr(f, left)?;
@@ -222,10 +258,6 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                 write!(f, "[")?;
                 self.write_expr(f, index)?;
                 write!(f, "]")?;
-            }
-            ExprKind::Bit(left, bit) => {
-                self.write_expr(f, left)?;
-                write!(f, "#{}", bit.index_src(&self.source))?;
             }
             ExprKind::Unary(op, expr) => {
                 match op {
@@ -244,7 +276,7 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                     BinOp::BitAnd => "&",
                     BinOp::Or => "||",
                     BinOp::And => "&&",
-                    BinOp::Xor => "^",
+                    BinOp::BitXor => "^",
 
                     BinOp::Add => "+",
                     BinOp::Sub => "-",
@@ -266,6 +298,15 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
                 self.write_expr(f, right)?;
                 write!(f, ")")?;
             }
+            ExprKind::Cast(expr, ty, tymeta) => {
+                write!(f, "::[{}", ty.index_src(self.source))?;
+                if let Some(tymeta) = tymeta {
+                    write!(f, "({})", tymeta.index_src(self.source))?;
+                }
+                write!(f, "](")?;
+                self.write_expr(f, expr)?;
+                write!(f, ")")?;
+            }
         }
 
         Ok(())
@@ -274,22 +315,12 @@ impl<'a, 'b> AstDisplay<'a, 'b> {
 
 impl<'a, 'b> Display for AstDisplay<'a, 'b> {
     fn fmt(&self, f: &mut Formatter) -> Result {
-        write!(f, "devices {{\n\tin: [")?;
-        let mut comma = false;
-        for d in &self.module.devices.d_in {
-            if comma {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", &self.source[d.start.index..d.end.index])?;
+        writeln!(f, "device {};\n", self.module.output.index_src(self.source))?;
 
-            comma = true;
-        }
-        write!(f, "],\n\tout: {},\n}}\n\n", &self.source[self.module.devices.d_out.start.index..self.module.devices.d_out.end.index])?;
+        for d_in in &self.module.inputs {
+            write!(f, "{} ", d_in.device.index_src(&self.source),)?;
 
-        for event in &self.module.events {
-            write!(f, "{}:{} ", event.source.index_src(&self.source), event.kind.index_src(&self.source))?;
-
-            self.write_block(f, &event.body, 1)?;
+            self.write_block(f, &d_in.body, 1)?;
 
             write!(f, "\n\n")?;
         }

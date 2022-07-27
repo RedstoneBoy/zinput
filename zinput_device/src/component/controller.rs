@@ -1,5 +1,6 @@
-use std::ops::BitOr;
+use std::{ops::BitOr, collections::HashMap, sync::LazyLock};
 
+use bindlang::{ty::{BLType, Type, BitNames}, to_struct, to_bitfield, util::Width};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -177,6 +178,59 @@ pub struct Controller {
     pub r1_analog: u8,
     pub l2_analog: u8,
     pub r2_analog: u8,
+}
+
+unsafe impl BLType for Controller {
+    fn bl_type() -> Type {
+        static TYPE: LazyLock<Type> = LazyLock::new(|| {
+            struct ButtonType;
+            unsafe impl BLType for ButtonType {
+                fn bl_type() -> Type {
+                    to_bitfield! {
+                        name = ControllerButtons;
+                        size = Width::W64;
+                        a = 0;
+                        b = 1;
+                        x = 2;
+                        y = 3;
+                        up = 4;
+                        down = 5;
+                        left = 6;
+                        right = 7;
+                        start = 8;
+                        select = 9;
+                        l1 = 10;
+                        r1 = 11;
+                        l2 = 12;
+                        r2 = 13;
+                        l3 = 14;
+                        r3 = 15;
+                        l4 = 16;
+                        r4 = 17;
+                        lstick = 18;
+                        rstick = 19;
+                        home = 20;
+                        capture = 21;
+                    }
+                }
+            }
+
+            to_struct! {
+                name = Controller;
+                0:  buttons:       ButtonType;
+                8:  left_stick_x:  u8;
+                9:  left_stick_y:  u8;
+                10: right_stick_x: u8;
+                11: right_stick_y: u8;
+                12: l1_analog:     u8;
+                13: r1_analog:     u8;
+                14: l2_analog:     u8;
+                15: r2_analog:     u8;
+            }
+        });
+        
+        TYPE.clone()
+    }
 }
 
 impl Default for Controller {

@@ -5,6 +5,9 @@ use crate::{
     token::{Token, TokenKind},
 };
 
+#[cfg(test)]
+mod tests;
+
 pub struct Lexer<'a> {
     src: &'a str,
     chars: Peekable<Chars<'a>>,
@@ -85,12 +88,16 @@ impl<'a> Lexer<'a> {
                             let end = self.pos;
                             return Ok(Token {
                                 span: Span { start, end },
-                                kind: TokenKind::Int(self.src[start.index..end.index].parse().expect("internal lexer error: error parsing int")),
+                                kind: TokenKind::Int(
+                                    self.src[start.index..end.index]
+                                        .parse()
+                                        .expect("internal lexer error: error parsing int"),
+                                ),
                             });
                         }
                     }
                 }
-                
+
                 // float match
 
                 loop {
@@ -103,10 +110,14 @@ impl<'a> Lexer<'a> {
                 }
 
                 let end = self.pos;
-                
+
                 Token {
                     span: Span { start, end },
-                    kind: TokenKind::Float(self.src[start.index..end.index].parse().expect("internal lexer error: error parsing float")),
+                    kind: TokenKind::Float(
+                        self.src[start.index..end.index]
+                            .parse()
+                            .expect("internal lexer error: error parsing float"),
+                    ),
                 }
             }
 
@@ -117,7 +128,14 @@ impl<'a> Lexer<'a> {
             '(' => self.single(TokenKind::LParen, start),
             ')' => self.single(TokenKind::RParen, start),
 
-            ':' => self.single(TokenKind::Colon, start),
+            ':' => self.double(
+                TokenKind::Colon,
+                |ch| match ch {
+                    ':' => Some(TokenKind::DoubleColon),
+                    _ => None,
+                },
+                start,
+            ),
             ',' => self.single(TokenKind::Comma, start),
             '.' => self.single(TokenKind::Dot, start),
             ';' => self.single(TokenKind::Semicolon, start),
@@ -203,7 +221,7 @@ impl<'a> Lexer<'a> {
             '<' => self.double(
                 TokenKind::Less,
                 |ch| match ch {
-                    '<'  => Some(TokenKind::ShiftLeft),
+                    '<' => Some(TokenKind::ShiftLeft),
                     '=' => Some(TokenKind::LessEq),
                     _ => None,
                 },
@@ -220,7 +238,10 @@ impl<'a> Lexer<'a> {
 
             other => {
                 self.errors.push(LexerError {
-                    span: Span { start, end: self.pos },
+                    span: Span {
+                        start,
+                        end: self.pos,
+                    },
                     kind: LexerErrorKind::InvalidCharacter(other),
                 });
                 return Err(NextError::Skip);

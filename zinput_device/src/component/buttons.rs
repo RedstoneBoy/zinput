@@ -1,3 +1,5 @@
+use bindlang::{ty::{BLType, Type, BitNames}, util::Width};
+
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -17,6 +19,12 @@ pub type ButtonsConfig = ();
 #[derive(Copy, Clone)]
 pub struct Buttons {
     pub buttons: u64,
+}
+
+unsafe impl BLType for Buttons {
+    fn bl_type() -> Type {
+        Type::Bitfield("Buttons", Width::W64, BitNames::default())
+    }
 }
 
 impl Default for Buttons {

@@ -1,14 +1,13 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{Devices, Module, Event, Block, Stmt, StmtKind, AssignKind, Expr, BinOp, ExprKind, UnOp, Literal},
+    ast::{
+        AssignKind, BinOp, Block, DeviceIn, Expr, ExprKind, Literal, Module, Stmt, StmtKind, UnOp,
+    },
     span::Span,
     token::{Token, TokenKind},
+    util::{Int, Signed, Width},
 };
-
-const KW_DEVICES: &'static str = "devices";
-const KW_IN: &'static str = "in";
-const KW_OUT: &'static str = "out";
 
 pub struct Parser<'a> {
     src: &'a str,
@@ -35,41 +34,30 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_module(&mut self) -> Option<Module> {
-        let devices = self.parse_device_struct()?;
+        self.eat_ident_kw("device")?;
+        let output = self.eat_token(TokenKind::Ident)?.span;
+        self.eat_token(TokenKind::Semicolon)?;
 
-        let mut events = Vec::new();
-        
+        let mut inputs = Vec::new();
+
         while self.tokens.peek().is_some() {
-            let event = self.parse_event()?;
-            events.push(event);
+            let input = self.parse_input()?;
+            inputs.push(input);
         }
 
-        Some(Module {
-            devices,
-            events,
-        })
+        Some(Module { output, inputs })
     }
 
-    fn parse_event(&mut self) -> Option<Event> {
-        let source = self.eat_token(TokenKind::Ident)?.span;
-        let start = source.start;
-
-        self.eat_token(TokenKind::Colon)?;
-
-        let kind = self.eat_token(TokenKind::Ident)?.span;
+    fn parse_input(&mut self) -> Option<DeviceIn> {
+        let device = self.eat_token(TokenKind::Ident)?.span;
+        let start = device.start;
 
         let body = self.parse_block()?;
         let end = body.span.end;
 
         let span = Span { start, end };
 
-        Some(Event {
-            source,
-            kind,
-            body,
-
-            span,
-        })
+        Some(DeviceIn { device, body, span })
     }
 
     fn parse_block(&mut self) -> Option<Block> {
@@ -89,10 +77,7 @@ impl<'a> Parser<'a> {
         let end = self.eat_token(TokenKind::RBrace)?.span.end;
         let span = Span { start, end };
 
-        Some(Block {
-            stmts,
-            span,
-        })
+        Some(Block { stmts, span })
     }
 
     fn parse_stmt(&mut self) -> Option<Stmt> {
@@ -108,28 +93,30 @@ impl<'a> Parser<'a> {
 
         let start = lval.span.start;
 
-        let assign_kind = self.tokens.peek().and_then(|tok| Some(match &tok.kind {
-            TokenKind::Assign =>   AssignKind::Normal,
-            TokenKind::BitOrAssign => AssignKind::BitOr,
-            TokenKind::BitAndAssign => AssignKind::BitAnd,
-            TokenKind::XorAssign => AssignKind::Xor,
-            TokenKind::AddAssign => AssignKind::Add,
-            TokenKind::SubAssign => AssignKind::Sub,
-            TokenKind::MulAssign => AssignKind::Mul,
-            TokenKind::DivAssign => AssignKind::Div,
-            _ => return None
-        }));
+        let assign_kind = self.tokens.peek().and_then(|tok| {
+            Some(match &tok.kind {
+                TokenKind::Assign => AssignKind::Normal,
+                TokenKind::BitOrAssign => AssignKind::BitOr,
+                TokenKind::BitAndAssign => AssignKind::BitAnd,
+                TokenKind::XorAssign => AssignKind::Xor,
+                TokenKind::AddAssign => AssignKind::Add,
+                TokenKind::SubAssign => AssignKind::Sub,
+                TokenKind::MulAssign => AssignKind::Mul,
+                TokenKind::DivAssign => AssignKind::Div,
+                _ => return None,
+            })
+        });
 
         if let Some(kind) = assign_kind {
             self.eat_any_token().unwrap();
 
             let expr = self.parse_expr()?;
-            
+
             let end = self.eat_token(TokenKind::Semicolon)?.span.end;
 
-            Some(Stmt { 
+            Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::Assign { lval, kind, expr }
+                kind: StmtKind::Assign { lval, kind, expr },
             })
         } else {
             let end = self.eat_token(TokenKind::Semicolon)?.span.end;
@@ -170,7 +157,11 @@ impl<'a> Parser<'a> {
 
             return Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: None },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: None,
+                },
             });
         }
 
@@ -182,12 +173,19 @@ impl<'a> Parser<'a> {
 
             let no = Block {
                 stmts: vec![else_if],
-                span: Span { start: no_start, end },
+                span: Span {
+                    start: no_start,
+                    end,
+                },
             };
 
             Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: Some(no) },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: Some(no),
+                },
             })
         } else if self.peek_token(TokenKind::LBrace) {
             let no = self.parse_block()?;
@@ -195,16 +193,17 @@ impl<'a> Parser<'a> {
 
             Some(Stmt {
                 span: Span { start, end },
-                kind: StmtKind::If { cond, yes, no: Some(no) },
+                kind: StmtKind::If {
+                    cond,
+                    yes,
+                    no: Some(no),
+                },
             })
         } else {
             let got = self.eat_any_token()?;
             self.errors.push(ParserError::UnexpectedToken {
                 got,
-                expected: vec![
-                    TokenKind::KIf,
-                    TokenKind::LBrace,
-                ],
+                expected: vec![TokenKind::KIf, TokenKind::LBrace],
             });
 
             None
@@ -218,10 +217,12 @@ impl<'a> Parser<'a> {
     // parse bool or
     fn parse_expr_l1(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Or => BinOp::Or,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Or => BinOp::Or,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l2,
             true,
         )
@@ -230,10 +231,12 @@ impl<'a> Parser<'a> {
     // parse bool or
     fn parse_expr_l2(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::And => BinOp::And,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::And => BinOp::And,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l3,
             true,
         )
@@ -242,15 +245,17 @@ impl<'a> Parser<'a> {
     // parse comparison
     fn parse_expr_l3(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Equals => BinOp::Equals,
-                TokenKind::NotEquals => BinOp::NotEquals,
-                TokenKind::Greater => BinOp::Greater,
-                TokenKind::GreaterEq => BinOp::GreaterEq,
-                TokenKind::Less => BinOp::Less,
-                TokenKind::LessEq => BinOp::LessEq,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Equals => BinOp::Equals,
+                    TokenKind::NotEquals => BinOp::NotEquals,
+                    TokenKind::Greater => BinOp::Greater,
+                    TokenKind::GreaterEq => BinOp::GreaterEq,
+                    TokenKind::Less => BinOp::Less,
+                    TokenKind::LessEq => BinOp::LessEq,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l4,
             false,
         )
@@ -259,10 +264,12 @@ impl<'a> Parser<'a> {
     // parse bit or
     fn parse_expr_l4(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::BitOr => BinOp::BitOr,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::BitOr => BinOp::BitOr,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l5,
             true,
         )
@@ -271,10 +278,12 @@ impl<'a> Parser<'a> {
     // parse xor
     fn parse_expr_l5(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Xor => BinOp::Xor,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Xor => BinOp::BitXor,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l6,
             true,
         )
@@ -283,10 +292,12 @@ impl<'a> Parser<'a> {
     // parse bit and
     fn parse_expr_l6(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::BitAnd => BinOp::BitAnd,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::BitAnd => BinOp::BitAnd,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l7,
             true,
         )
@@ -295,11 +306,13 @@ impl<'a> Parser<'a> {
     // parse shift
     fn parse_expr_l7(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::ShiftLeft => BinOp::ShiftLeft,
-                TokenKind::ShiftRight => BinOp::ShiftRight,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::ShiftLeft => BinOp::ShiftLeft,
+                    TokenKind::ShiftRight => BinOp::ShiftRight,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l8,
             true,
         )
@@ -308,11 +321,13 @@ impl<'a> Parser<'a> {
     // parse add sub
     fn parse_expr_l8(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Plus => BinOp::Add,
-                TokenKind::Minus => BinOp::Sub,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Plus => BinOp::Add,
+                    TokenKind::Minus => BinOp::Sub,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l9,
             true,
         )
@@ -321,11 +336,13 @@ impl<'a> Parser<'a> {
     // parse mul
     fn parse_expr_l9(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::Star => BinOp::Mul,
-                TokenKind::Slash => BinOp::Div,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::Star => BinOp::Mul,
+                    TokenKind::Slash => BinOp::Div,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l10,
             true,
         )
@@ -334,11 +351,13 @@ impl<'a> Parser<'a> {
     // parse shift
     fn parse_expr_l10(&mut self) -> Option<Expr> {
         self.parse_bin_op(
-            |tk| Some(match tk {
-                TokenKind::ShiftLeft => BinOp::ShiftLeft,
-                TokenKind::ShiftRight => BinOp::ShiftRight,
-                _ => return None,
-            }),
+            |tk| {
+                Some(match tk {
+                    TokenKind::ShiftLeft => BinOp::ShiftLeft,
+                    TokenKind::ShiftRight => BinOp::ShiftRight,
+                    _ => return None,
+                })
+            },
             Self::parse_expr_l11,
             true,
         )
@@ -351,41 +370,31 @@ impl<'a> Parser<'a> {
             Some(Expr {
                 span: Span {
                     start: tok.span.start,
-                    end:  expr.span.end,
+                    end: expr.span.end,
                 },
-                kind: ExprKind::Unary(UnOp::Negate, Box::new(expr))
+                kind: ExprKind::Unary(UnOp::Negate, Box::new(expr)),
+                ty: None,
             })
-        } else  if let Some(tok) = self.maybe_eat_token(TokenKind::Not) {
+        } else if let Some(tok) = self.maybe_eat_token(TokenKind::Not) {
             let expr = self.parse_expr_l12()?;
             Some(Expr {
                 span: Span {
                     start: tok.span.start,
-                    end:  expr.span.end,
+                    end: expr.span.end,
                 },
-                kind: ExprKind::Unary(UnOp::Not, Box::new(expr))
+                kind: ExprKind::Unary(UnOp::Not, Box::new(expr)),
+                ty: None,
             })
         } else {
             self.parse_expr_l12()
         }
     }
 
-    // parse bit
+    // parse placeholder
     fn parse_expr_l12(&mut self) -> Option<Expr> {
         let expr = self.parse_expr_l13()?;
 
-        if let Some(_) = self.maybe_eat_token(TokenKind::Hash) {
-            let bit = self.eat_token(TokenKind::Ident)?;
-
-            Some(Expr {
-                span: Span {
-                    start: expr.span.start,
-                    end: bit.span.end,
-                },
-                kind: ExprKind::Bit(Box::new(expr), bit.span)
-            })
-        } else {
-            Some(expr)
-        }
+        Some(expr)
     }
 
     // parse index
@@ -401,7 +410,8 @@ impl<'a> Parser<'a> {
                     start: expr.span.start,
                     end,
                 },
-                kind: ExprKind::Index(Box::new(expr), Box::new(index))
+                kind: ExprKind::Index(Box::new(expr), Box::new(index)),
+                ty: None,
             })
         } else {
             Some(expr)
@@ -420,6 +430,7 @@ impl<'a> Parser<'a> {
                     end: ident.span.end,
                 },
                 kind: ExprKind::Dot(Box::new(expr), ident.span),
+                ty: None,
             };
         }
 
@@ -427,27 +438,78 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr_l15(&mut self) -> Option<Expr> {
-        let tok =  self.eat_any_token()?;
-        Some(match &tok.kind {
+        let tok = self.eat_any_token()?;
+        Some(match tok.kind {
             TokenKind::KTrue => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Bool(true)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Bool(true)),
+                    ty: None,
+                }
             }
             TokenKind::KFalse => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Bool(false)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Bool(false)),
+                    ty: None,
+                }
             }
             TokenKind::Int(val) => {
-                let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Int(*val)) }
+                let mut span = tok.span;
+
+                let (width, signed) = if let Some(Token {
+                    kind: TokenKind::IntType(width, signed),
+                    span: tspan,
+                }) = self.tokens.peek()
+                {
+                    span.end = tspan.end;
+                    let ret = (*width, *signed);
+                    let _ = self.eat_any_token();
+                    ret
+                } else {
+                    const U8_MAX: u64 = u8::MAX as u64;
+                    const U16_MAX: u64 = u16::MAX as u64;
+                    const U32_MAX: u64 = u32::MAX as u64;
+                    const U64_MAX: u64 = u64::MAX;
+
+                    match val {
+                        0..=U8_MAX => (Width::W8, Signed::No),
+                        0..=U16_MAX => (Width::W16, Signed::No),
+                        0..=U32_MAX => (Width::W32, Signed::No),
+                        0..=U64_MAX => (Width::W64, Signed::No),
+                    }
+                };
+
+                let int = match width {
+                    Width::W8 => Int::W8(val as _),
+                    Width::W16 => Int::W16(val as _),
+                    Width::W32 => Int::W32(val as _),
+                    Width::W64 => Int::W64(val),
+                };
+
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Int(int, signed)),
+                    ty: None,
+                }
             }
             TokenKind::Float(val) => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Literal(Literal::Float(*val)) }
+                Expr {
+                    span,
+                    kind: ExprKind::Literal(Literal::Float(val)),
+                    ty: None,
+                }
             }
             TokenKind::Ident => {
                 let span = tok.span;
-                Expr { span, kind: ExprKind::Var(span) }
+                Expr {
+                    span,
+                    kind: ExprKind::Var(span),
+                    ty: None,
+                }
             }
             TokenKind::LParen => {
                 let expr = self.parse_expr()?;
@@ -458,7 +520,10 @@ impl<'a> Parser<'a> {
                 self.errors.push(ParserError::UnexpectedToken {
                     got: tok,
                     expected: vec![
-                        TokenKind::KTrue, TokenKind::KFalse, TokenKind::Int(0), TokenKind::Float(0.0),
+                        TokenKind::KTrue,
+                        TokenKind::KFalse,
+                        TokenKind::Int(0),
+                        TokenKind::Float(0.0),
                     ],
                 });
                 return None;
@@ -466,7 +531,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_bin_op<T, F>(&mut self, mut token_to_op: T, mut next_level: F, multiple: bool) -> Option<Expr>
+    fn parse_bin_op<T, F>(
+        &mut self,
+        mut token_to_op: T,
+        mut next_level: F,
+        multiple: bool,
+    ) -> Option<Expr>
     where
         T: FnMut(&TokenKind) -> Option<BinOp>,
         F: FnMut(&mut Self) -> Option<Expr>,
@@ -484,6 +554,7 @@ impl<'a> Parser<'a> {
                         end: right.span.end,
                     },
                     kind: ExprKind::Binary(Box::new(left), bin_op, Box::new(right)),
+                    ty: None,
                 };
             } else {
                 break;
@@ -495,38 +566,6 @@ impl<'a> Parser<'a> {
         }
 
         Some(left)
-    }
-
-    fn parse_device_struct(&mut self) -> Option<Devices> {
-        let start = self.eat_ident_kw(KW_DEVICES)?.span.start;
-        self.eat_token(TokenKind::LBrace)?;
-        self.eat_ident_kw(KW_IN)?;
-        self.eat_token(TokenKind::Colon)?;
-        self.eat_token(TokenKind::LBrack)?;
-
-        let mut d_in = Vec::new();
-        while self.peek_token(TokenKind::Ident) {
-            let token = self.eat_token(TokenKind::Ident).unwrap();
-            d_in.push(token.span);
-
-            if self.maybe_eat_token(TokenKind::Comma).is_none() {
-                break;
-            }
-        }
-
-        self.eat_token(TokenKind::RBrack)?;
-        self.eat_token(TokenKind::Comma)?;
-        self.eat_ident_kw(KW_OUT)?;
-        self.eat_token(TokenKind::Colon)?;
-
-        let d_out = self.eat_token(TokenKind::Ident)?.span;
-
-        self.maybe_eat_token(TokenKind::Comma);
-        let end = self.eat_token(TokenKind::RBrace)?.span.end;
-
-        let span = Span { start, end };
-
-        Some(Devices { d_in, d_out, span })
     }
 
     fn eat_ident_kw(&mut self, kw: &'static str) -> Option<Token> {
@@ -595,7 +634,13 @@ impl<'a> Parser<'a> {
 
 #[derive(Clone, Debug)]
 pub enum ParserError {
-    UnexpectedToken { got: Token, expected: Vec<TokenKind> },
-    ExpectedIdentKeyWord { got: Token, expected: &'static str },
+    UnexpectedToken {
+        got: Token,
+        expected: Vec<TokenKind>,
+    },
+    ExpectedIdentKeyWord {
+        got: Token,
+        expected: &'static str,
+    },
     UnexpectedEof,
 }
