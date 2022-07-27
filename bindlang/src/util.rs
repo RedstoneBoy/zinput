@@ -10,30 +10,12 @@ impl Width {
     #[allow(non_upper_case_globals)]
     pub const WSize: Width = Int::WSize(0).width();
 
-    pub fn size(&self) -> i32 {
+    pub(crate) fn size(&self) -> u8 {
         match self {
             Width::W8 => 1,
             Width::W16 => 2,
             Width::W32 => 4,
             Width::W64 => 8,
-        }
-    }
-
-    pub fn int(&self, val: u8) -> Int {
-        match self {
-            Width::W8 => Int::W8(val),
-            Width::W16 => Int::W16(val as _),
-            Width::W32 => Int::W32(val as _),
-            Width::W64 => Int::W64(val as _),
-        }
-    }
-
-    pub fn int_truncate(&self, val: u64) -> Int {
-        match self {
-            Width::W8 => Int::W8(val as _),
-            Width::W16 => Int::W16(val as _),
-            Width::W32 => Int::W32(val as _),
-            Width::W64 => Int::W64(val),
         }
     }
 }
@@ -72,24 +54,15 @@ impl Int {
             Int::W64(_) => Width::W64,
         }
     }
-
-    pub fn to_u64_zextend(self) -> u64 {
-        match self {
-            Int::W8(v) => v as u64,
-            Int::W16(v) => v as u64,
-            Int::W32(v) => v as u64,
-            Int::W64(v) => v as u64,
-        }
-    }
 }
 
 impl Into<u64> for Int {
     fn into(self) -> u64 {
         match self {
-            Int::W8(v) => v as _,
-            Int::W16(v) => v as _,
-            Int::W32(v) => v as _,
-            Int::W64(v) => v as _,
+            Int::W8(v) => v.into(),
+            Int::W16(v) => v.into(),
+            Int::W32(v) => v.into(),
+            Int::W64(v) => v.into(),
         }
     }
 }

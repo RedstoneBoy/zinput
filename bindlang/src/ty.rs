@@ -18,10 +18,11 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn stack_size(&self) -> i32 {
+    pub(crate) fn stack_size(&self) -> u8 {
         let ptr_size = std::mem::size_of::<usize>();
-        assert!(ptr_size < (i32::MAX / 2) as usize);
-        let ptr_size = ptr_size as i32;
+        assert!(ptr_size < (u8::MAX / 2) as usize, "pointer size is too large");
+        let ptr_size = ptr_size as u8;
+
         match self {
             Type::Reference(_, _) => ptr_size,
             Type::Int(w, _) => w.size(),
@@ -34,7 +35,7 @@ impl Type {
         }
     }
 
-    pub fn is_num(&self) -> bool {
+    pub(crate) fn is_num(&self) -> bool {
         match self {
             Type::Int(_, _) => true,
             Type::F32 => true,
@@ -43,7 +44,7 @@ impl Type {
         }
     }
 
-    pub fn width(&self) -> Option<Width> {
+    pub(crate) fn width(&self) -> Option<Width> {
         match self {
             Type::Int(width, _) => Some(*width),
             Type::F32 => Some(Width::W32),
@@ -54,7 +55,7 @@ impl Type {
         }
     }
 
-    pub fn dereferenced(self) -> Self {
+    pub(crate) fn dereferenced(self) -> Self {
         let mut this = self;
 
         while let Type::Reference(ty, _) = this {
@@ -64,7 +65,7 @@ impl Type {
         this
     }
 
-    pub fn assignable_from(&self, from: &Type) -> bool {
+    pub(crate) fn assignable_from(&self, from: &Type) -> bool {
         match self {
             Type::Reference(_, _) => false,
             Type::Int(width, signed) => match from {

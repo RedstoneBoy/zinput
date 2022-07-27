@@ -11,12 +11,15 @@ pub mod ty;
 mod typecheck;
 pub mod util;
 
-use std::collections::HashMap;
-
+use backend_cranelift::CompiledFunction;
 pub use error::Errors;
-use ty::Type;
+use ty::BLType;
 
-pub fn compile_native(source: &str, device_type: Type) -> Result<Vec<backend_cranelift::CompiledFunction>, Errors> {
+pub fn compile_native<T: BLType>(source: &str) -> Result<Vec<CompiledFunction<T>>, Errors> {
+    use std::collections::HashMap;
+
+    let device_type = T::bl_type();
+
     let lexer = lexer::Lexer::new(source);
     let (tokens, lexer_errors) = lexer.scan();
     let parser = parser::Parser::new(source, tokens);
@@ -43,5 +46,5 @@ pub fn compile_native(source: &str, device_type: Type) -> Result<Vec<backend_cra
     }
 
     let compiler = backend_cranelift::Compiler::new(source);
-    Ok(compiler.compile(module))
+    Ok(unsafe { compiler.compile(module) })
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::c_void};
+use std::{collections::HashMap, ffi::c_void, marker::PhantomData};
 
 use cranelift::{
     codegen::{ir::StackSlot, Context},
@@ -16,7 +16,7 @@ use crate::{
         BinOp, Block as AstBlock, DeviceIn, Expr, ExprKind, Literal, Module as AstModule, Stmt,
         StmtKind, UnOp,
     },
-    ty::Type as Ty,
+    ty::{Type as Ty, BLType},
     util::{Int, Signed, Width},
 };
 
@@ -27,6 +27,7 @@ const ICE_EXPECT_STACK: &'static str =
 
 const ERROR_INVALID_NUMBER_OF_INPUTS: u32 = 1;
 const ERROR_INDEX_OUT_OF_BOUNDS: u32 = 2;
+const ERROR_TOO_MANY_INPUTS: u32 = 3;
 
 struct Env<'a> {
     vars: Vec<HashMap<&'a str, Result<Variable, StackSlot>>>,
@@ -92,7 +93,30 @@ impl<'a> Env<'a> {
     }
 }
 
-pub type CompiledFunction = extern "sysv64" fn(*mut c_void, *mut c_void, u32) -> u32;
+pub struct CompiledFunction<T: BLType>(RawFunction, PhantomData<T>);
+
+impl<T: BLType> CompiledFunction<T> {
+    pub fn call(&self, output: &mut T, inputs: &mut [&mut T]) -> u32 {
+        unsafe {
+            self.0(
+                output as *mut _ as _,
+                inputs as *mut _ as _,
+                match inputs.len().try_into() {
+                    Ok(v) => v,
+                    Err(_) => return ERROR_TOO_MANY_INPUTS,
+                }
+            )
+        }
+    }
+}
+/// # Safety
+/// 
+/// `output` must be a pointer to the output device.
+/// 
+/// `inputs` must be a pointer to an array of input devices.
+/// 
+/// `inputs_len` must be the number of input devices pointed to by `inputs`.
+type RawFunction = unsafe extern "sysv64" fn(output: *mut c_void, inputs: *mut c_void, inputs_len: u32) -> u32;
 
 pub struct Compiler<'a> {
     src: &'a str,
@@ -119,7 +143,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(mut self, module: AstModule) -> Vec<CompiledFunction> {
+    /// # Safety
+    /// 
+    /// `T` must be the same type that was used to construct `module`
+    pub unsafe fn compile<T: BLType>(mut self, module: AstModule) -> Vec<CompiledFunction<T>> {
         let d_out = module.output.index_src(self.src);
         let inputs = module
             .inputs
@@ -153,7 +180,8 @@ impl<'a> Compiler<'a> {
         let mut ret = Vec::new();
         for func_id in funcs {
             let ptr = self.module.get_finalized_function(func_id);
-            ret.push(unsafe { std::mem::transmute(ptr) });
+            let ptr = unsafe { std::mem::transmute(ptr) };
+            ret.push(CompiledFunction(ptr, PhantomData));
         }
 
         ret
