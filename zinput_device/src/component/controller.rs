@@ -180,11 +180,11 @@ pub struct Controller {
     pub r2_analog: u8,
 }
 
-impl BLType for Controller {
+unsafe impl BLType for Controller {
     fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             struct ButtonType;
-            impl BLType for ButtonType {
+            unsafe impl BLType for ButtonType {
                 fn bl_type() -> Type {
                     to_bitfield! {
                         name = ControllerButtons;

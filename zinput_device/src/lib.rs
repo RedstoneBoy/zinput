@@ -148,7 +148,7 @@ macro_rules! device {
                 $(pub [< $cname s >]: FfiSlice,)*
             }
 
-            impl<'a> bindlang::ty::BLType for DeviceMutFfi<'a> {
+            unsafe impl<'a> bindlang::ty::BLType for DeviceMutFfi<'a> {
                 fn bl_type() -> bindlang::ty::Type {
                     use std::collections::HashMap;
                     use std::sync::LazyLock;

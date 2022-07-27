@@ -1,4 +1,4 @@
-use std::{sync::LazyLock, collections::HashMap};
+use std::sync::LazyLock;
 
 use bindlang::{ty::{Type, BLType}, to_struct};
 
@@ -43,7 +43,7 @@ pub struct Motion {
     pub accel_z: f32,
 }
 
-impl BLType for Motion {
+unsafe impl BLType for Motion {
     fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             to_struct! {

@@ -164,13 +164,13 @@ pub struct Field {
 /// can lead to undefined behaviour in BL.
 ///
 /// See [`Struct`] for safety information
-pub trait BLType {
+pub unsafe trait BLType {
     fn bl_type() -> Type;
 }
 
 macro_rules! impl_bl_type {
     ($($typ:ty = $e:expr;)*) => {
-        $(impl BLType for $typ {
+        $(unsafe impl BLType for $typ {
             fn bl_type() -> Type {
                 $e
             }

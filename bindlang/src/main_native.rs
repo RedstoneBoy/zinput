@@ -12,7 +12,7 @@ use bindlang::{
 };
 
 struct ButtonType;
-impl BLType for ButtonType {
+unsafe impl BLType for ButtonType {
     fn bl_type() -> Type {
         to_bitfield! {
             name = ControllerButtons;
@@ -58,7 +58,7 @@ struct Device {
     yaw: f64,
 }
 
-impl BLType for Device {
+unsafe impl BLType for Device {
     fn bl_type() -> Type {
         to_struct!(
             name = Device;

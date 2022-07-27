@@ -21,7 +21,7 @@ pub struct Buttons {
     pub buttons: u64,
 }
 
-impl BLType for Buttons {
+unsafe impl BLType for Buttons {
     fn bl_type() -> Type {
         Type::Bitfield("Buttons", Width::W64, BitNames::default())
     }

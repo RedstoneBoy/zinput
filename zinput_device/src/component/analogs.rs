@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bindlang::ty::{BLType, Type, Struct};
+use bindlang::{ty::{BLType, Type, Struct}, to_struct};
 use serde::{Deserialize, Serialize};
 
 use super::ComponentData;
@@ -35,14 +35,19 @@ pub struct Analogs {
     pub analogs: [u8; 8],
 }
 
-impl BLType for Analogs {
+unsafe impl BLType for Analogs {
     fn bl_type() -> Type {
-        // TODO
-        Type::Struct(Struct {
-            name: "Analogs",
-            fields: HashMap::new(),
-            size: std::mem::size_of::<Analogs>() as i32,
-        })
+        to_struct!(
+            name = Analogs;
+            0: a0: u8;
+            1: a1: u8;
+            2: a2: u8;
+            3: a3: u8;
+            4: a4: u8;
+            5: a5: u8;
+            6: a6: u8;
+            7: a7: u8;
+        )
     }
 }
 

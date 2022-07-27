@@ -33,7 +33,7 @@ pub struct TouchPad {
     pub touched: bool,
 }
 
-impl BLType for TouchPad {
+unsafe impl BLType for TouchPad {
     fn bl_type() -> Type {
         static TYPE: LazyLock<Type> = LazyLock::new(|| {
             to_struct! {
