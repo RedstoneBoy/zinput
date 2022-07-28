@@ -102,6 +102,12 @@ macro_rules! device_info {
                     }
                 }
 
+                pub fn create_device(&self) -> Device {
+                    Device {
+                        $([< $cname s >]: vec![Default::default(); self.[< $cname s >].len()],)*
+                    }
+                }
+
                 pub fn with_id(mut self, id: String) -> Self {
                     self.id = Some(id);
                     self

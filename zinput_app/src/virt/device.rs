@@ -2,20 +2,6 @@ use bindlang::backend_cranelift::Program;
 use paste::paste;
 use zinput_engine::{DeviceView, DeviceHandle, device::{Device, components, DeviceMutFfi, DeviceInfo}};
 
-fn info_to_device(info: &DeviceInfo) -> Device {
-    macro_rules! info_to_device {
-        ($($cname:ident : $ctype:ty),* $(,)?) => {
-            paste! {
-                Device {
-                    $([< $cname s >]: vec![Default::default(); info.[< $cname s>].len()],)*
-                }
-            }
-        }
-    }
-
-    components!(data info_to_device)
-}
-
 struct Input {
     view: DeviceView,
     device: Device,
@@ -24,10 +10,9 @@ struct Input {
 
 impl Input {
     fn new(view: DeviceView) -> Self {
-        let info = view.info();
-        let device = info_to_device(info);
+        let mut device = view.info().create_device();
 
-        Input { view, device, ffi: device.as_mut().to_ffi() }
+        Input { view, ffi: device.as_mut().to_ffi(), device }
     }
 }
 
@@ -66,7 +51,7 @@ impl VDevice {
         let Some(program) = &mut self.program
         else { return; };
 
-        let inputs_ffi = unsafe {
+        let mut inputs_ffi = unsafe {
             Vec::from_raw_parts(self.inputs_ffi.0 as *mut &mut DeviceMutFfi, self.inputs_ffi.1, self.inputs_ffi.2)
         };
 
@@ -75,13 +60,13 @@ impl VDevice {
             inputs_ffi.push(&mut input.ffi);
         }
 
-        self.output_handle.update(|output| {
-            let output = output.to_ffi();
+        self.output_handle.update(|mut output| {
+            let mut output = output.to_ffi();
 
             program.call(&mut output, &mut inputs_ffi, input_index);
         });
 
-        let parts = unsafe { inputs_ffi.into_raw_parts() };
+        let parts = inputs_ffi.into_raw_parts();
         self.inputs_ffi = (parts.0 as _, parts.1, parts.2);
     }
 

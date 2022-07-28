@@ -8,7 +8,7 @@ use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
 use zinput_engine::DeviceHandle;
 use zinput_engine::device::DeviceMutFfi;
-use zinput_engine::{util::Uuid, DeviceAlreadyExists, DeviceView, Engine};
+use zinput_engine::{util::Uuid, DeviceView, Engine};
 
 mod device;
 
@@ -49,7 +49,7 @@ impl VirtualDevices {
         &self,
         out: DeviceHandle,
         mut views: Vec<DeviceView>,
-    ) -> Result<VDeviceHandle, VirtualDeviceError> {
+    ) -> VDeviceHandle {
         let mut shared = self.shared.lock();
 
         let name = out.view().info().name.clone();
@@ -69,7 +69,7 @@ impl VirtualDevices {
         let vdev = VDevice::new(name, views, out);
         shared.devices.insert(device, vdev);
 
-        Ok(VDeviceHandle(device))
+        VDeviceHandle(device)
     }
 
     pub fn remove(
@@ -97,7 +97,7 @@ impl VirtualDevices {
         handle: VDeviceHandle,
         program: Option<Program<DeviceMutFfi>>,
     ) {
-        let shared = self.shared.lock();
+        let mut shared = self.shared.lock();
         let Some(device) = shared.devices.get_mut(&handle.0)
         else { return; };
 
@@ -142,33 +142,6 @@ struct Shared {
 struct RecvDest {
     device: Uuid,
     view: usize,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum VirtualDeviceError {
-    DeviceAlreadyExists(DeviceAlreadyExists),
-}
-
-impl From<DeviceAlreadyExists> for VirtualDeviceError {
-    fn from(err: DeviceAlreadyExists) -> Self {
-        VirtualDeviceError::DeviceAlreadyExists(err)
-    }
-}
-
-impl std::error::Error for VirtualDeviceError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            VirtualDeviceError::DeviceAlreadyExists(err) => Some(err),
-        }
-    }
-}
-
-impl std::fmt::Display for VirtualDeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            VirtualDeviceError::DeviceAlreadyExists(err) => write!(f, "{err}"),
-        }
-    }
 }
 
 fn updater_thread(thread: Thread) -> impl FnOnce() {
