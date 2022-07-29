@@ -1,7 +1,4 @@
-use std::{
-    fmt::Write,
-    sync::Arc,
-};
+use std::{fmt::Write, sync::Arc};
 
 use paste::paste;
 use zinput_engine::{
@@ -11,7 +8,7 @@ use zinput_engine::{
     DeviceView, Engine,
 };
 
-use crate::virt::{VirtualDevices, VDeviceHandle};
+use crate::virt::{VDeviceHandle, VirtualDevices};
 
 use super::Screen;
 
@@ -31,7 +28,7 @@ impl VDeviceData {
             .with_id(Uuid::new_v4().to_string())
             .autoload_config(true);
         info.add_controller(Default::default());
-        
+
         VDeviceData {
             info,
             handle: None,
@@ -103,11 +100,7 @@ impl VirtualTab {
 
                     for (i, data) in self.data.iter().enumerate() {
                         if ui
-                            .selectable_value(
-                                &mut self.selected,
-                                Some(i),
-                                &data.info.name,
-                            )
+                            .selectable_value(&mut self.selected, Some(i), &data.info.name)
                             .clicked()
                         {
                             if last_selected != Some(i) {
@@ -131,7 +124,7 @@ impl VirtualTab {
 
         // if true, a device was removed, invalidating devid
         self.show_top_bar(ctx, devid);
-        
+
         if self.selected.is_none() {
             return;
         }
@@ -139,8 +132,8 @@ impl VirtualTab {
         if self.data[devid].enabled() {
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.centered_and_justified(|ui| {
-                    let label = egui::RichText::new("Device must be disabled to edit it.")
-                        .size(36.0);
+                    let label =
+                        egui::RichText::new("Device must be disabled to edit it.").size(36.0);
                     ui.label(label);
                 })
             });
@@ -162,13 +155,19 @@ impl VirtualTab {
     fn show_top_bar(&mut self, ctx: &egui::Context, devid: usize) {
         egui::TopBottomPanel::top("vdevice_top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.selectable_label(self.itab == InnerTab::Info, "Info").clicked() {
+                if ui
+                    .selectable_label(self.itab == InnerTab::Info, "Info")
+                    .clicked()
+                {
                     self.itab = InnerTab::Info;
                 }
-                if ui.selectable_label(self.itab == InnerTab::Bindings, "Bindings").clicked() {
+                if ui
+                    .selectable_label(self.itab == InnerTab::Bindings, "Bindings")
+                    .clicked()
+                {
                     self.itab = InnerTab::Bindings;
                 }
-    
+
                 ui.separator();
 
                 let toggle_text = match self.data[devid].enabled() {
@@ -179,7 +178,7 @@ impl VirtualTab {
                 if ui.button(toggle_text).clicked() {
                     self.toggle_device(devid);
                 }
-    
+
                 if ui.button("Delete").clicked() {
                     self.remove_device(devid);
                 }
@@ -191,7 +190,10 @@ impl VirtualTab {
         egui::TopBottomPanel::top("vdevice_info_top").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Name");
-                if ui.text_edit_singleline(&mut self.data[devid].info.name).changed() {
+                if ui
+                    .text_edit_singleline(&mut self.data[devid].info.name)
+                    .changed()
+                {
                     // TODO: set save flag
                 }
 
@@ -249,9 +251,7 @@ impl VirtualTab {
         }
     }
 
-    fn show_itab_bindings(&mut self, ctx: &egui::Context, devid: usize) {
-        
-    }
+    fn show_itab_bindings(&mut self, ctx: &egui::Context, devid: usize) {}
 
     fn create_device(&mut self) {
         let mut name = NEW_DEVICE_NAME.to_owned();
@@ -274,7 +274,9 @@ impl VirtualTab {
                 data.handle = None;
             }
             None => {
-                let out = self.engine.new_device(data.info.clone())
+                let out = self
+                    .engine
+                    .new_device(data.info.clone())
                     .expect("virtual_tab: virtual device handle was not dropped");
 
                 let views = data.views.clone();
@@ -283,7 +285,7 @@ impl VirtualTab {
             }
         }
     }
-    
+
     fn remove_device(&mut self, devid: usize) {
         let data = self.data.remove(devid);
 

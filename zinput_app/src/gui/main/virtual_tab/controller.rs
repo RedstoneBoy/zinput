@@ -1,7 +1,12 @@
-use zinput_engine::{device::{DeviceInfo, component::controller::{Button, Analog}}, eframe::egui};
+use zinput_engine::{
+    device::{
+        component::controller::{Analog, Button},
+        DeviceInfo,
+    },
+    eframe::egui,
+};
 
 use super::ComponentEditor;
-
 
 pub struct Editor {
     index: usize,
@@ -9,9 +14,7 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(index: usize) -> Self {
-        Editor {
-            index,
-        }
+        Editor { index }
     }
 }
 
@@ -29,7 +32,10 @@ impl ComponentEditor for Editor {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for button in Button::BUTTONS {
                         let mut has = controller.has_button(button);
-                        if ui.selectable_value(&mut has, true, format!("{button}")).clicked() {
+                        if ui
+                            .selectable_value(&mut has, true, format!("{button}"))
+                            .clicked()
+                        {
                             controller.set_button(button, !controller.has_button(button));
                             changed = true;
                         }
@@ -41,11 +47,14 @@ impl ComponentEditor for Editor {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered_justified(|ui| {
                 ui.label("Available Analogs");
-                
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for analog in Analog::ANALOGS {
                         let mut has = controller.has_analog(analog);
-                        if ui.selectable_value(&mut has, true, format!("{analog}")).clicked() {
+                        if ui
+                            .selectable_value(&mut has, true, format!("{analog}"))
+                            .clicked()
+                        {
                             controller.set_analog(analog, !controller.has_analog(analog));
                             changed = true;
                         }

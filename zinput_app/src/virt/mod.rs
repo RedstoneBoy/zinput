@@ -6,8 +6,8 @@ use std::time::Duration;
 use bindlang::backend_cranelift::Program;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
-use zinput_engine::DeviceHandle;
 use zinput_engine::device::DeviceMutFfi;
+use zinput_engine::DeviceHandle;
 use zinput_engine::{util::Uuid, DeviceView, Engine};
 
 mod device;
@@ -45,11 +45,7 @@ impl VirtualDevices {
         }
     }
 
-    pub fn insert(
-        &self,
-        out: DeviceHandle,
-        mut views: Vec<DeviceView>,
-    ) -> VDeviceHandle {
+    pub fn insert(&self, out: DeviceHandle, mut views: Vec<DeviceView>) -> VDeviceHandle {
         let mut shared = self.shared.lock();
 
         let name = out.view().info().name.clone();
@@ -72,10 +68,7 @@ impl VirtualDevices {
         VDeviceHandle(device)
     }
 
-    pub fn remove(
-        &mut self,
-        handle: VDeviceHandle,
-    ) {
+    pub fn remove(&mut self, handle: VDeviceHandle) {
         let mut shared = self.shared.lock();
 
         for dests in shared.recv_map.values_mut() {
@@ -92,11 +85,7 @@ impl VirtualDevices {
         shared.devices.remove(&handle.0);
     }
 
-    pub fn set_program(
-        &mut self,
-        handle: VDeviceHandle,
-        program: Option<Program<DeviceMutFfi>>,
-    ) {
+    pub fn set_program(&mut self, handle: VDeviceHandle, program: Option<Program<DeviceMutFfi>>) {
         let mut shared = self.shared.lock();
         let Some(device) = shared.devices.get_mut(&handle.0)
         else { return; };
@@ -165,9 +154,9 @@ fn updater_thread(thread: Thread) -> impl FnOnce() {
                     for dest in &recv_dests {
                         let Some(device) = shared.devices.get_mut(&dest.device)
                         else { continue; };
-    
+
                         device.update(dest.view);
-                    }                    
+                    }
 
                     drop(shared);
                 }

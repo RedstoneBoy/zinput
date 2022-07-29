@@ -1,6 +1,9 @@
 use bindlang::backend_cranelift::Program;
 use paste::paste;
-use zinput_engine::{DeviceView, DeviceHandle, device::{Device, components, DeviceMutFfi, DeviceInfo}};
+use zinput_engine::{
+    device::{components, Device, DeviceInfo, DeviceMutFfi},
+    DeviceHandle, DeviceView,
+};
 
 struct Input {
     view: DeviceView,
@@ -12,13 +15,17 @@ impl Input {
     fn new(view: DeviceView) -> Self {
         let mut device = view.info().create_device();
 
-        Input { view, ffi: device.as_mut().to_ffi(), device }
+        Input {
+            view,
+            ffi: device.as_mut().to_ffi(),
+            device,
+        }
     }
 }
 
 pub struct VDevice {
     name: String,
-    
+
     inputs: Vec<Input>,
     inputs_ffi: (*mut *mut DeviceMutFfi, usize, usize),
     output_handle: DeviceHandle,
@@ -38,7 +45,7 @@ impl VDevice {
             inputs,
             inputs_ffi: unsafe { Vec::new().into_raw_parts() },
             output_handle: output,
-            
+
             program: None,
         }
     }
@@ -52,7 +59,11 @@ impl VDevice {
         else { return; };
 
         let mut inputs_ffi = unsafe {
-            Vec::from_raw_parts(self.inputs_ffi.0 as *mut &mut DeviceMutFfi, self.inputs_ffi.1, self.inputs_ffi.2)
+            Vec::from_raw_parts(
+                self.inputs_ffi.0 as *mut &mut DeviceMutFfi,
+                self.inputs_ffi.1,
+                self.inputs_ffi.2,
+            )
         };
 
         for input in &mut self.inputs {

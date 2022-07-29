@@ -1,9 +1,4 @@
-use zinput_engine::{
-    eframe::{
-        egui,
-    },
-    DeviceView,
-};
+use zinput_engine::{eframe::egui, DeviceView};
 
 use super::ComponentView;
 
