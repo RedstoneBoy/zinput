@@ -15,6 +15,8 @@ use crate::virt::{VirtualDevices, VDeviceHandle};
 
 use super::Screen;
 
+mod controller;
+
 const NEW_DEVICE_NAME: &'static str = "Virtual Device";
 
 struct VDeviceData {
@@ -25,8 +27,13 @@ struct VDeviceData {
 
 impl VDeviceData {
     fn new(name: String) -> Self {
+        let mut info = DeviceInfo::new(name)
+            .with_id(Uuid::new_v4().to_string())
+            .autoload_config(true);
+        info.add_controller(Default::default());
+        
         VDeviceData {
-            info: DeviceInfo::new(name).with_id(Uuid::new_v4().to_string()).autoload_config(true),
+            info,
             handle: None,
             views: Vec::new(),
         }
@@ -51,6 +58,9 @@ pub struct VirtualTab {
     data: Vec<VDeviceData>,
 
     itab: InnerTab,
+
+    info_selected: ComponentSelection,
+    info_editor: Option<Box<dyn ComponentEditor>>,
 }
 
 impl Screen for VirtualTab {
@@ -70,6 +80,9 @@ impl VirtualTab {
             data: Vec::new(),
 
             itab: InnerTab::Info,
+
+            info_selected: Default::default(),
+            info_editor: None,
         }
     }
 
@@ -137,18 +150,16 @@ impl VirtualTab {
 
         match self.itab {
             InnerTab::Info => {
-                self.show_itab_info(devid);
+                self.show_itab_info(ctx, devid);
             }
             InnerTab::Bindings => {
-                self.show_itab_bindings(devid);
+                self.show_itab_bindings(ctx, devid);
             }
         }
     }
 
     /// Returns true if a device was removed
     fn show_top_bar(&mut self, ctx: &egui::Context, devid: usize) {
-        let mut removed = false;
-
         egui::TopBottomPanel::top("vdevice_top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(self.itab == InnerTab::Info, "Info").clicked() {
@@ -176,11 +187,69 @@ impl VirtualTab {
         });
     }
 
-    fn show_itab_info(&mut self, devid: usize) {
+    fn show_itab_info(&mut self, ctx: &egui::Context, devid: usize) {
+        egui::TopBottomPanel::top("vdevice_info_top").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Name");
+                if ui.text_edit_singleline(&mut self.data[devid].info.name).changed() {
+                    // TODO: set save flag
+                }
 
+                ui.separator();
+
+                ui.label("Components");
+                if ui.button("Add").clicked() {
+                    // TODO: create component drop down
+                }
+
+                if ui.button("Remove").clicked() {
+                    // TODO: remove selected component
+                }
+            });
+        });
+
+        // components
+        egui::SidePanel::left("vdevice_component_list").show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    let mut last_selected = self.info_selected;
+
+                    let info = &mut self.data[devid].info;
+                    macro_rules! list_comp {
+                        ($($cname:ident : $ckind:expr),* $(,)?) => {
+                            paste! {
+                                $(
+                                    for i in 0..info.[< $cname s >].len() {
+                                        let selection = ComponentSelection { kind: $ckind, index: i };
+                                        ui.selectable_value(
+                                            &mut self.info_selected,
+                                            selection,
+                                            format!("{}", selection),
+                                        );
+                                    }
+                                )*
+                            }
+                        };
+                    }
+
+                    if last_selected != self.info_selected || self.info_editor.is_none() {
+                        self.info_editor = Some(self.info_selected.get_editor());
+                    }
+
+                    components!(kind list_comp);
+                });
+        });
+
+        let Some(editor) = &mut self.info_editor
+        else { return; };
+
+        if editor.update(&mut self.data[devid].info, ctx) {
+            // TODO: set save flag
+        }
     }
 
-    fn show_itab_bindings(&mut self, devid: usize) {
+    fn show_itab_bindings(&mut self, ctx: &egui::Context, devid: usize) {
         
     }
 
@@ -230,6 +299,42 @@ impl VirtualTab {
     }
 }
 
-trait ComponentView {
-    fn update(&mut self, ctx: &egui::Context);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct ComponentSelection {
+    kind: ComponentKind,
+    index: usize,
+}
+
+impl ComponentSelection {
+    fn get_editor(&self) -> Box<dyn ComponentEditor> {
+        match self.kind {
+            ComponentKind::Controller => Box::new(controller::Editor::new(self.index)),
+            _ => todo!(),
+        }
+    }
+}
+
+impl Default for ComponentSelection {
+    fn default() -> Self {
+        ComponentSelection {
+            kind: ComponentKind::Controller,
+            index: 0,
+        }
+    }
+}
+
+impl std::fmt::Display for ComponentSelection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind)?;
+        if self.index > 0 {
+            write!(f, " {}", self.index + 1)?;
+        }
+
+        Ok(())
+    }
+}
+
+trait ComponentEditor {
+    /// Returns true if info was updated
+    fn update(&mut self, info: &mut DeviceInfo, ctx: &egui::Context) -> bool;
 }

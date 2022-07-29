@@ -1,6 +1,6 @@
-use std::{ops::BitOr, collections::HashMap, sync::LazyLock};
+use std::{ops::BitOr, sync::LazyLock};
 
-use bindlang::{ty::{BLType, Type, BitNames}, to_struct, to_bitfield, util::Width};
+use bindlang::{ty::{BLType, Type}, to_struct, to_bitfield, util::Width};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
@@ -41,6 +41,37 @@ impl ControllerInfo {
     pub const fn with_r2_analog(mut self) -> Self {
         self.analogs |= 1 << 5;
         self
+    }
+
+    pub const fn with_analog(mut self, analog: Analog) -> Self {
+        self.analogs |= 1 << analog.bit();
+        self
+    }
+
+    pub const fn with_analogs(mut self, analogs: &[Analog]) -> Self {
+        let mut i = 0;
+        while i < analogs.len() {
+            self.analogs |= 1 << analogs[i].bit();
+            i += 1;
+        }
+
+        self
+    }
+
+    pub const fn has_analog(&self, analog: Analog) -> bool {
+        self.analogs & (1 << analog.bit()) != 0
+    }
+
+    pub const fn has_button(&self, button: Button) -> bool {
+        self.buttons & (1 << button.bit()) != 0
+    }
+
+    pub fn set_analog(&mut self, analog: Analog, value: bool) {
+        self.analogs = self.analogs & !(1 << analog.bit()) | ((value as u8) << analog.bit());
+    }
+    
+    pub fn set_button(&mut self, button: Button, value: bool) {
+        self.buttons = self.buttons & !(1 << button.bit()) | ((value as u64) << button.bit());
     }
 }
 
@@ -414,4 +445,54 @@ fn configure_analog(analog: u8, range: [u8; 2]) -> u8 {
     let max = range[1] as f32;
     let range = max - min;
     (((f32::clamp(analog as f32, min, max) - min) / range) * 255.0) as u8
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Analog {
+    LStick,
+    RStick,
+    L1,
+    R1,
+    L2,
+    R2,
+}
+
+impl Analog {
+    pub const ANALOGS: [Analog; 6] = [
+        Analog::LStick,
+        Analog::RStick,
+        Analog::L1,
+        Analog::R1,
+        Analog::L2,
+        Analog::R2,
+    ];
+
+    pub const fn bit(&self) -> u8 {
+        match self {
+            Analog::LStick => 0,
+            Analog::RStick => 1,
+            Analog::L1 => 2,
+            Analog::R1 => 3,
+            Analog::L2 => 4,
+            Analog::R2 => 5,
+        }
+    }
+}
+
+impl std::fmt::Display for Analog {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Analog::*;
+        write!(
+            f,
+            "{}",
+            match *self {
+                LStick => "Left Stick",
+                RStick => "Right Stick",
+                L1 => "L1",
+                R1 => "R1",
+                L2 => "L2",
+                R2 => "R2",
+            }
+        )
+    }
 }
