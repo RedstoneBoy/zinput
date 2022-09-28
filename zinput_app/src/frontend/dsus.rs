@@ -252,17 +252,6 @@ fn new_dsus_query_thread(thread: QueryThread) -> impl FnOnce() {
 }
 
 fn dsus_query_thread(thread: QueryThread) -> Result<()> {
-    const TIMEOUT_KIND: std::io::ErrorKind = {
-        #[cfg(target_os = "windows")]
-        {
-            std::io::ErrorKind::TimedOut
-        }
-        #[cfg(target_os = "linux")]
-        {
-            std::io::ErrorKind::WouldBlock
-        }
-    };
-
     let QueryThread {
         conn,
         clients,
@@ -294,7 +283,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
 
         let (amt, client_addr) = match conn.recv_from(&mut buf) {
             Ok(v) => v,
-            Err(e) if e.kind() == TIMEOUT_KIND => {
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
                 continue;
             }
             Err(e) => {
@@ -348,6 +337,7 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
                     let is_connected = controllers.lock()[slot as usize];
 
                     response.controller_header_mut().set_slot(slot);
+                    response.controller_header_mut().mac_mut()[5] = slot + 1;
                     if is_connected {
                         response.controller_header_mut().set_state(State::Connected);
                     } else {
@@ -378,8 +368,11 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
                                 entry.value_mut().slots[msg.slot() as usize & 0b11] = true;
                             }
                             Registration::MacBased => {
-                                // todo
-                                log::warn!(target: T, "client requested mac-based registration");
+                                if &msg.mac()[..5] != &[0, 0, 0, 0, 0] || !(1..=4).contains(&msg.mac()[5]) {
+                                    log::warn!(target: T, "client requested invalid mac address");
+                                } else {
+                                    entry.value_mut().slots[msg.mac()[5] as usize - 1] = true;
+                                }
                             }
                         }
                         false
@@ -398,8 +391,11 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
                             client.slots[msg.slot() as usize & 0b11] = true;
                         }
                         Registration::MacBased => {
-                            // todo
-                            log::warn!(target: T, "client requested mac-based registration");
+                            if &msg.mac()[..5] != &[0, 0, 0, 0, 0] || !(1..=4).contains(&msg.mac()[5]) {
+                                log::warn!(target: T, "client requested invalid mac address");
+                            } else {
+                                client.slots[msg.mac()[5] as usize - 1] = true;
+                            }
                         }
                     }
                     clients.insert(client_addr, client);
@@ -538,7 +534,7 @@ impl Server {
                 State::Disconnected,
                 Model::FullGyro,
                 ConnectionType::NotApplicable,
-                [0; 6],
+                [0, 0, 0, 0, 0, (i + 1) as u8],
                 BatteryStatus::Charged,
                 false,
                 &mut hasher,
@@ -620,8 +616,8 @@ impl Server {
         dsu_data.set_accel_y(data.accel_y);
         dsu_data.set_accel_z(data.accel_z);
         dsu_data.set_gyro_pitch(data.gyro_pitch);
-        dsu_data.set_gyro_yaw(data.gyro_yaw);
-        dsu_data.set_gyro_roll(data.gyro_roll);
+        dsu_data.set_gyro_yaw(-data.gyro_yaw);
+        dsu_data.set_gyro_roll(-data.gyro_roll);
     }
 
     fn send_data(&mut self, clients: &DashMap<SocketAddr, DsuClient>) -> Result<()> {
