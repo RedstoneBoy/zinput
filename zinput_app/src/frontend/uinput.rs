@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     fs::{File, OpenOptions},
     path::PathBuf,
     sync::{
@@ -16,10 +15,9 @@ use input_linux::{
     AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle,
 };
 use parking_lot::Mutex;
-use zinput_engine::device::component::controller::{Button, Controller};
+use zinput_engine::{device::component::controller::{Button, Controller}, DeviceView};
 use zinput_engine::{
     eframe::{self, egui},
-    event::{Event, EventKind},
     plugin::{Plugin, PluginKind, PluginStatus},
     util::Uuid,
     Engine,
@@ -29,21 +27,19 @@ const T: &'static str = "frontend:uinput";
 
 pub struct UInput {
     inner: Mutex<Inner>,
-    signals: Arc<Signals>,
 }
 
 impl UInput {
     pub fn new() -> Self {
         UInput {
-            inner: Mutex::new(Inner::new()),
-            signals: Arc::new(Signals::new()),
+            inner: Mutex::new(Inner::Uninit),
         }
     }
 }
 
 impl Plugin for UInput {
     fn init(&self, engine: Arc<Engine>) {
-        self.inner.lock().init(engine, self.signals.clone());
+        self.inner.lock().init(engine);
     }
 
     fn stop(&self) {
@@ -51,7 +47,7 @@ impl Plugin for UInput {
     }
 
     fn status(&self) -> PluginStatus {
-        self.inner.lock().status.lock().clone()
+        self.inner.lock().status()
     }
 
     fn name(&self) -> &str {
@@ -62,141 +58,160 @@ impl Plugin for UInput {
         PluginKind::Frontend
     }
 
-    fn events(&self) -> &[EventKind] {
-        &[EventKind::DeviceUpdate]
-    }
-
     fn update_gui(&self, ctx: &egui::Context, frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         self.inner.lock().update_gui(ctx, frame, ui)
     }
-
-    fn on_event(&self, event: &Event) {
-        match event {
-            Event::DeviceUpdate(id) => {
-                if self.signals.listen_update.lock().contains(id)
-                    && !self.signals.update.0.is_full()
-                {
-                    // unwrap: the channel cannot become disconnected as it is Arc-owned by Self
-                    self.signals.update.0.send(*id).unwrap();
-                }
-            }
-            _ => {}
-        }
-    }
 }
 
-struct Inner {
-    device: Sender<(usize, Option<Uuid>)>,
-    device_recv: Receiver<(usize, Option<Uuid>)>,
-    engine: Option<Arc<Engine>>,
+enum Inner {
+    Uninit,
+    Init {
+        engine: Arc<Engine>,
+        status: Arc<Mutex<PluginStatus>>,
+        stop: Arc<AtomicBool>,
+        handle: JoinHandle<()>,
 
-    selected_devices: [Option<Uuid>; 4],
-
-    status: Arc<Mutex<PluginStatus>>,
-
-    handle: Option<JoinHandle<()>>,
-
-    stop: Arc<AtomicBool>,
+        device_send: Sender<Vec<Uuid>>,
+        selected: Vec<Uuid>,
+    },
 }
 
 impl Inner {
-    fn new() -> Self {
-        let (device, device_recv) = crossbeam_channel::unbounded();
-        Inner {
-            device,
+    fn init(&mut self, engine: Arc<Engine>) {
+        if matches!(self, Inner::Init { .. }) {
+            self.stop();
+        }
+
+        let status = Arc::new(Mutex::new(PluginStatus::Running));
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let (device_send, device_recv) = crossbeam_channel::unbounded();
+
+        let handle = std::thread::spawn(new_uinput_thread(Thread {
+            engine: engine.clone(),
             device_recv,
-            engine: None,
+            status: status.clone(),
+            stop: stop.clone(),
+        }));
 
-            selected_devices: [None; 4],
-
-            status: Arc::new(Mutex::new(PluginStatus::Stopped)),
-
-            handle: None,
-
-            stop: Arc::new(AtomicBool::new(false)),
-        }
-    }
-}
-
-impl Inner {
-    fn init(&mut self, engine: Arc<Engine>, signals: Arc<Signals>) {
-        self.engine = Some(engine.clone());
-
-        *self.status.lock() = PluginStatus::Running;
-        self.stop.store(false, Ordering::Release);
-
-        self.handle = Some(std::thread::spawn(new_uinput_thread(Thread {
+        *self = Inner::Init {
             engine,
-            device_change: self.device_recv.clone(),
-            signals,
-            status: self.status.clone(),
-            stop: self.stop.clone(),
-        })));
+            status,
+            stop,
+            handle,
+
+            device_send,
+            selected: Vec::new(),
+        };
     }
 
     fn stop(&mut self) {
-        self.stop.store(true, Ordering::Release);
+        match std::mem::replace(self, Inner::Uninit) {
+            Inner::Uninit => {}
+            Inner::Init {
+                handle,
+                status,
+                stop,
+                ..
+            } => {
+                stop.store(true, Ordering::Release);
 
-        if let Some(handle) = std::mem::replace(&mut self.handle, None) {
-            match handle.join() {
-                Ok(()) => {}
-                Err(_) => log::error!(target: T, "error joining dsus thread"),
+                match handle.join() {
+                    Ok(()) => {}
+                    Err(_) => log::info!(target: T, "driver panicked"),
+                }
+
+                *status.lock() = PluginStatus::Stopped;
             }
+        }
+    }
+
+    fn status(&self) -> PluginStatus {
+        match self {
+            Inner::Uninit => PluginStatus::Stopped,
+            Inner::Init { status, .. } => status.lock().clone(),
         }
     }
 
     fn update_gui(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
-        if let Some(engine) = self.engine.clone() {
-            for i in 0..self.selected_devices.len() {
-                egui::ComboBox::from_label(format!("UInput Controller {}", i + 1))
-                    .selected_text(
-                        self.selected_devices[i]
-                            .and_then(|id| engine.get_device_info(&id))
-                            .map_or("[None]".to_owned(), |dev| dev.name.clone()),
-                    )
-                    .show_ui(ui, |ui| {
-                        if ui
-                            .selectable_value(&mut self.selected_devices[i], None, "[None]")
-                            .clicked()
-                        {
-                            self.device.send((i, None)).unwrap();
-                        }
-                        for device_ref in engine.devices() {
-                            if ui
-                                .selectable_value(
-                                    &mut self.selected_devices[i],
-                                    Some(*device_ref.id()),
-                                    &device_ref.name,
-                                )
-                                .clicked()
-                            {
-                                self.device.send((i, Some(*device_ref.id()))).unwrap();
-                            }
-                        }
-                    });
-            }
+        let Inner::Init {
+            engine,
+            device_send,
+            selected,
+            ..
+        } = self
+        else { return };
+
+        #[derive(PartialEq, Eq)]
+        enum Action {
+            Remove(usize),
+            Change(usize, Uuid),
+            Add(Uuid),
         }
-    }
-}
 
-struct Signals {
-    listen_update: Mutex<HashSet<Uuid>>,
-    update: (Sender<Uuid>, Receiver<Uuid>),
-}
+        let mut action = None;
 
-impl Signals {
-    fn new() -> Self {
-        Signals {
-            listen_update: Mutex::new(HashSet::new()),
-            update: crossbeam_channel::bounded(4),
+        // Devices
+
+        for i in 0..selected.len() {
+            if action.is_some() {
+                break;
+            }
+            egui::ComboBox::from_label(format!("UInput Controller {}", i + 1))
+                .selected_text(match engine.get_device(&selected[i]) {
+                    Some(view) => view.info().name.clone(),
+                    None => {
+                        action = Some(Action::Remove(i));
+                        break;
+                    }
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
+                    for entry in engine.devices() {
+                        ui.selectable_value(
+                            &mut action,
+                            Some(Action::Change(i, *entry.uuid())),
+                            &entry.info().name,
+                        );
+                    }
+                });
+        }
+
+        if selected.len() < 4 && action.is_none() {
+            egui::ComboBox::from_label(format!(
+                "ViGEm XBox Controller {}",
+                selected.len() + 1
+            ))
+            .selected_text("[None]")
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut action, None, "[None]");
+                for entry in engine.devices() {
+                    ui.selectable_value(
+                        &mut action,
+                        Some(Action::Add(*entry.uuid())),
+                        &entry.info().name,
+                    );
+                }
+            });
+        }
+
+        if let Some(action) = action {
+            match action {
+                Action::Remove(i) => {
+                    selected.remove(i);
+                }
+                Action::Change(i, id) => selected[i] = id,
+                Action::Add(id) => selected.push(id),
+            }
+
+            device_send.send(selected.clone()).unwrap();
         }
     }
 }
 
 struct Thread {
     engine: Arc<Engine>,
-    device_change: Receiver<(usize, Option<Uuid>)>,
-    signals: Arc<Signals>,
+    device_recv: Receiver<Vec<Uuid>>,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
 }
@@ -220,41 +235,27 @@ fn new_uinput_thread(thread: Thread) -> impl FnOnce() {
 fn uinput_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
-        device_change,
-        signals,
+        device_recv,
         stop,
         ..
     } = thread;
 
     let uinput = init_uinput()?;
 
+    let (update_send, update_recv) = crossbeam_channel::bounded(10);
+
     let mut joysticks = Vec::<Joystick>::new();
 
     loop {
         crossbeam_channel::select! {
-            recv(device_change) -> device_change => {
-                match device_change {
-                    Ok((idx, Some(device_id))) => {
-                        if let Some(joystick) = joysticks.get(idx) {
-                            let mut signals = signals.listen_update.lock();
-                            signals.remove(&joystick.device_id);
-                        }
+            recv(device_recv) -> device_recv => {
+                let Ok(ids) = device_recv
+                else { return Ok(()); }; // Sender dropped which means plugin is uninitialized
 
-                        if idx > joysticks.len() {
-                            log::error!(target: T, "tried to add controller to index {} but there are only {} joysticks", idx, joysticks.len());
-                            continue;
-                        }
-
-                        let name = match engine.get_device_info(&device_id) {
-                            Some(device) => device.name.clone(),
-                            None => {
-                                log::error!(target: T, "tried to add non-existent controller");
-                                continue;
-                            }
-                        };
-
-                        signals.listen_update.lock().insert(device_id);
-
+                if ids.len() < joysticks.len() {
+                    joysticks.truncate(ids.len());
+                } else if ids.len() > joysticks.len() {
+                    for i in joysticks.len()..ids.len() {
                         let uinput_device = OpenOptions::new()
                             .read(true)
                             .write(true)
@@ -263,45 +264,22 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 
                         let uinput_device = UInputHandle::new(uinput_device);
 
-                        let joystick = Joystick::new(&name, device_id, uinput_device)?;
+                        let Some(mut view) = engine.get_device(&ids[i])
+                        else { anyhow::bail!("tried to get device with invalid uuid"); };
+                        view.register_channel(update_send.clone());
 
-                        joysticks.insert(idx, joystick);
-                    }
-                    Ok((idx, None)) => {
-                        if let Some(joystick) = joysticks.get(idx) {
-                            let mut signals = signals.listen_update.lock();
-                            signals.remove(&joystick.device_id);
-
-                            joysticks.remove(idx);
-                        } else {
-                            log::error!(target: T, "tried to remove controller out of bounds at index {} when len is {}", idx, joysticks.len());
-                        }
-                    }
-                    Err(_) => {
-                        // todo
+                        joysticks.push(Joystick::new(view, uinput_device)?);
                     }
                 }
             },
-            recv(signals.update.1) -> uid => {
-                let uid = match uid {
-                    Ok(uid) => uid,
-                    Err(_) => {
-                        // todo
-                        continue;
-                    }
-                };
+            recv(update_recv) -> uid => {
+                let Ok(uid) = uid
+                else { continue; };
 
                 for joystick in &joysticks {
-                    if joystick.device_id == uid {
-                        let device = match engine.get_device(&uid) {
-                            Some(device) => device,
-                            None => continue,
-                        };
+                    if joystick.view.uuid() != &uid { continue; };
 
-                        if let Some(controller) = device.controllers.get(0) {
-                            joystick.update_controller(controller)?;
-                        }
-                    }
+                    joystick.update()?;
                 }
             }
             default(Duration::from_secs(1)) => {
@@ -316,13 +294,13 @@ fn uinput_thread(thread: Thread) -> Result<()> {
 }
 
 struct Joystick {
-    device_id: Uuid,
+    view: DeviceView,
 
     uinput_device: UInputHandle<File>,
 }
 
 impl Joystick {
-    fn new(name: &str, device_id: Uuid, uinput_device: UInputHandle<File>) -> Result<Self> {
+    fn new(view: DeviceView, uinput_device: UInputHandle<File>) -> Result<Self> {
         macro_rules! keybits {
             ($device:expr, $($key:expr),* $(,)?) => {
                 $($device.set_keybit($key)?;)*
@@ -372,7 +350,7 @@ impl Joystick {
 
         ud.create(
             &input_linux::InputId::default(),
-            name.as_bytes(),
+            view.info().name.as_bytes(),
             0,
             &[
                 AbsoluteInfoSetup {
@@ -404,14 +382,17 @@ impl Joystick {
         .context("failed to create uinput device")?;
 
         Ok(Joystick {
-            device_id,
-
+            view,
             uinput_device: ud,
         })
     }
 
-    fn update_controller(&self, data: &Controller) -> Result<()> {
+    fn update(&self) -> Result<()> {
         use input_linux::sys as ils;
+
+        let device = self.view.device();
+        let Some(data) = device.controllers.get(0)
+        else { return Ok(()); };
 
         macro_rules! make_events {
             (
