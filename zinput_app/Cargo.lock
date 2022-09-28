@@ -564,7 +564,7 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 [[package]]
 name = "dsu_protocol"
 version = "0.1.0"
-source = "git+https://github.com/RedstoneBoy/dsu_protocol#49435a6e3d0de3a06a9dac784b50f9c43000aa57"
+source = "git+https://github.com/RedstoneBoy/dsu_protocol#268de676e5ea5a5a77fc943e435d57c0a47564f8"
 
 [[package]]
 name = "eframe"
@@ -834,17 +834,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hidapi"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b1717343691998deb81766bfcd1dce6df0d5d6c37070b5a3de2bb6d39f7822"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
-]
-
-[[package]]
 name = "hidcon"
 version = "0.1.0"
 
@@ -965,6 +954,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "winapi",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "292a948cd991e376cf75541fe5b97a1081d713c618b4f1b9500f8844e49eb565"
 
 [[package]]
 name = "libudev-sys"
@@ -2115,7 +2110,6 @@ dependencies = [
  "crossbeam-channel",
  "dashmap 4.0.2",
  "dsu_protocol",
- "hidapi",
  "hidcon",
  "input-linux",
  "log",
@@ -2136,6 +2130,7 @@ name = "zinput_device"
 version = "0.1.0"
 dependencies = [
  "bindlang",
+ "libm",
  "paste",
  "serde",
  "serde-big-array",

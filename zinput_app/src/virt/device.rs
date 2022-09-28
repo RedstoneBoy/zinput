@@ -43,7 +43,7 @@ impl VDevice {
             name,
 
             inputs,
-            inputs_ffi: unsafe { Vec::new().into_raw_parts() },
+            inputs_ffi: Vec::new().into_raw_parts(),
             output_handle: output,
 
             program: None,

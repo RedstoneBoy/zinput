@@ -1,5 +1,3 @@
-#![feature(let_else)]
-
 pub use eframe;
 pub use zinput_device as device;
 

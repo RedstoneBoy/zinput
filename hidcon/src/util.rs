@@ -17,6 +17,10 @@ macro_rules! buttons {
         pub struct $name($bty);
 
         impl $name {
+            pub fn bits(&self) -> $bty {
+                self.0
+            }
+
             #[inline(always)]
             pub fn is_pressed(self, button: $ename) -> bool {
                 (self.0 >> button.bit()) & 0b1 != 0

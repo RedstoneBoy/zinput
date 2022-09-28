@@ -1,4 +1,3 @@
-#![feature(let_else)]
 #![feature(generic_associated_types)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(vec_into_raw_parts)]
@@ -28,7 +27,7 @@ fn main() {
         zinput.add_plugin(Arc::new(frontend::uinput::UInput::new()), false);
     }
 
-    zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()), true);
+    // zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()), true);
     zinput.add_plugin(Arc::new(backend::swi_recv::Swi::new()), false);
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
 

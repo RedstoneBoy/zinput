@@ -13,7 +13,6 @@ crc = "1.8"
 crossbeam-channel = "0.5"
 dashmap = "4.0"
 dsu_protocol = { git = "https://github.com/RedstoneBoy/dsu_protocol" }
-hidapi = { version = "1.4.1", features = ["linux-static-hidraw"], default-features = false }
 hidcon = { path = "../hidcon" }
 log = "0.4"
 parking_lot = "0.11"
@@ -31,3 +30,6 @@ winapi = { version = "0.3", features = ["dbt", "hidpi", "hidusage", "windef", "w
 [target.'cfg(target_os = "linux")'.dependencies]
 input-linux = "0.5"
 udev = "0.6"
+
+[profile.dev]
+opt-level = 1
