@@ -1,6 +1,5 @@
 #![feature(once_cell)]
-
-use paste::paste;
+#![cfg_attr(not(any(feature = "bindlang", feature = "serde")), no_std)]
 
 pub mod component;
 
@@ -44,12 +43,12 @@ macro_rules! components {
     };
 }
 
+#[allow(unused_macros)]
 macro_rules! device_config {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
-        paste! {
-            use serde::{Deserialize, Serialize};
-
-            #[derive(Clone, Deserialize, Serialize)]
+        paste::paste! {
+            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+            #[derive(Clone)]
             pub struct DeviceConfig {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
@@ -78,9 +77,10 @@ macro_rules! device_config {
     }
 }
 
+#[allow(unused_macros)]
 macro_rules! device_info {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
-        paste! {
+        paste::paste! {
             #[derive(Clone, PartialEq, Eq)]
             pub struct DeviceInfo {
                 pub name: String,
@@ -129,9 +129,10 @@ macro_rules! device_info {
     }
 }
 
+#[allow(unused_macros)]
 macro_rules! device {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
-        paste! {
+        paste::paste! {
             pub struct Device {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
@@ -164,6 +165,7 @@ macro_rules! device {
                 $(pub [< $cname s >]: FfiSlice,)*
             }
 
+            #[cfg(feature = "bindlang")]
             unsafe impl bindlang::ty::BLType for DeviceMutFfi {
                 fn bl_type() -> bindlang::ty::Type {
                     use std::collections::HashMap;
@@ -194,13 +196,16 @@ macro_rules! device {
 
             #[repr(C)]
             pub struct FfiSlice {
-                pub ptr: *mut std::ffi::c_void,
+                pub ptr: *mut core::ffi::c_void,
                 pub len: usize,
             }
         }
     }
 }
 
+#[cfg(feature = "device")]
 components!(config device_config);
+#[cfg(feature = "device")]
 components!(info device_info);
+#[cfg(feature = "device")]
 components!(data device);

@@ -1,14 +1,20 @@
-use serde::{Deserialize, Serialize};
-
 pub mod analogs;
 pub mod buttons;
 pub mod controller;
 pub mod motion;
 pub mod touch_pad;
 
-pub trait ComponentConfig: Default + Deserialize<'static> + Serialize {}
+#[cfg(feature = "serde")]
+pub trait ComponentConfig: Default + serde::Deserialize<'static> + serde::Serialize {}
 
-impl<T> ComponentConfig for T where T: Default + Deserialize<'static> + Serialize {}
+#[cfg(not(feature = "serde"))]
+pub trait ComponentConfig: Default {}
+
+#[cfg(feature = "serde")]
+impl<T> ComponentConfig for T where T: Default + serde::Deserialize<'static> + serde::Serialize {}
+
+#[cfg(not(feature = "serde"))]
+impl<T> ComponentConfig for T where T: Default {}
 
 pub trait ComponentData: Default {
     type Config: ComponentConfig;
@@ -18,17 +24,18 @@ pub trait ComponentData: Default {
     fn configure(&mut self, config: &Self::Config);
 }
 
+#[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ComponentKind {
-    Analogs,
-    Buttons,
-    Controller,
-    Motion,
-    TouchPad,
+    Analogs = 0,
+    Buttons = 1,
+    Controller = 2,
+    Motion = 3,
+    TouchPad = 4,
 }
 
-impl std::fmt::Display for ComponentKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ComponentKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             ComponentKind::Analogs => write!(f, "Analogs"),
             ComponentKind::Buttons => write!(f, "Buttons"),

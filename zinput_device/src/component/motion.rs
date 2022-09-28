@@ -1,7 +1,3 @@
-use std::sync::LazyLock;
-
-use bindlang::{ty::{Type, BLType}, to_struct};
-
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -31,7 +27,7 @@ impl Default for MotionInfo {
 pub type MotionConfig = ();
 
 /// Gyro values are degrees per second
-/// Acceleration is in g (9.8m/s^2)
+/// Acceleration is in G (1G = 9.8m/s^2)
 #[repr(C)]
 #[derive(Clone, Default)]
 pub struct Motion {
@@ -52,10 +48,13 @@ pub struct Motion {
     pub accel_z: f32,
 }
 
-unsafe impl BLType for Motion {
-    fn bl_type() -> Type {
-        static TYPE: LazyLock<Type> = LazyLock::new(|| {
-            to_struct! {
+#[cfg(feature = "bindlang")]
+unsafe impl bindlang::ty::BLType for Motion {
+    fn bl_type() -> bindlang::ty::Type {
+        use std::sync::LazyLock;
+        
+        static TYPE: LazyLock<bindlang::ty::Type> = LazyLock::new(|| {
+            bindlang::to_struct! {
                 name = Motion;
                 0:   pitch:   f32;
                 4:   roll:    f32;

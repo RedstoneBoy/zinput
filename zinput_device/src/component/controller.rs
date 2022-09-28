@@ -1,8 +1,4 @@
-use std::{ops::BitOr, sync::LazyLock};
-
-use bindlang::{ty::{BLType, Type}, to_struct, to_bitfield, util::Width};
-use serde::{Deserialize, Serialize};
-use serde_big_array::BigArray;
+use core::ops::BitOr;
 
 use super::ComponentData;
 
@@ -84,7 +80,8 @@ impl Default for ControllerInfo {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone)]
 pub struct ControllerConfig {
     pub left_stick: StickConfig,
     pub right_stick: StickConfig,
@@ -92,7 +89,7 @@ pub struct ControllerConfig {
     pub r1_range: [u8; 2],
     pub l2_range: [u8; 2],
     pub r2_range: [u8; 2],
-    #[serde(with = "BigArray")]
+    #[cfg_attr(feature = "serde", serde(with = "serde_big_array::BigArray"))]
     pub remap: [u8; 64],
 }
 
@@ -115,7 +112,8 @@ impl Default for ControllerConfig {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone)]
 pub struct StickConfig {
     pub deadzone: u8,
 
@@ -131,13 +129,13 @@ impl StickConfig {
         let dzf = self.deadzone as f32 / 255.0;
         let xf = (x as f32 - 127.5) / 127.5;
         let yf = (y as f32 - 127.5) / 127.5;
-        let scalar = f32::sqrt(xf.powi(2) + yf.powi(2));
+        let scalar = sqrt(powi(xf, 2) + powi(yf, 2));
 
         let max = match &self.samples {
             Some(samples) => {
-                let mut angle = f32::atan2(yf, xf);
+                let mut angle = atan2(yf, xf);
                 if angle < 0.0 {
-                    angle = 2.0 * std::f32::consts::PI + angle;
+                    angle = 2.0 * core::f32::consts::PI + angle;
                 }
                 Self::sample(samples, angle)
             }
@@ -163,7 +161,7 @@ impl StickConfig {
 
     fn sample(samples: &[f32; 32], angle: f32) -> f32 {
         fn index_to_angle(index: usize) -> f32 {
-            (index as f32) * (std::f32::consts::PI * 2.0 / 32.0)
+            (index as f32) * (core::f32::consts::PI * 2.0 / 32.0)
         }
 
         let (mut i1, mut i2) = (0, 0);
@@ -211,15 +209,18 @@ pub struct Controller {
     pub r2_analog: u8,
 }
 
-unsafe impl BLType for Controller {
-    fn bl_type() -> Type {
-        static TYPE: LazyLock<Type> = LazyLock::new(|| {
+#[cfg(feature = "bindlang")]
+unsafe impl bindlang::ty::BLType for Controller {
+    fn bl_type() -> bindlang::ty::Type {
+        use std::sync::LazyLock;
+
+        static TYPE: LazyLock<bindlang::ty::Type> = LazyLock::new(|| {
             struct ButtonType;
-            unsafe impl BLType for ButtonType {
-                fn bl_type() -> Type {
-                    to_bitfield! {
+            unsafe impl bindlang::ty::BLType for ButtonType {
+                fn bl_type() -> bindlang::ty::Type {
+                    bindlang::to_bitfield! {
                         name = ControllerButtons;
-                        size = Width::W64;
+                        size = bindlang::util::Width::W64;
                         a = 0;
                         b = 1;
                         x = 2;
@@ -246,7 +247,7 @@ unsafe impl BLType for Controller {
                 }
             }
 
-            to_struct! {
+            bindlang::to_struct! {
                 name = Controller;
                 0:  buttons:       ButtonType;
                 8:  left_stick_x:  u8;
@@ -315,30 +316,31 @@ impl ComponentData for Controller {
     }
 }
 
+#[repr(u64)]
 #[derive(Copy, Clone, Debug)]
 pub enum Button {
-    A,
-    B,
-    X,
-    Y,
-    Up,
-    Down,
-    Left,
-    Right,
-    Start,
-    Select,
-    L1,
-    R1,
-    L2,
-    R2,
-    L3,
-    R3,
-    L4,
-    R4,
-    LStick,
-    RStick,
-    Home,
-    Capture,
+    A = 1 << 0,
+    B = 1 << 1,
+    X = 1 << 2,
+    Y = 1 << 3,
+    Up = 1 << 4,
+    Down = 1 << 5,
+    Left = 1 << 6,
+    Right = 1 << 7,
+    Start = 1 << 8,
+    Select = 1 << 9,
+    L1 = 1 << 10,
+    R1 = 1 << 11,
+    L2 = 1 << 12,
+    R2 = 1 << 13,
+    L3 = 1 << 14,
+    R3 = 1 << 15,
+    L4 = 1 << 16,
+    R4 = 1 << 17,
+    LStick = 1 << 18,
+    RStick = 1 << 19,
+    Home = 1 << 20,
+    Capture = 1 << 21,
 }
 
 impl Button {
@@ -406,8 +408,8 @@ impl BitOr<Button> for u64 {
     }
 }
 
-impl std::fmt::Display for Button {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Button {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use Button::*;
         write!(
             f,
@@ -479,8 +481,8 @@ impl Analog {
     }
 }
 
-impl std::fmt::Display for Analog {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Analog {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         use Analog::*;
         write!(
             f,
@@ -495,4 +497,34 @@ impl std::fmt::Display for Analog {
             }
         )
     }
+}
+
+#[cfg(not(any(feature = "bindlang", feature = "serde")))]
+fn sqrt(a: f32) -> f32 {
+    libm::sqrtf(a)
+}
+
+#[cfg(any(feature = "bindlang", feature = "serde"))]
+fn sqrt(a: f32) -> f32 {
+    a.sqrt()
+}
+
+#[cfg(not(any(feature = "bindlang", feature = "serde")))]
+fn powi(a: f32, b: i32) -> f32 {
+    libm::powf(a, b as _)
+}
+
+#[cfg(any(feature = "bindlang", feature = "serde"))]
+fn powi(a: f32, b: i32) -> f32 {
+    a.powi(b)
+}
+
+#[cfg(not(any(feature = "bindlang", feature = "serde")))]
+fn atan2(a: f32, b: f32) -> f32 {
+    libm::atan2f(a, b)
+}
+
+#[cfg(any(feature = "bindlang", feature = "serde"))]
+fn atan2(a: f32, b: f32) -> f32 {
+    f32::atan2(a, b)
 }

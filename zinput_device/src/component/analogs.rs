@@ -1,8 +1,3 @@
-use std::collections::HashMap;
-
-use bindlang::{ty::{BLType, Type, Struct}, to_struct};
-use serde::{Deserialize, Serialize};
-
 use super::ComponentData;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -16,7 +11,8 @@ impl Default for AnalogsInfo {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone)]
 pub struct AnalogsConfig {
     pub ranges: [[u8; 2]; 8],
 }
@@ -35,9 +31,10 @@ pub struct Analogs {
     pub analogs: [u8; 8],
 }
 
-unsafe impl BLType for Analogs {
-    fn bl_type() -> Type {
-        to_struct!(
+#[cfg(feature = "bindlang")]
+unsafe impl bindlang::ty::BLType for Analogs {
+    fn bl_type() -> bindlang::ty::Type {
+        bindlang::to_struct!(
             name = Analogs;
             0: a0: u8;
             1: a1: u8;

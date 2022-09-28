@@ -1,7 +1,3 @@
-use std::{sync::LazyLock, collections::HashMap};
-
-use bindlang::{ty::{BLType, Type}, to_struct};
-
 use super::ComponentData;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -42,10 +38,13 @@ pub struct TouchPad {
     pub touched: bool,
 }
 
-unsafe impl BLType for TouchPad {
-    fn bl_type() -> Type {
-        static TYPE: LazyLock<Type> = LazyLock::new(|| {
-            to_struct! {
+#[cfg(feature = "bindlang")]
+unsafe impl bindlang::ty::BLType for TouchPad {
+    fn bl_type() -> bindlang::ty::Type {
+        use std::sync::LazyLock;
+        
+        static TYPE: LazyLock<bindlang::ty::Type> = LazyLock::new(|| {
+            bindlang::to_struct! {
                 name = TouchPad;
                 0:  touch_x: u16;
                 2:  touch_y: u16;
