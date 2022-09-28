@@ -152,11 +152,15 @@ impl DeviceDriver for SCDriver {
             Err(rusb::Error::NoDevice) => return Ok(ControlFlow::Break(())),
             Err(err) => return Err(err.into()),
         };
-        if size != 64 {
+
+        // FIXME: libusb claims 65 bytes have been read
+        if size < 64 {
             return Ok(ControlFlow::Continue(()));
         }
 
         self.controller.update(&self.packet)?;
+
+        
 
         self.update_controller();
         self.update_touch_pads();
@@ -210,10 +214,10 @@ impl SCDriver {
             HidButton::Start,  Button::Start;
             HidButton::Steam,  Button::Home;
             HidButton::Back,   Button::Select;
-            HidButton::A,      Button::B;
-            HidButton::X,      Button::Y;
-            HidButton::B,      Button::A;
-            HidButton::Y,      Button::X;
+            HidButton::A,      Button::A;
+            HidButton::X,      Button::X;
+            HidButton::B,      Button::B;
+            HidButton::Y,      Button::Y;
             HidButton::Lb,     Button::L1;
             HidButton::Rb,     Button::R1;
             HidButton::Lt,     Button::L2;
