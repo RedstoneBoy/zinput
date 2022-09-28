@@ -1,0 +1,24 @@
+language = "C"
+
+include_guard = "ZNET_H"
+cpp_compat = true
+tab_width = 4
+
+[parse]
+parse_deps = true
+include = ["zinput_device"]
+
+[export]
+item_types = ["constants", "globals", "enums", "structs", "unions", "typedefs", "opaque", "functions"]
+prefix = "ZNet_"
+include = [
+    "Button",
+    "Controller",
+    "Motion",
+
+    "Device",
+    "Packet",
+]
+
+[enum]
+prefix_with_name = true
