@@ -195,7 +195,7 @@ impl Default for StickConfig {
     }
 }
 
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Copy, Clone)]
 pub struct Controller {
     pub buttons: u64,

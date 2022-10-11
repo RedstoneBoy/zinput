@@ -25,7 +25,7 @@ impl Default for AnalogsConfig {
     }
 }
 
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Copy, Clone)]
 pub struct Analogs {
     pub analogs: [u8; 8],

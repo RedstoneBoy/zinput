@@ -28,7 +28,7 @@ pub type MotionConfig = ();
 
 /// Gyro values are degrees per second
 /// Acceleration is in G (1G = 9.8m/s^2)
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Clone, Default)]
 pub struct Motion {
     /// Negative = Pitch forward

@@ -29,7 +29,7 @@ impl Default for TouchPadInfo {
 
 pub type TouchPadConfig = ();
 
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Copy, Clone, Default)]
 pub struct TouchPad {
     pub touch_x: u16,

@@ -182,7 +182,7 @@ macro_rules! device {
                             });
                             _i += std::mem::size_of::<FfiSlice>() as i32;
                         )*
-    
+
                         Type::Struct(Struct {
                             name: "device",
                             fields,

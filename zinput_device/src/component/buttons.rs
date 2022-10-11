@@ -13,7 +13,7 @@ impl Default for ButtonsInfo {
 
 pub type ButtonsConfig = ();
 
-#[repr(C)]
+#[repr(C, align(8))]
 #[derive(Copy, Clone)]
 pub struct Buttons {
     pub buttons: u64,
