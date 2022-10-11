@@ -5,16 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
-rustc-hash = { version = "1.1.0", optional = true }
-zinput_device = { path = "../zinput_device", default-features = false }
+paste = "1.0.9"
+rustc-hash = { version = "1.1.0" }
 
-[build-dependencies]
-cbindgen = "0.24.3"
-
-[features]
-sender = []
-receiver = ["dep:rustc-hash"]
+[dependencies.zinput_device]
+path = "../zinput_device"
+default-features = false
