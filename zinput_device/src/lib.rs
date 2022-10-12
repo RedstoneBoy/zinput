@@ -1,5 +1,5 @@
 #![feature(once_cell)]
-#![cfg_attr(not(any(feature = "bindlang", feature = "serde")), no_std)]
+#![cfg_attr(not(any(feature = "bindlang", feature = "serde", feature = "device")), no_std)]
 
 pub mod component;
 
