@@ -6,7 +6,7 @@ pub use sender::Sender;
 use zinput_device::components;
 
 #[repr(C, align(8))]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct PacketHeader {
     devices: u8,
 }
@@ -21,7 +21,7 @@ macro_rules! device_header {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste::paste! {
             #[repr(C, align(8))]
-            #[derive(Copy, Clone)]
+            #[derive(Copy, Clone, Debug)]
             struct DeviceHeader {
                 name: [u8; 16],
                 
@@ -48,3 +48,9 @@ impl DeviceHeader {
         unsafe { core::slice::from_raw_parts(self as *const _ as _, core::mem::size_of::<Self>()) }
     }
 }
+
+#[allow(dead_code)]
+const fn assert_platform_requirements() {
+    assert!(cfg!(target_endian = "little"));
+}
+const _: () = assert_platform_requirements();

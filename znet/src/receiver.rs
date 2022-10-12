@@ -52,7 +52,7 @@ impl<'a> Receiver<'a> {
         let mut buffer_pos = packet_header_len + device_headers_len;
 
         for &header in device_headers {
-            if buffer.len() < buffer_pos + header.data_len() {
+            if buffer.len() + packet_header_len < buffer_pos + header.data_len() {
                 break;
             }
 

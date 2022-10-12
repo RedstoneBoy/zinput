@@ -216,11 +216,11 @@ fn znet(port: String, stop: Arc<AtomicBool>, engine: Arc<Engine>) -> Result<()> 
                 continue;
             }
             Err(err) => {
-                return Err(err).context("failed to receive swi data");
+                return Err(err).context("failed to receive znet data");
             }
         }
 
-        conn.update(&engine)?;
+        conn.update()?;
     }
 
     Ok(())
@@ -252,7 +252,7 @@ impl<'a> ZNetConn<'a> {
         let now = Instant::now();
 
         self.devices
-            .retain(|name, bundle| now - bundle.last_update < DEVICE_TIMEOUT);
+            .retain(|_, bundle| now - bundle.last_update < DEVICE_TIMEOUT);
 
         // Receive data
         self.receiver.recv()?;
@@ -260,7 +260,7 @@ impl<'a> ZNetConn<'a> {
         Ok(())
     }
 
-    fn update(&mut self, engine: &Engine) -> Result<()> {
+    fn update(&mut self) -> Result<()> {
         for name in self.receiver.device_names() {
             let Some(data) = self.receiver.device(name)
             else { continue };
@@ -321,7 +321,7 @@ impl<'a> ZNetConn<'a> {
                         }}
                     }
 
-                    let handle = engine.new_device(components!(info create_device))?;
+                    let handle = self.engine.new_device(components!(info create_device))?;
 
                     self.devices.insert(
                         *name,
