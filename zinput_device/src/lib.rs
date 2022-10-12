@@ -133,6 +133,7 @@ macro_rules! device_info {
 macro_rules! device {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste::paste! {
+            #[derive(Default)]
             pub struct Device {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }
