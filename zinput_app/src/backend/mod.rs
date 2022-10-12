@@ -1,7 +1,7 @@
 // pub mod joycon;
 #[cfg(target_os = "windows")]
 pub mod raw_input;
-pub mod swi_recv;
+pub mod znet_recv;
 pub mod usb_devices;
 #[cfg(target_os = "windows")]
 pub mod xinput;

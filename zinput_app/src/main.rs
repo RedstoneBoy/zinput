@@ -28,7 +28,7 @@ fn main() {
     }
 
     // zinput.add_plugin(Arc::new(backend::joycon::Joycon::new()), true);
-    zinput.add_plugin(Arc::new(backend::swi_recv::Swi::new()), false);
+    zinput.add_plugin(Arc::new(backend::znet_recv::ZNet::new()), false);
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()), false);

@@ -473,16 +473,17 @@ impl Drop for Joystick {
 }
 
 fn init_uinput() -> Result<PathBuf> {
-    let mut udev = udev::Enumerator::new()?;
-    udev.match_subsystem("misc")?;
-    udev.match_sysname("uinput")?;
-    let mut devices = udev.scan_devices()?;
-    let uinput_device = devices
-        .next()
-        .ok_or(anyhow::anyhow!("uinput system not found"))?;
-    let uinput_devnode = uinput_device
-        .devnode()
-        .ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
-
-    Ok(uinput_devnode.to_owned())
+    // let mut udev = udev::Enumerator::new()?;
+    // udev.match_subsystem("misc")?;
+    // udev.match_sysname("uinput")?;
+    // let mut devices = udev.scan_devices()?;
+    // let uinput_device = devices
+        // .next()
+        // .ok_or(anyhow::anyhow!("uinput system not found"))?;
+    // let uinput_devnode = uinput_device
+        // .devnode()
+        // .ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
+// 
+    // Ok(uinput_devnode.to_owned())
+    Ok("/dev/uinput".into())
 }

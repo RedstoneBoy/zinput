@@ -20,6 +20,8 @@ struct VDeviceData {
     info: DeviceInfo,
     handle: Option<VDeviceHandle>,
     views: Vec<DeviceView>,
+
+    code: String,
 }
 
 impl VDeviceData {
@@ -33,6 +35,8 @@ impl VDeviceData {
             info,
             handle: None,
             views: Vec::new(),
+
+            code: String::new(),
         }
     }
 
@@ -58,6 +62,8 @@ pub struct VirtualTab {
 
     info_selected: ComponentSelection,
     info_editor: Option<Box<dyn ComponentEditor>>,
+
+    bindings_input_selected: usize,
 }
 
 impl Screen for VirtualTab {
@@ -80,6 +86,8 @@ impl VirtualTab {
 
             info_selected: Default::default(),
             info_editor: None,
+
+            bindings_input_selected: 0,
         }
     }
 
@@ -200,12 +208,46 @@ impl VirtualTab {
                 ui.separator();
 
                 ui.label("Components");
-                if ui.button("Add").clicked() {
-                    // TODO: create component drop down
+                let add_resp = ui.button("Add");
+                let popup_id = ui.make_persistent_id("vcomp_add_popup");
+
+                if add_resp.clicked() {
+                    ui.memory().toggle_popup(popup_id);
                 }
 
+                egui::popup_below_widget(ui, popup_id, &add_resp, |ui| {
+                    let info = &mut self.data[devid].info;
+                    macro_rules! comp_add {
+                        ($($cname:ident : $ckind:expr),* $(,)?) => {
+                            paste! {
+                                $(
+                                    {
+                                        let text = egui::WidgetText::from(format!("{}", $ckind));
+                                        let galley = text.into_galley(
+                                            ui,
+                                            Some(false),
+                                            f32::INFINITY,
+                                            egui::TextStyle::Button,
+                                        );
+                                        let new_width = galley.size().x + ui.spacing().item_spacing.x * 2.0;
+                                        if new_width > ui.min_size().x {
+                                            ui.set_min_width(new_width);
+                                        }
+
+                                        if ui.selectable_label(false, format!("{}", $ckind)).clicked() {
+                                            info.[< $cname s >].push(Default::default());
+                                        }
+                                    }
+                                )*
+                            }
+                        }
+                    }
+
+                    components!(kind comp_add);
+                });
+
                 if ui.button("Remove").clicked() {
-                    // TODO: remove selected component
+                    self.info_selected.remove(&mut self.data[devid].info);
                 }
             });
         });
@@ -215,7 +257,7 @@ impl VirtualTab {
             egui::ScrollArea::vertical()
                 .auto_shrink([false; 2])
                 .show(ui, |ui| {
-                    let mut last_selected = self.info_selected;
+                    let last_selected = self.info_selected;
 
                     let info = &mut self.data[devid].info;
                     macro_rules! list_comp {
@@ -235,11 +277,11 @@ impl VirtualTab {
                         };
                     }
 
+                    components!(kind list_comp);
+
                     if last_selected != self.info_selected || self.info_editor.is_none() {
                         self.info_editor = Some(self.info_selected.get_editor());
                     }
-
-                    components!(kind list_comp);
                 });
         });
 
@@ -251,7 +293,65 @@ impl VirtualTab {
         }
     }
 
-    fn show_itab_bindings(&mut self, ctx: &egui::Context, devid: usize) {}
+    fn show_itab_bindings(&mut self, ctx: &egui::Context, devid: usize) {
+        egui::SidePanel::left("vdev_inputs_list").show(ctx, |ui| {
+            ui.vertical_centered_justified(|ui| {
+                let add_resp = ui.button("Add");
+                let popup_id = ui.make_persistent_id("vdev_input_new");
+
+                if add_resp.clicked() {
+                    ui.memory().toggle_popup(popup_id);
+                }
+
+                egui::popup_below_widget(ui, popup_id, &add_resp, |ui| {
+                    let mut select = None;
+
+                    for entry in self.engine.devices() {
+                        ui.selectable_value(&mut select, Some(*entry.uuid()), entry.info().name.clone());
+                    }
+
+                    if let Some(uuid) = select {
+                        let Some(view) = self.engine.get_device(&uuid)
+                        else { return; };
+                        self.data[devid].views.push(view);
+                    }
+                });
+
+                if ui.button("Remove").clicked() {
+                    if self.bindings_input_selected < self.data[devid].views.len() {
+                        self.data[devid].views.remove(self.bindings_input_selected);
+                    }
+                }
+            });
+
+            ui.separator();
+
+            for (i, view) in self.data[devid].views.iter().enumerate() {
+                ui.selectable_value(&mut self.bindings_input_selected, i, view.info().name.clone());
+            }
+        });
+
+        egui::TopBottomPanel::top("vdev_bindings_topbar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_label(false, "Code");
+
+                ui.separator();
+    
+                ui.button("Save");
+                ui.button("Load");
+            });
+        });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                egui::TextEdit::multiline(&mut self.data[devid].code)
+                    .code_editor()
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(32)
+                    .show(ui);
+            });
+        });
+    }
 
     fn create_device(&mut self) {
         let mut name = NEW_DEVICE_NAME.to_owned();
@@ -311,8 +411,36 @@ impl ComponentSelection {
     fn get_editor(&self) -> Box<dyn ComponentEditor> {
         match self.kind {
             ComponentKind::Controller => Box::new(controller::Editor::new(self.index)),
-            _ => todo!(),
+            _ => {
+                struct EmptyEditor;
+
+                impl ComponentEditor for EmptyEditor {
+                    fn update(&mut self, _: &mut DeviceInfo, _: &egui::Context) -> bool {
+                        false
+                    }
+                }
+
+                Box::new(EmptyEditor)
+            }
         }
+    }
+
+    fn remove(&self, info: &mut DeviceInfo) {
+        macro_rules! remove_kind {
+            ($($cname:ident : $ckind:expr),* $(,)?) => {
+                paste! {
+                    $(
+                        if self.kind == $ckind {
+                            if self.index < info.[< $cname s >].len() {
+                                info.[< $cname s >].remove(self.index);
+                            }
+                        }
+                    )*
+                }
+            };
+        }
+
+        components!(kind remove_kind);
     }
 }
 
