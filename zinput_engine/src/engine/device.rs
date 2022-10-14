@@ -11,7 +11,7 @@ use index_map::IndexMap;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use paste::paste;
 use uuid::Uuid;
-use zinput_device::{Device, DeviceConfig, DeviceConfigMut, DeviceInfo, DeviceMut};
+use zinput_device::{Device, DeviceConfig, DeviceConfigMut, DeviceInfo, DeviceMut, components};
 
 pub struct DeviceHandle {
     internal: Arc<InternalDevice>,
@@ -65,6 +65,22 @@ impl Drop for DeviceHandle {
             self.internal.handle.load(Ordering::Acquire) == true,
             "DeviceHandle was already dropped"
         );
+
+        let mut device = self.internal.device.write();
+        macro_rules! clear_data {
+            ($($cname:ident : $ctype:ty),* $(,)?) => {
+                paste::paste! {
+                    $(
+                        for comp in &mut device.[< $cname s >] {
+                            *comp = Default::default();
+                        }
+                    )*
+                }
+            }
+        }
+
+        components!(data clear_data);
+        drop(device);
 
         self.internal.handle.store(false, Ordering::Release);
     }

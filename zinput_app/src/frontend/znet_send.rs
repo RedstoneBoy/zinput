@@ -11,12 +11,11 @@ use std::{
 use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, RecvError, Sender};
 use parking_lot::Mutex;
-use swi_packet::{SwiButton, SwiController, SwiPacketBuffer};
 use zinput_engine::{
-    device::component::{
+    device::{component::{
         controller::{Button, Controller},
         motion::Motion,
-    },
+    }, Device},
     DeviceView,
 };
 use zinput_engine::{
@@ -25,27 +24,27 @@ use zinput_engine::{
     util::Uuid,
     Engine,
 };
+use znet::Sender as ZSender;
 
-const T: &'static str = "frontend:swi_send";
+const T: &'static str = "frontend:znet_send";
 
-const DEFAULT_ADDRESS: &'static str = "10.0.0.176:26780";
+const DEFAULT_ADDRESS: &'static str = "10.0.0.176:26810";
 
-// Rotations Per Second -> Degrees Per Second
-const GYRO_SCALE: f32 = 360.0;
+const BUFFER_SIZE: usize = 4096;
 
-pub struct Swi {
+pub struct ZNet {
     inner: Mutex<Inner>,
 }
 
-impl Swi {
+impl ZNet {
     pub fn new() -> Self {
-        Swi {
+        ZNet {
             inner: Mutex::new(Inner::new()),
         }
     }
 }
 
-impl Plugin for Swi {
+impl Plugin for ZNet {
     fn init(&self, engine: Arc<Engine>) {
         self.inner.lock().init(engine);
     }
@@ -59,7 +58,7 @@ impl Plugin for Swi {
     }
 
     fn name(&self) -> &str {
-        "swi_send"
+        "znet_send"
     }
 
     fn kind(&self) -> PluginKind {
@@ -75,8 +74,6 @@ impl Plugin for Swi {
 struct Gui {
     old_address: String,
     address: String,
-
-    selected_devices: [Option<Uuid>; 8],
 }
 
 impl Gui {
@@ -84,8 +81,6 @@ impl Gui {
         Gui {
             old_address: DEFAULT_ADDRESS.to_owned(),
             address: DEFAULT_ADDRESS.to_owned(),
-
-            selected_devices: [None; 8],
         }
     }
 }
@@ -100,7 +95,8 @@ enum Inner {
         stop: Arc<AtomicBool>,
         handle: JoinHandle<()>,
 
-        device_send: Sender<(usize, Option<Uuid>)>,
+        device_send: Sender<Vec<Uuid>>,
+        selected: Vec<Uuid>,
 
         gui: Gui,
     },
@@ -133,7 +129,7 @@ impl Inner {
 
         let (device_send, device_recv) = crossbeam_channel::unbounded();
 
-        let handle = std::thread::spawn(new_swi_thread(Thread {
+        let handle = std::thread::spawn(new_znet_thread(Thread {
             engine: engine.clone(),
             device_recv,
             status: status.clone(),
@@ -148,6 +144,7 @@ impl Inner {
             handle,
 
             device_send,
+            selected: Vec::new(),
 
             gui,
         };
@@ -186,42 +183,78 @@ impl Inner {
     fn update_gui(&mut self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         match self {
             Inner::Uninit { gui } => {
-                ui.label(format!("Switch Address: {}", gui.old_address));
+                ui.label(format!("Receiver Address: {}", gui.old_address));
                 ui.text_edit_singleline(&mut gui.address);
             }
             Inner::Init {
                 engine,
                 device_send,
+                selected,
                 gui,
                 ..
             } => {
-                for i in 0..gui.selected_devices.len() {
-                    egui::ComboBox::from_label(format!("Swi Controller {}", i + 1))
-                        .selected_text(
-                            gui.selected_devices[i]
-                                .and_then(|id| engine.get_device(&id))
-                                .map_or("[None]".to_owned(), |view| view.info().name.clone()),
-                        )
-                        .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_value(&mut gui.selected_devices[i], None, "[None]")
-                                .clicked()
-                            {
-                                device_send.send((i, None)).unwrap();
+                #[derive(PartialEq, Eq)]
+                enum Action {
+                    Remove(usize),
+                    Change(usize, Uuid),
+                    Add(Uuid),
+                }
+
+                let mut action = None;
+
+                for i in 0..selected.len() {
+                    if action.is_some() {
+                        break;
+                    }
+
+                    egui::ComboBox::from_label(format!("ZNet Controller {}", i + 1))
+                        .selected_text(match engine.get_device(&selected[i]) {
+                            Some(view) => view.info().name.clone(),
+                            None => {
+                                action = Some(Action::Remove(i));
+                                break;
                             }
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut action, Some(Action::Remove(i)), "[None]");
                             for entry in engine.devices() {
-                                if ui
-                                    .selectable_value(
-                                        &mut gui.selected_devices[i],
-                                        Some(*entry.uuid()),
-                                        &entry.info().name,
-                                    )
-                                    .clicked()
-                                {
-                                    device_send.send((i, Some(*entry.uuid()))).unwrap();
-                                }
+                                ui.selectable_value(
+                                    &mut action,
+                                    Some(Action::Change(i, *entry.uuid())),
+                                    &entry.info().name,
+                                );
                             }
                         });
+                }
+
+                if selected.len() < 4 && action.is_none() {
+                    egui::ComboBox::from_label(format!(
+                        "ViGEm XBox Controller {}",
+                        selected.len() + 1
+                    ))
+                    .selected_text("[None]")
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut action, None, "[None]");
+                        for entry in engine.devices() {
+                            ui.selectable_value(
+                                &mut action,
+                                Some(Action::Add(*entry.uuid())),
+                                &entry.info().name,
+                            );
+                        }
+                    });
+                }
+        
+                if let Some(action) = action {
+                    match action {
+                        Action::Remove(i) => {
+                            selected.remove(i);
+                        }
+                        Action::Change(i, id) => selected[i] = id,
+                        Action::Add(id) => selected.push(id),
+                    }
+        
+                    device_send.send(selected.clone()).unwrap();
                 }
             }
         }
@@ -230,32 +263,32 @@ impl Inner {
 
 struct Thread {
     engine: Arc<Engine>,
-    device_recv: Receiver<(usize, Option<Uuid>)>,
+    device_recv: Receiver<Vec<Uuid>>,
     status: Arc<Mutex<PluginStatus>>,
     stop: Arc<AtomicBool>,
     addr: String,
 }
 
-fn new_swi_thread(thread: Thread) -> impl FnOnce() {
+fn new_znet_thread(thread: Thread) -> impl FnOnce() {
     || {
         let status = thread.status.clone();
-        match swi_thread(thread) {
+        match znet_thread(thread) {
             Ok(()) => {
-                log::info!(target: T, "swi thread closed");
+                log::info!(target: T, "stopped");
                 *status.lock() = PluginStatus::Stopped;
             }
             Err(e) => {
-                log::error!(target: T, "swi thread crashed: {}", e);
-                *status.lock() = PluginStatus::Error(format!("swi thread crashed: {}", e));
+                log::error!(target: T, "crashed: {}", e);
+                *status.lock() = PluginStatus::Error(format!("crashed: {}", e));
             }
         }
     }
 }
 
-fn swi_thread(thread: Thread) -> Result<()> {
+fn znet_thread(thread: Thread) -> Result<()> {
     let Thread {
         engine,
-        device_recv: device_change,
+        device_recv,
         stop,
         addr,
         ..
@@ -263,61 +296,48 @@ fn swi_thread(thread: Thread) -> Result<()> {
 
     let (update_send, update_recv) = crossbeam_channel::bounded(10);
 
-    let mut conn = SwiConn::new(&addr)?;
-
-    let mut views: [Option<DeviceView>; 8] = [None, None, None, None, None, None, None, None];
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .context("error binding socket")?;
+    socket.set_nonblocking(true)
+        .context("error setting socket to nonblocking")?;
+    let sender = ZSender::new(socket);
+    let mut buf = [0; BUFFER_SIZE];
 
     loop {
         crossbeam_channel::select! {
-            recv(device_change) -> device_change => {
-                match device_change {
-                    Ok((idx, Some(device_id))) => {
-                        views[idx] = engine.get_device(&device_id);
-                        if let Some(view) = &mut views[idx] {
-                            view.register_channel(update_send.clone());
-                        }
-                    }
-                    Ok((idx, None)) => {
-                        views[idx] = None;
-                    }
-                    Err(RecvError) => {
-                        // Sender dropped which means plugin is uninitialized
-                        return Ok(());
+            recv(device_recv) -> device_recv => {
+                let Ok(ids) = device_recv
+                else { return Ok(()); }; // Sender dropped which means plugin is uninitialized
+
+                if ids.len() < joysticks.len() {
+                    joysticks.truncate(ids.len());
+                } else if ids.len() > joysticks.len() {
+                    for i in joysticks.len()..ids.len() {
+                        let uinput_device = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .open(&uinput)
+                            .context("failed to open uinput device")?;
+
+                        let uinput_device = UInputHandle::new(uinput_device);
+
+                        let Some(mut view) = engine.get_device(&ids[i])
+                        else { anyhow::bail!("tried to get device with invalid uuid"); };
+                        view.register_channel(update_send.clone());
+
+                        joysticks.push(Joystick::new(view, uinput_device)?);
                     }
                 }
             },
             recv(update_recv) -> uid => {
-                let uid = match uid {
-                    Ok(uid) => uid,
-                    Err(RecvError) => {
-                        // this thread owns a sender, receiver does not error
-                        unreachable!()
-                    }
-                };
+                let Ok(uid) = uid
+                else { continue; };
 
-                for (i, view) in views.iter().filter_map(|view| view.as_ref()).enumerate() {
-                    if &uid == view.uuid() {
-                        let device = view.device();
-                        match device.controllers.get(0) {
-                            Some(controller) => conn.update_controller(i, controller),
-                            None => {},
-                        }
-                        match device.motions.get(0) {
-                            Some(motion) => conn.update_motion(i, motion),
-                            None => {},
-                        }
-                    }
+                for joystick in &joysticks {
+                    if joystick.view.uuid() != &uid { continue; };
+
+                    joystick.update()?;
                 }
-
-                conn.set_num_controllers(0);
-                for i in (0..8).rev() {
-                    if views[i].is_some() {
-                        conn.set_num_controllers(i + 1);
-                        break;
-                    }
-                }
-
-                conn.send_data()?;
             }
             default(Duration::from_secs(1)) => {
                 if stop.load(Ordering::Acquire) {

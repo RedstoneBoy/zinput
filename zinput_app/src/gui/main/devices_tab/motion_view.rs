@@ -27,41 +27,13 @@ impl ComponentView for MotionView {
             let Some(motion) = device.motions.get(self.index)
             else { return; };
 
-            let [ax, ay, az] = [motion.accel_x, motion.accel_y, motion.accel_z];
+            ui.label(format!("Accel X: {}", motion.accel_x));
+            ui.label(format!("Accel Y: {}", motion.accel_y));
+            ui.label(format!("Accel Z: {}", motion.accel_z));
 
-            self.angle.clear();
-
-            let accel_mag = f32::sqrt(ax.powi(2) + ay.powi(2) + az.powi(2));
-
-            log::info!("{accel_mag}");
-
-            if accel_mag >= 0.95 && accel_mag <= 1.05 {
-                self.angle.push_str("facing ");
-            } else {
-                self.angle.push_str("moving ");
-            }
-
-            if ax.abs() >= ay.abs() && ax.abs() >= ay.abs() {
-                if ax < 0.0 {
-                    self.angle.push_str("left");
-                } else {
-                    self.angle.push_str("right");
-                }
-            } else if ay.abs() >= ax.abs() && ay.abs() >= az.abs() {
-                if ay < 0.0 {
-                    self.angle.push_str("up");
-                } else {
-                    self.angle.push_str("down");
-                }
-            } else if az.abs() >= ax.abs() && az.abs() >= ay.abs() {
-                if az < 0.0 {
-                    self.angle.push_str("towards screen");
-                } else {
-                    self.angle.push_str("towards user");
-                }
-            }
-
-            ui.label(&self.angle);
+            ui.label(format!("Gyro Pitch: {}", motion.gyro_pitch));
+            ui.label(format!("Gyro Roll: {}", motion.gyro_roll));
+            ui.label(format!("Gyro Yaw: {}", motion.gyro_yaw));
         });
     }
 }

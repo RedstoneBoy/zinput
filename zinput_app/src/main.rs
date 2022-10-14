@@ -1,4 +1,3 @@
-#![feature(generic_associated_types)]
 #![feature(maybe_uninit_uninit_array)]
 #![feature(vec_into_raw_parts)]
 
@@ -32,7 +31,7 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()), false);
-    zinput.add_plugin(Arc::new(frontend::swi_send::Swi::new()), false);
+    // zinput.add_plugin(Arc::new(frontend::znet_send::ZNet::new()), false);
 
     zinput.run();
 }
