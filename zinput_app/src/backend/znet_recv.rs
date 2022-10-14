@@ -73,7 +73,10 @@ impl Plugin for ZNet {
     fn update_gui(&self, _ctx: &egui::Context, _frame: &mut eframe::Frame, ui: &mut egui::Ui) {
         let mut inner = self.inner.lock();
         ui.label(format!("Port: {}", inner.gui().old_port));
-        ui.text_edit_singleline(&mut inner.gui().port);
+
+        if matches!(&*inner, Inner::Uninit { .. }) {
+            ui.text_edit_singleline(&mut inner.gui().port);
+        }
     }
 }
 
