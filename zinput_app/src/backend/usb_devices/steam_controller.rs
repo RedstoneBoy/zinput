@@ -48,6 +48,7 @@ struct SCDriver {
     packet: [u8; 64],
     bundle: DeviceBundle<'static>,
     controller: HidController,
+    frames_untouched: u8,
 }
 
 impl DeviceDriver for SCDriver {
@@ -73,6 +74,7 @@ impl DeviceDriver for SCDriver {
             packet: [0; 64],
             bundle,
             controller: Default::default(),
+            frames_untouched: 0,
         })
     }
 
@@ -251,11 +253,15 @@ impl SCDriver {
             self.bundle.touch_pad[0].pressed = buttons.is_pressed(HidButton::LClick);
             self.bundle.touch_pad[0].touch_x = (lpad_x as i32 - i16::MIN as i32) as u32 as u16;
             self.bundle.touch_pad[0].touch_y = (lpad_y as i32 - i16::MIN as i32) as u32 as u16;
+            self.frames_untouched = 0;
         } else {
-            self.bundle.touch_pad[0].pressed = false;
-            self.bundle.touch_pad[0].touched = false;
-            self.bundle.touch_pad[0].touch_x = u16::MAX / 2;
-            self.bundle.touch_pad[0].touch_y = u16::MAX / 2;
+            self.frames_untouched += 1;
+            if self.frames_untouched > 2 {
+                self.bundle.touch_pad[0].touched = false;
+                self.bundle.touch_pad[0].pressed = false;
+                self.bundle.touch_pad[0].touch_x = (lpad_x as i32 - i16::MIN as i32) as u32 as u16;
+                self.bundle.touch_pad[0].touch_y = (lpad_y as i32 - i16::MIN as i32) as u32 as u16;
+            }
         }
     }
 

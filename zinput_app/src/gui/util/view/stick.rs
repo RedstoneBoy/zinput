@@ -16,7 +16,10 @@ pub struct StickView<'a> {
 
     draw_circle: bool,
     draw_center_dot: bool,
+    draw_pos: bool,
     draw_square: bool,
+
+    pos_radius: f32,
 }
 
 impl<'a> StickView<'a> {
@@ -33,7 +36,10 @@ impl<'a> StickView<'a> {
 
             draw_circle: true,
             draw_center_dot: true,
+            draw_pos: true,
             draw_square: false,
+
+            pos_radius: 2.0,
         }
     }
 
@@ -71,9 +77,19 @@ impl<'a> StickView<'a> {
         self
     }
 
+    pub fn draw_pos(mut self, draw_pos: bool) -> Self {
+        self.draw_pos = draw_pos;
+        self
+    }
+
     #[allow(dead_code)]
     pub fn draw_square(mut self, draw_square: bool) -> Self {
         self.draw_square = draw_square;
+        self
+    }
+
+    pub fn pos_radius(mut self, pos_radius: f32) -> Self {
+        self.pos_radius = pos_radius;
         self
     }
 }
@@ -185,10 +201,12 @@ impl<'a> Widget for StickView<'a> {
             }
         }
 
-        let x = self.x.clamp(-1.0, 1.0) * radius;
-        let y = -self.y.clamp(-1.0, 1.0) * radius;
-
-        painter.circle_filled(rect.center() + vec2(x, y), 2.0, Color32::LIGHT_BLUE);
+        if self.draw_pos {
+            let x = self.x.clamp(-1.0, 1.0) * radius;
+            let y = -self.y.clamp(-1.0, 1.0) * radius;
+    
+            painter.circle_filled(rect.center() + vec2(x, y), self.pos_radius, Color32::LIGHT_BLUE);
+        }
 
         response
     }

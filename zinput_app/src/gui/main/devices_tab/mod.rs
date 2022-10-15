@@ -8,12 +8,13 @@ use zinput_engine::{
     DeviceView, Engine,
 };
 
-use self::{controller_view::ControllerView, motion_view::MotionView};
+use self::{controller_view::ControllerView, motion_view::MotionView, touch_pad_view::TouchPadView};
 
 use super::Screen;
 
 mod controller_view;
 mod motion_view;
+mod touch_pad_view;
 
 pub struct DevicesTab {
     engine: Arc<Engine>,
@@ -326,6 +327,7 @@ fn get_component_view(
     match kind {
         ComponentKind::Controller => Some(Box::new(ControllerView::new(device, index))),
         ComponentKind::Motion => Some(Box::new(MotionView::new(device, index))),
+        ComponentKind::TouchPad => Some(Box::new(TouchPadView::new(device, index))),
         _ => None,
     }
 }
