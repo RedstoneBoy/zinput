@@ -13,6 +13,7 @@ crc = "1.8"
 crossbeam-channel = "0.5"
 dashmap = "4.0"
 dsu_protocol = { git = "https://github.com/RedstoneBoy/dsu_protocol" }
+hidapi = { version = "1.4.2", default-features = false, features = ["linux-static-hidraw"] }
 hidcon = { path = "../hidcon" }
 log = "0.4"
 parking_lot = "0.11"

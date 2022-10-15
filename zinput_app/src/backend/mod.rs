@@ -1,4 +1,4 @@
-// pub mod joycon;
+pub mod joycon;
 #[cfg(target_os = "windows")]
 pub mod raw_input;
 pub mod usb_devices;
