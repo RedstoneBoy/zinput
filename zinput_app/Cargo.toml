@@ -24,7 +24,7 @@ znet = { path = "../znet" }
 
 [target.'cfg(windows)'.dependencies]
 rusty-xinput = "1.2"
-vigem-client = { version = "0.1", features = ["unstable"] }
+vigem-client = { version = "0.1.4", features = ["unstable_ds4"] }
 winapi = { version = "0.3", features = ["dbt", "hidpi", "hidusage", "windef", "winuser"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
