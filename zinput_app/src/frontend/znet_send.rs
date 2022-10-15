@@ -12,10 +12,14 @@ use anyhow::{Context, Result};
 use crossbeam_channel::{Receiver, RecvError, Sender};
 use parking_lot::Mutex;
 use zinput_engine::{
-    device::{component::{
-        controller::{Button, Controller},
-        motion::Motion,
-    }, Device},
+    device::{
+        component::{
+            controller::{Button, Controller},
+            motion::Motion,
+        },
+        components,
+        Device,
+    },
     DeviceView,
 };
 use zinput_engine::{
@@ -244,7 +248,7 @@ impl Inner {
                         }
                     });
                 }
-        
+
                 if let Some(action) = action {
                     match action {
                         Action::Remove(i) => {
@@ -253,7 +257,7 @@ impl Inner {
                         Action::Change(i, id) => selected[i] = id,
                         Action::Add(id) => selected.push(id),
                     }
-        
+
                     device_send.send(selected.clone()).unwrap();
                 }
             }
@@ -296,12 +300,19 @@ fn znet_thread(thread: Thread) -> Result<()> {
 
     let (update_send, update_recv) = crossbeam_channel::bounded(10);
 
-    let socket = UdpSocket::bind("0.0.0.0:0")
-        .context("error binding socket")?;
-    socket.set_nonblocking(true)
+    let socket = UdpSocket::bind("0.0.0.0:0").context("error binding socket")?;
+    socket
+        .set_nonblocking(true)
         .context("error setting socket to nonblocking")?;
+    socket
+        .connect(&addr)
+        .context(format!("error connecting to '{addr}'"))?;
     let sender = ZSender::new(socket);
-    let mut buf = [0; BUFFER_SIZE];
+    let mut buffer = [0; BUFFER_SIZE];
+
+    let mut devices = Vec::<Device>::new();
+    let mut names = Vec::<[u8; 16]>::new();
+    let mut views = Vec::<DeviceView>::new();
 
     loop {
         crossbeam_channel::select! {
@@ -309,23 +320,23 @@ fn znet_thread(thread: Thread) -> Result<()> {
                 let Ok(ids) = device_recv
                 else { return Ok(()); }; // Sender dropped which means plugin is uninitialized
 
-                if ids.len() < joysticks.len() {
-                    joysticks.truncate(ids.len());
-                } else if ids.len() > joysticks.len() {
-                    for i in joysticks.len()..ids.len() {
-                        let uinput_device = OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .open(&uinput)
-                            .context("failed to open uinput device")?;
-
-                        let uinput_device = UInputHandle::new(uinput_device);
-
+                if ids.len() < views.len() {
+                    devices.truncate(ids.len());
+                    names.truncate(ids.len());
+                    views.truncate(ids.len());
+                } else if ids.len() > views.len() {
+                    for i in views.len()..ids.len() {
                         let Some(mut view) = engine.get_device(&ids[i])
                         else { anyhow::bail!("tried to get device with invalid uuid"); };
                         view.register_channel(update_send.clone());
 
-                        joysticks.push(Joystick::new(view, uinput_device)?);
+                        devices.push(view.device().clone());
+                        let mut name = [0u8; 16];
+                        for (i, b) in format!("zcon {i}").as_bytes().iter().enumerate() {
+                            name[i] = *b;
+                        }
+                        names.push(name);
+                        views.push(view);
                     }
                 }
             },
@@ -333,10 +344,37 @@ fn znet_thread(thread: Thread) -> Result<()> {
                 let Ok(uid) = uid
                 else { continue; };
 
-                for joystick in &joysticks {
-                    if joystick.view.uuid() != &uid { continue; };
+                for (out, view) in devices
+                    .iter_mut()
+                    .zip(views.iter())
+                {
+                    if view.uuid() != &uid {
+                        continue;
+                    }
 
-                    joystick.update()?;
+                    let input = view.device();
+
+                    macro_rules! update_device {
+                        ($($cname:ident : $cty:ty),* $(,)?) => {
+                            paste::paste! {
+                                $(
+                                for (i, data) in input.[< $cname s >].iter().enumerate() {
+                                    out.[< $cname s >][i] = data.clone();
+                                }
+                                )*
+                            }
+                        }
+                    }
+
+                    components!(data update_device);
+                }
+
+                match sender.send(&devices, &names, &mut buffer) {
+                    Ok(_) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) => {
+                        log::warn!(target: T, "error sending packet: {e}");
+                    }
                 }
             }
             default(Duration::from_secs(1)) => {
@@ -348,88 +386,4 @@ fn znet_thread(thread: Thread) -> Result<()> {
     }
 
     Ok(())
-}
-
-struct SwiConn {
-    socket: UdpSocket,
-    addr: SocketAddr,
-    packet: SwiPacketBuffer,
-    ctrls: [SwiController; 8],
-}
-
-impl SwiConn {
-    fn new(address: &str) -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").context("failed to bind socket")?;
-        let addr = address.parse().context("invalid address")?;
-
-        Ok(SwiConn {
-            socket,
-            addr,
-            packet: Default::default(),
-            ctrls: [
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ],
-        })
-    }
-
-    fn send_data(&mut self) -> Result<()> {
-        for i in 0..8 {
-            self.packet.set_controller(i, &self.ctrls[i]);
-        }
-
-        self.socket
-            .send_to(self.packet.sendable_buffer(), &self.addr)
-            .context("failed to send swi packet")?;
-        Ok(())
-    }
-
-    fn set_num_controllers(&mut self, num: usize) {
-        self.packet.set_num_controllers(num);
-    }
-
-    fn update_controller(&mut self, num: usize, data: &Controller) {
-        self.ctrls[num].number = num as u8;
-        self.ctrls[num].buttons = [0, 0];
-        for (from, to) in [
-            (Button::A, SwiButton::A),
-            (Button::B, SwiButton::B),
-            (Button::X, SwiButton::X),
-            (Button::Y, SwiButton::Y),
-            (Button::Up, SwiButton::Up),
-            (Button::Down, SwiButton::Down),
-            (Button::Left, SwiButton::Left),
-            (Button::Right, SwiButton::Right),
-            (Button::Start, SwiButton::Plus),
-            (Button::Select, SwiButton::Minus),
-            (Button::LStick, SwiButton::LStick),
-            (Button::RStick, SwiButton::RStick),
-            (Button::L1, SwiButton::L),
-            (Button::R1, SwiButton::R),
-            (Button::L2, SwiButton::ZL),
-            (Button::R2, SwiButton::ZR),
-        ] {
-            if from.is_pressed(data.buttons) {
-                self.ctrls[num].set_pressed(to);
-            }
-        }
-
-        self.ctrls[num].left_stick = [data.left_stick_x, data.left_stick_y];
-        self.ctrls[num].right_stick = [data.right_stick_x, data.right_stick_y];
-    }
-
-    fn update_motion(&mut self, num: usize, data: &Motion) {
-        self.ctrls[num].accelerometer = [data.accel_x, -data.accel_z, data.accel_y];
-        self.ctrls[num].gyroscope = [
-            data.gyro_pitch / GYRO_SCALE,
-            -data.gyro_roll / GYRO_SCALE,
-            data.gyro_yaw / GYRO_SCALE,
-        ];
-    }
 }

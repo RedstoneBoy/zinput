@@ -31,7 +31,7 @@ fn main() {
     zinput.add_plugin(Arc::new(backend::usb_devices::UsbDevices::new()), true);
 
     zinput.add_plugin(Arc::new(frontend::dsus::Dsus::new()), false);
-    // zinput.add_plugin(Arc::new(frontend::znet_send::ZNet::new()), false);
+    zinput.add_plugin(Arc::new(frontend::znet_send::ZNet::new()), false);
 
     zinput.run();
 }
