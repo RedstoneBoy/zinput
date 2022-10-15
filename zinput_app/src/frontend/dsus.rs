@@ -283,7 +283,10 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
 
         let (amt, client_addr) = match conn.recv_from(&mut buf) {
             Ok(v) => v,
-            Err(e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::TimedOut
+                    || e.kind() == std::io::ErrorKind::WouldBlock =>
+            {
                 continue;
             }
             Err(e) => {
@@ -368,7 +371,9 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
                                 entry.value_mut().slots[msg.slot() as usize & 0b11] = true;
                             }
                             Registration::MacBased => {
-                                if &msg.mac()[..5] != &[0, 0, 0, 0, 0] || !(1..=4).contains(&msg.mac()[5]) {
+                                if &msg.mac()[..5] != &[0, 0, 0, 0, 0]
+                                    || !(1..=4).contains(&msg.mac()[5])
+                                {
                                     log::warn!(target: T, "client requested invalid mac address");
                                 } else {
                                     entry.value_mut().slots[msg.mac()[5] as usize - 1] = true;
@@ -391,7 +396,9 @@ fn dsus_query_thread(thread: QueryThread) -> Result<()> {
                             client.slots[msg.slot() as usize & 0b11] = true;
                         }
                         Registration::MacBased => {
-                            if &msg.mac()[..5] != &[0, 0, 0, 0, 0] || !(1..=4).contains(&msg.mac()[5]) {
+                            if &msg.mac()[..5] != &[0, 0, 0, 0, 0]
+                                || !(1..=4).contains(&msg.mac()[5])
+                            {
                                 log::warn!(target: T, "client requested invalid mac address");
                             } else {
                                 client.slots[msg.mac()[5] as usize - 1] = true;

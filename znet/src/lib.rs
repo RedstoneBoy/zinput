@@ -24,7 +24,7 @@ macro_rules! device_header {
             #[derive(Copy, Clone, Debug)]
             struct DeviceHeader {
                 name: [u8; 16],
-                
+
                 $([< $cname s >]: u8,)*
             }
 

@@ -11,7 +11,7 @@ use index_map::IndexMap;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use paste::paste;
 use uuid::Uuid;
-use zinput_device::{Device, DeviceConfig, DeviceConfigMut, DeviceInfo, DeviceMut, components};
+use zinput_device::{components, Device, DeviceConfig, DeviceConfigMut, DeviceInfo, DeviceMut};
 
 pub struct DeviceHandle {
     internal: Arc<InternalDevice>,

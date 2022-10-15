@@ -1,8 +1,11 @@
-use std::{net::{UdpSocket, ToSocketAddrs}, io::Write};
+use std::{
+    io::Write,
+    net::{ToSocketAddrs, UdpSocket},
+};
 
-use zinput_device::{Device, components};
+use zinput_device::{components, Device};
 
-use crate::{PacketHeader, DeviceHeader};
+use crate::{DeviceHeader, PacketHeader};
 
 pub struct Sender {
     pub socket: UdpSocket,
@@ -13,26 +16,37 @@ impl Sender {
         Sender { socket }
     }
 
-    fn serialize<'a, 'b, 'c, 'd>(&'a self, devices: &'b [Device], names: &'c [[u8; 16]], buffer: &'d mut [u8]) -> std::io::Result<&'d [u8]> {
+    fn serialize<'a, 'b, 'c, 'd>(
+        &'a self,
+        devices: &'b [Device],
+        names: &'c [[u8; 16]],
+        buffer: &'d mut [u8],
+    ) -> std::io::Result<&'d [u8]> {
         if names.len() != devices.len() {
             return Ok(&[]);
         }
 
         let mut cursor = std::io::Cursor::new(&mut *buffer);
 
-        cursor.write(PacketHeader {
-            devices: devices.len() as _,
-        }.as_bytes())?;
-        
+        cursor.write(
+            PacketHeader {
+                devices: devices.len() as _,
+            }
+            .as_bytes(),
+        )?;
+
         for (device, name) in devices.iter().zip(names.iter()) {
-            cursor.write(DeviceHeader {
-                name: *name,
-                analogs: device.analogs.len() as _,
-                buttons: device.buttons.len() as _,
-                controllers: device.controllers.len() as _,
-                motions: device.motions.len() as _,
-                touch_pads: device.touch_pads.len() as _,
-            }.as_bytes())?;
+            cursor.write(
+                DeviceHeader {
+                    name: *name,
+                    analogs: device.analogs.len() as _,
+                    buttons: device.buttons.len() as _,
+                    controllers: device.controllers.len() as _,
+                    motions: device.motions.len() as _,
+                    touch_pads: device.touch_pads.len() as _,
+                }
+                .as_bytes(),
+            )?;
         }
 
         for device in devices {
@@ -59,14 +73,24 @@ impl Sender {
         Ok(&buffer[..pos])
     }
 
-    pub fn send(&self, devices: &[Device], names: &[[u8; 16]], buffer: &mut [u8]) -> std::io::Result<usize>
-    {
+    pub fn send(
+        &self,
+        devices: &[Device],
+        names: &[[u8; 16]],
+        buffer: &mut [u8],
+    ) -> std::io::Result<usize> {
         let buffer = self.serialize(devices, names, buffer)?;
 
         self.socket.send(buffer)
     }
 
-    pub fn send_to<A>(&self, devices: &[Device], names: &[[u8; 16]], buffer: &mut [u8], addr: A) -> std::io::Result<usize>
+    pub fn send_to<A>(
+        &self,
+        devices: &[Device],
+        names: &[[u8; 16]],
+        buffer: &mut [u8],
+        addr: A,
+    ) -> std::io::Result<usize>
     where
         A: ToSocketAddrs,
     {

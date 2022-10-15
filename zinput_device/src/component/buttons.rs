@@ -22,7 +22,11 @@ pub struct Buttons {
 #[cfg(feature = "bindlang")]
 unsafe impl bindlang::ty::BLType for Buttons {
     fn bl_type() -> bindlang::ty::Type {
-        bindlang::ty::Type::Bitfield("Buttons", bindlang::util::Width::W64, bindlang::ty::BitNames::default())
+        bindlang::ty::Type::Bitfield(
+            "Buttons",
+            bindlang::util::Width::W64,
+            bindlang::ty::BitNames::default(),
+        )
     }
 }
 

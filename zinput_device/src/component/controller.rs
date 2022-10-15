@@ -65,7 +65,7 @@ impl ControllerInfo {
     pub fn set_analog(&mut self, analog: Analog, value: bool) {
         self.analogs = self.analogs & !(1 << analog.bit()) | ((value as u8) << analog.bit());
     }
-    
+
     pub fn set_button(&mut self, button: Button, value: bool) {
         self.buttons = self.buttons & !(1 << button.bit()) | ((value as u64) << button.bit());
     }
@@ -260,7 +260,7 @@ unsafe impl bindlang::ty::BLType for Controller {
                 15: r2_analog:     u8;
             }
         });
-        
+
         TYPE.clone()
     }
 }

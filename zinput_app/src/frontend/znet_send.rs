@@ -17,8 +17,7 @@ use zinput_engine::{
             controller::{Button, Controller},
             motion::Motion,
         },
-        components,
-        Device,
+        components, Device,
     },
     DeviceView,
 };
@@ -233,7 +232,7 @@ impl Inner {
 
                 if selected.len() < 4 && action.is_none() {
                     egui::ComboBox::from_label(format!(
-                        "ViGEm XBox Controller {}",
+                        "Network Controller {}",
                         selected.len() + 1
                     ))
                     .selected_text("[None]")

@@ -52,7 +52,7 @@ pub struct Motion {
 unsafe impl bindlang::ty::BLType for Motion {
     fn bl_type() -> bindlang::ty::Type {
         use std::sync::LazyLock;
-        
+
         static TYPE: LazyLock<bindlang::ty::Type> = LazyLock::new(|| {
             bindlang::to_struct! {
                 name = Motion;
@@ -64,7 +64,7 @@ unsafe impl bindlang::ty::BLType for Motion {
                 20:  accel_z: f32;
             }
         });
-        
+
         TYPE.clone()
     }
 }

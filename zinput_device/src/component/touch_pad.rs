@@ -42,7 +42,7 @@ pub struct TouchPad {
 unsafe impl bindlang::ty::BLType for TouchPad {
     fn bl_type() -> bindlang::ty::Type {
         use std::sync::LazyLock;
-        
+
         static TYPE: LazyLock<bindlang::ty::Type> = LazyLock::new(|| {
             bindlang::to_struct! {
                 name = TouchPad;
@@ -52,7 +52,7 @@ unsafe impl bindlang::ty::BLType for TouchPad {
                 5:  touched: bool;
             }
         });
-        
+
         TYPE.clone()
     }
 }

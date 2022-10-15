@@ -160,8 +160,6 @@ impl DeviceDriver for SCDriver {
 
         self.controller.update(&self.packet)?;
 
-        
-
         self.update_controller();
         self.update_touch_pads();
         self.update_motion();

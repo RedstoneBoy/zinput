@@ -15,7 +15,10 @@ use input_linux::{
     AbsoluteAxis, AbsoluteInfo, AbsoluteInfoSetup, EventKind as ILEventKind, Key, UInputHandle,
 };
 use parking_lot::Mutex;
-use zinput_engine::{device::component::controller::{Button, Controller}, DeviceView};
+use zinput_engine::{
+    device::component::controller::{Button, Controller},
+    DeviceView,
+};
 use zinput_engine::{
     eframe::{self, egui},
     plugin::{Plugin, PluginKind, PluginStatus},
@@ -178,21 +181,18 @@ impl Inner {
         }
 
         if selected.len() < 4 && action.is_none() {
-            egui::ComboBox::from_label(format!(
-                "ViGEm XBox Controller {}",
-                selected.len() + 1
-            ))
-            .selected_text("[None]")
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut action, None, "[None]");
-                for entry in engine.devices() {
-                    ui.selectable_value(
-                        &mut action,
-                        Some(Action::Add(*entry.uuid())),
-                        &entry.info().name,
-                    );
-                }
-            });
+            egui::ComboBox::from_label(format!("ViGEm XBox Controller {}", selected.len() + 1))
+                .selected_text("[None]")
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut action, None, "[None]");
+                    for entry in engine.devices() {
+                        ui.selectable_value(
+                            &mut action,
+                            Some(Action::Add(*entry.uuid())),
+                            &entry.info().name,
+                        );
+                    }
+                });
         }
 
         if let Some(action) = action {
@@ -478,12 +478,12 @@ fn init_uinput() -> Result<PathBuf> {
     // udev.match_sysname("uinput")?;
     // let mut devices = udev.scan_devices()?;
     // let uinput_device = devices
-        // .next()
-        // .ok_or(anyhow::anyhow!("uinput system not found"))?;
+    // .next()
+    // .ok_or(anyhow::anyhow!("uinput system not found"))?;
     // let uinput_devnode = uinput_device
-        // .devnode()
-        // .ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
-// 
+    // .devnode()
+    // .ok_or(anyhow::anyhow!("uinput system does not have devnode"))?;
+    //
     // Ok(uinput_devnode.to_owned())
     Ok("/dev/uinput".into())
 }

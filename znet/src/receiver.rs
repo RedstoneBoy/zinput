@@ -3,7 +3,7 @@ use std::net::UdpSocket;
 use rustc_hash::FxHashMap;
 use zinput_device::components;
 
-use crate::{PacketHeader, DeviceHeader};
+use crate::{DeviceHeader, PacketHeader};
 
 // TODO: Deserialization is currently unsound as there are no overflow checks
 
@@ -25,7 +25,7 @@ impl<'a> Receiver<'a> {
             data: FxHashMap::default(),
         }
     }
-    
+
     pub fn recv(&mut self) -> std::io::Result<()> {
         self.data.clear();
 
@@ -40,14 +40,16 @@ impl<'a> Receiver<'a> {
 
         let header: &PacketHeader = unsafe { &*(buffer as *const _ as *const PacketHeader) };
         buffer = &buffer[packet_header_len..];
-        
+
         let device_headers_len = header.devices as usize * core::mem::size_of::<DeviceHeader>();
 
         if buffer.len() < device_headers_len {
             return Ok(());
         }
 
-        let device_headers: &[DeviceHeader] = unsafe { core::slice::from_raw_parts(buffer as *const _ as _, header.devices as usize) };
+        let device_headers: &[DeviceHeader] = unsafe {
+            core::slice::from_raw_parts(buffer as *const _ as _, header.devices as usize)
+        };
 
         let mut buffer_pos = packet_header_len + device_headers_len;
 
@@ -85,7 +87,7 @@ macro_rules! net_device {
             #[derive(Clone)]
             struct NetDeviceInfo {
                 header: DeviceHeader,
-                
+
                 $([< $cname _offset >]: usize,)*
             }
 

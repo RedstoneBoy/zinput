@@ -307,7 +307,11 @@ impl VirtualTab {
                     let mut select = None;
 
                     for entry in self.engine.devices() {
-                        ui.selectable_value(&mut select, Some(*entry.uuid()), entry.info().name.clone());
+                        ui.selectable_value(
+                            &mut select,
+                            Some(*entry.uuid()),
+                            entry.info().name.clone(),
+                        );
                     }
 
                     if let Some(uuid) = select {
@@ -327,7 +331,11 @@ impl VirtualTab {
             ui.separator();
 
             for (i, view) in self.data[devid].views.iter().enumerate() {
-                ui.selectable_value(&mut self.bindings_input_selected, i, view.info().name.clone());
+                ui.selectable_value(
+                    &mut self.bindings_input_selected,
+                    i,
+                    view.info().name.clone(),
+                );
             }
         });
 
@@ -336,7 +344,7 @@ impl VirtualTab {
                 ui.selectable_label(false, "Code");
 
                 ui.separator();
-    
+
                 ui.button("Save");
                 ui.button("Load");
             });
