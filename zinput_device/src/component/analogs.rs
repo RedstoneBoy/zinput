@@ -11,7 +11,7 @@ impl Default for AnalogsInfo {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(default))]
 #[derive(Clone)]
 pub struct AnalogsConfig {
     pub ranges: [[u8; 2]; 8],

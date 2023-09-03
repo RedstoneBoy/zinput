@@ -80,7 +80,7 @@ impl Default for ControllerInfo {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(default))]
 #[derive(Clone)]
 pub struct ControllerConfig {
     pub left_stick: StickConfig,
@@ -112,7 +112,7 @@ impl Default for ControllerConfig {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(default))]
 #[derive(Clone)]
 pub struct StickConfig {
     pub deadzone: u8,

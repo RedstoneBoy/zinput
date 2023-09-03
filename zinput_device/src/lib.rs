@@ -54,8 +54,8 @@ macro_rules! components {
 macro_rules! device_config {
     ($($cname:ident : $ctype:ty),* $(,)?) => {
         paste::paste! {
-            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-            #[derive(Clone)]
+            #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(default))]
+            #[derive(Clone, Default)]
             pub struct DeviceConfig {
                 $(pub [< $cname s >]: Vec<$ctype>,)*
             }

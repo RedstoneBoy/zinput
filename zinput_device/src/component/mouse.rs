@@ -1,12 +1,10 @@
-use serde::{Serialize, Deserialize};
-
 use super::ComponentData;
-
 
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct MouseInfo {}
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize), serde(default))]
+#[derive(Clone, Default)]
 pub struct MouseConfig {
     pub sensitivity: f32,
 }
