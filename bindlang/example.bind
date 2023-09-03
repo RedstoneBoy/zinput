@@ -1,8 +1,0 @@
-device out;
-
-ljoy {
-    let i = 0u64;
-    i = out.buttons;
-    i += 1u64;
-    out.buttons = i;
-}

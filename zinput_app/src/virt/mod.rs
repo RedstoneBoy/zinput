@@ -3,10 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bindlang::backend_cranelift::Program;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::Mutex;
-use zinput_engine::device::DeviceMutFfi;
 use zinput_engine::DeviceHandle;
 use zinput_engine::{util::Uuid, DeviceView, Engine};
 
@@ -83,14 +81,6 @@ impl VirtualDevices {
         }
 
         shared.devices.remove(&handle.0);
-    }
-
-    pub fn set_program(&mut self, handle: VDeviceHandle, program: Option<Program<DeviceMutFfi>>) {
-        let mut shared = self.shared.lock();
-        let Some(device) = shared.devices.get_mut(&handle.0)
-        else { return; };
-
-        device.set_program(program);
     }
 }
 

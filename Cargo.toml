@@ -1,7 +1,6 @@
 
 [workspace]
 members = [
-    "bindlang",
     "hidcon",
     "zinput_app",
     "zinput_engine",

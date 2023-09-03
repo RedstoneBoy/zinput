@@ -1,6 +1,6 @@
 #![feature(lazy_cell)]
 #![cfg_attr(
-    not(any(feature = "bindlang", feature = "serde", feature = "device")),
+    not(any(feature = "serde", feature = "device")),
     no_std
 )]
 
@@ -153,59 +153,14 @@ macro_rules! device {
                 }
             }
 
+            #[repr(C)]
             pub struct DeviceMut<'a> {
                 $(pub [< $cname s >]: &'a mut [$ctype],)*
             }
 
-            impl<'a> DeviceMut<'a> {
-                pub fn to_ffi(&mut self) -> DeviceMutFfi {
-                    DeviceMutFfi {
-                        $([< $cname s >]: FfiSlice {
-                            ptr: self.[< $cname s >].as_mut_ptr() as _,
-                            len: self.[< $cname s >].len(),
-                        },)*
-                    }
-                }
-            }
-
             #[repr(C)]
-            pub struct DeviceMutFfi {
-                $(pub [< $cname s >]: FfiSlice,)*
-            }
-
-            #[cfg(feature = "bindlang")]
-            unsafe impl bindlang::ty::BLType for DeviceMutFfi {
-                fn bl_type() -> bindlang::ty::Type {
-                    use std::collections::HashMap;
-                    use std::sync::LazyLock;
-                    use bindlang::ty::{Field, Struct, Type, BLType};
-
-                    static TYPE: LazyLock<Type> = LazyLock::new(|| {
-                        let mut fields = HashMap::new();
-                        let mut _i = 0;
-                        $(
-                            fields.insert(stringify!([< $cname s >]), Field {
-                                ty: Type::Slice(<$ctype as BLType>::bl_type().into()),
-                                byte_offset: _i,
-                            });
-                            _i += std::mem::size_of::<FfiSlice>() as i32;
-                        )*
-
-                        Type::Struct(Struct {
-                            name: "device",
-                            fields,
-                            size: std::mem::size_of::<DeviceMutFfi>() as i32,
-                        })
-                    });
-
-                    TYPE.clone()
-                }
-            }
-
-            #[repr(C)]
-            pub struct FfiSlice {
-                pub ptr: *mut core::ffi::c_void,
-                pub len: usize,
+            pub struct DeviceRef<'a> {
+                $(pub [< $cname s >]: &'a [$ctype],)*
             }
         }
     }
