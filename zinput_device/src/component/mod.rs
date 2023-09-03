@@ -2,6 +2,7 @@ pub mod analogs;
 pub mod buttons;
 pub mod controller;
 pub mod motion;
+pub mod mouse;
 pub mod touch_pad;
 
 #[cfg(feature = "serde")]
@@ -31,7 +32,8 @@ pub enum ComponentKind {
     Buttons = 1,
     Controller = 2,
     Motion = 3,
-    TouchPad = 4,
+    Mouse = 4,
+    TouchPad = 5,
 }
 
 impl core::fmt::Display for ComponentKind {
@@ -41,6 +43,7 @@ impl core::fmt::Display for ComponentKind {
             ComponentKind::Buttons => write!(f, "Buttons"),
             ComponentKind::Controller => write!(f, "Controller"),
             ComponentKind::Motion => write!(f, "Motion"),
+            ComponentKind::Mouse => write!(f, "Mouse"),
             ComponentKind::TouchPad => write!(f, "Touch Pad"),
         }
     }

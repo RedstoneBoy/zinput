@@ -322,6 +322,7 @@ internal_device_components!(
     motion: Motion,
     analog: Analogs,
     button: Buttons,
+    mouse: Mouse,
     touch_pad: TouchPad,
 );
 

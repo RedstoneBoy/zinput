@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+pub mod evdev;
 pub mod joycon;
 #[cfg(target_os = "windows")]
 pub mod raw_input;

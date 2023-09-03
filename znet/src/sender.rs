@@ -43,6 +43,7 @@ impl Sender {
                     buttons: device.buttons.len() as _,
                     controllers: device.controllers.len() as _,
                     motions: device.motions.len() as _,
+                    mouses: device.mouses.len() as _,
                     touch_pads: device.touch_pads.len() as _,
                 }
                 .as_bytes(),

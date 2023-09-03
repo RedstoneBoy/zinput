@@ -1,4 +1,4 @@
-#![feature(once_cell)]
+#![feature(lazy_cell)]
 #![cfg_attr(
     not(any(feature = "bindlang", feature = "serde", feature = "device")),
     no_std
@@ -15,6 +15,7 @@ macro_rules! components {
             analog:     $crate::component::analogs::AnalogsConfig,
             button:     $crate::component::buttons::ButtonsConfig,
             touch_pad:  $crate::component::touch_pad::TouchPadConfig,
+            mouse:      $crate::component::mouse::MouseConfig,
         }
     };
     (data $macro:ident) => {
@@ -24,6 +25,7 @@ macro_rules! components {
             analog:     $crate::component::analogs::Analogs,
             button:     $crate::component::buttons::Buttons,
             touch_pad:  $crate::component::touch_pad::TouchPad,
+            mouse:      $crate::component::mouse::Mouse,
         }
     };
     (info $macro:ident) => {
@@ -33,6 +35,7 @@ macro_rules! components {
             analog:     $crate::component::analogs::AnalogsInfo,
             button:     $crate::component::buttons::ButtonsInfo,
             touch_pad:  $crate::component::touch_pad::TouchPadInfo,
+            mouse:      $crate::component::mouse::MouseInfo,
         }
     };
     (kind $macro:ident) => {
@@ -42,6 +45,7 @@ macro_rules! components {
             analog:     $crate::component::ComponentKind::Analogs,
             button:     $crate::component::ComponentKind::Buttons,
             touch_pad:  $crate::component::ComponentKind::TouchPad,
+            mouse:      $crate::component::ComponentKind::Mouse,
         }
     };
 }
